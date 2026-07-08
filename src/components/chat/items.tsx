@@ -1,11 +1,4 @@
-import {
-  Check,
-  ChevronRight,
-  Copy,
-  Pencil,
-  RefreshCw,
-  Wrench,
-} from "lucide-react";
+import { Check, ChevronRight, Copy, Pencil, RefreshCw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "~/components/chat/markdown";
 import { Action, Actions } from "~/components/ui/actions";
@@ -16,6 +9,14 @@ import {
   ReasoningTrigger,
 } from "~/components/ui/reasoning";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+  type ToolState,
+} from "~/components/ui/tool";
 import {
   type ContentPart,
   type FunctionCallItem,
@@ -304,61 +305,26 @@ export const ToolCallBlock = memo(function ToolCallBlock({
   output?: FunctionCallOutputItem | null;
   streaming?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
   const outputText = useMemo(() => {
     if (!output) return null;
     if (typeof output.output === "string") return tryPrettyJson(output.output);
     return JSON.stringify(output.output, null, 2);
   }, [output]);
 
+  const state: ToolState = output
+    ? "completed"
+    : streaming
+      ? "running"
+      : "pending";
+
   return (
-    <div className="w-full overflow-hidden rounded-xl border bg-card">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-accent/50"
-      >
-        <Wrench
-          className={cn(
-            "size-4 text-muted-foreground",
-            streaming && !output && "animate-pulse",
-          )}
-        />
-        <span className="font-mono font-medium">{call.name}</span>
-        <span className="text-muted-foreground text-xs">
-          {output ? "completed" : streaming ? "running…" : (call.status ?? "")}
-        </span>
-        <ChevronRight
-          className={cn(
-            "ml-auto size-4 text-muted-foreground transition-transform",
-            open && "rotate-90",
-          )}
-        />
-      </button>
-      {open && (
-        <div className="space-y-3 border-t px-3.5 py-3">
-          <div>
-            <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              Arguments
-            </div>
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed scrollbar-thin">
-              {tryPrettyJson(call.arguments || "{}")}
-            </pre>
-          </div>
-          {outputText !== null && (
-            <div>
-              <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                Result
-              </div>
-              <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed scrollbar-thin">
-                {outputText}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <Tool>
+      <ToolHeader title={call.name} state={state} />
+      <ToolContent>
+        <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
+        <ToolOutput output={outputText} />
+      </ToolContent>
+    </Tool>
   );
 });
 
