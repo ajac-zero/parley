@@ -1,15 +1,22 @@
-import {
-  Check,
-  ChevronRight,
-  Copy,
-  Pencil,
-  RefreshCw,
-  Wrench,
-} from "lucide-react";
+import { Check, ChevronRight, Copy, Pencil, RefreshCw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "~/components/chat/markdown";
+import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "~/components/ui/reasoning";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+  type ToolState,
+} from "~/components/ui/tool";
 import {
   type ContentPart,
   type FunctionCallItem,
@@ -140,9 +147,8 @@ export const UserMessage = memo(function UserMessage({
           {text}
         </div>
       )}
-      <div className="flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
-        <Button
-          variant="ghost"
+      <Actions className="gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
+        <Action
           size="icon"
           className="size-7 text-muted-foreground"
           onClick={copy}
@@ -153,10 +159,9 @@ export const UserMessage = memo(function UserMessage({
           ) : (
             <Copy className="size-3.5" />
           )}
-        </Button>
+        </Action>
         {onEdit && (
-          <Button
-            variant="ghost"
+          <Action
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={() => setEditing(true)}
@@ -164,9 +169,9 @@ export const UserMessage = memo(function UserMessage({
             aria-label="Edit message"
           >
             <Pencil className="size-3.5" />
-          </Button>
+          </Action>
         )}
-      </div>
+      </Actions>
     </div>
   );
 });
@@ -208,9 +213,8 @@ export const AssistantMessage = memo(function AssistantMessage({
         <span className="ml-0.5 inline-block h-4 w-2 animate-pulse rounded-sm bg-foreground/70 align-text-bottom" />
       )}
       {!streaming && (
-        <div className="mt-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover/assistant:opacity-100">
-          <Button
-            variant="ghost"
+        <Actions className="mt-1.5 gap-0.5 opacity-0 transition-opacity group-hover/assistant:opacity-100">
+          <Action
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={copy}
@@ -221,19 +225,18 @@ export const AssistantMessage = memo(function AssistantMessage({
             ) : (
               <Copy className="size-3.5" />
             )}
-          </Button>
+          </Action>
           {isLast && onRegenerate && (
-            <Button
-              variant="ghost"
+            <Action
               size="icon"
               className="size-7 text-muted-foreground"
               onClick={onRegenerate}
               aria-label="Regenerate response"
             >
               <RefreshCw className="size-3.5" />
-            </Button>
+            </Action>
           )}
-        </div>
+        </Actions>
       )}
     </div>
   );
@@ -248,36 +251,38 @@ export const ReasoningBlock = memo(function ReasoningBlock({
   item: ReasoningItem;
   streaming?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const summary = reasoningSummaryText(item);
   const hasContent = summary.trim().length > 0;
+  // Captured once at mount: whether this block was already streaming when
+  // it first appeared. Reasoning's auto-close-after-streaming behavior only
+  // makes sense for that case — a block for a persisted/historical item
+  // mounts with streaming=false and should just stay closed, never
+  // flash open. Passing a defaultOpen that keeps changing with the live
+  // `streaming` prop would defeat Reasoning's own "was open by default"
+  // check on every re-render.
+  const [wasStreamingOnMount] = useState(() => Boolean(streaming));
+
+  if (!hasContent) {
+    return (
+      <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+        {streaming ? (
+          <span className="animate-pulse">Thinking…</span>
+        ) : (
+          "Thought process"
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full">
-      <button
-        type="button"
-        onClick={() => hasContent && setOpen((v) => !v)}
-        className={cn(
-          "flex items-center gap-1 text-muted-foreground text-sm transition-colors",
-          hasContent && "hover:text-foreground",
-          streaming && "animate-pulse",
-        )}
-      >
-        <ChevronRight
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-        />
-        {streaming ? "Thinking…" : "Thought process"}
-      </button>
-      {(open || streaming) && hasContent && (
-        <div className="mt-2 border-border border-l-2 pl-4 text-muted-foreground text-sm">
-          <Markdown
-            text={summary}
-            className="text-sm leading-6"
-            streaming={streaming}
-          />
-        </div>
-      )}
-    </div>
+    <Reasoning
+      className="w-full"
+      isStreaming={streaming}
+      defaultOpen={wasStreamingOnMount}
+    >
+      <ReasoningTrigger />
+      <ReasoningContent>{summary}</ReasoningContent>
+    </Reasoning>
   );
 });
 
@@ -300,61 +305,26 @@ export const ToolCallBlock = memo(function ToolCallBlock({
   output?: FunctionCallOutputItem | null;
   streaming?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
   const outputText = useMemo(() => {
     if (!output) return null;
     if (typeof output.output === "string") return tryPrettyJson(output.output);
     return JSON.stringify(output.output, null, 2);
   }, [output]);
 
+  const state: ToolState = output
+    ? "completed"
+    : streaming
+      ? "running"
+      : "pending";
+
   return (
-    <div className="w-full overflow-hidden rounded-xl border bg-card">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-accent/50"
-      >
-        <Wrench
-          className={cn(
-            "size-4 text-muted-foreground",
-            streaming && !output && "animate-pulse",
-          )}
-        />
-        <span className="font-mono font-medium">{call.name}</span>
-        <span className="text-muted-foreground text-xs">
-          {output ? "completed" : streaming ? "running…" : (call.status ?? "")}
-        </span>
-        <ChevronRight
-          className={cn(
-            "ml-auto size-4 text-muted-foreground transition-transform",
-            open && "rotate-90",
-          )}
-        />
-      </button>
-      {open && (
-        <div className="space-y-3 border-t px-3.5 py-3">
-          <div>
-            <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              Arguments
-            </div>
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed scrollbar-thin">
-              {tryPrettyJson(call.arguments || "{}")}
-            </pre>
-          </div>
-          {outputText !== null && (
-            <div>
-              <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                Result
-              </div>
-              <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed scrollbar-thin">
-                {outputText}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <Tool>
+      <ToolHeader title={call.name} state={state} />
+      <ToolContent>
+        <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
+        <ToolOutput output={outputText} />
+      </ToolContent>
+    </Tool>
   );
 });
 
