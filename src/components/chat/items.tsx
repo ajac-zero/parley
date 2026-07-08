@@ -10,6 +10,11 @@ import { memo, useMemo, useState } from "react";
 import { Markdown } from "~/components/chat/markdown";
 import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "~/components/ui/reasoning";
 import { Textarea } from "~/components/ui/textarea";
 import {
   type ContentPart,
@@ -245,36 +250,38 @@ export const ReasoningBlock = memo(function ReasoningBlock({
   item: ReasoningItem;
   streaming?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const summary = reasoningSummaryText(item);
   const hasContent = summary.trim().length > 0;
+  // Captured once at mount: whether this block was already streaming when
+  // it first appeared. Reasoning's auto-close-after-streaming behavior only
+  // makes sense for that case — a block for a persisted/historical item
+  // mounts with streaming=false and should just stay closed, never
+  // flash open. Passing a defaultOpen that keeps changing with the live
+  // `streaming` prop would defeat Reasoning's own "was open by default"
+  // check on every re-render.
+  const [wasStreamingOnMount] = useState(() => Boolean(streaming));
+
+  if (!hasContent) {
+    return (
+      <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+        {streaming ? (
+          <span className="animate-pulse">Thinking…</span>
+        ) : (
+          "Thought process"
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full">
-      <button
-        type="button"
-        onClick={() => hasContent && setOpen((v) => !v)}
-        className={cn(
-          "flex items-center gap-1 text-muted-foreground text-sm transition-colors",
-          hasContent && "hover:text-foreground",
-          streaming && "animate-pulse",
-        )}
-      >
-        <ChevronRight
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-        />
-        {streaming ? "Thinking…" : "Thought process"}
-      </button>
-      {(open || streaming) && hasContent && (
-        <div className="mt-2 border-border border-l-2 pl-4 text-muted-foreground text-sm">
-          <Markdown
-            text={summary}
-            className="text-sm leading-6"
-            streaming={streaming}
-          />
-        </div>
-      )}
-    </div>
+    <Reasoning
+      className="w-full"
+      isStreaming={streaming}
+      defaultOpen={wasStreamingOnMount}
+    >
+      <ReasoningTrigger />
+      <ReasoningContent>{summary}</ReasoningContent>
+    </Reasoning>
   );
 });
 
