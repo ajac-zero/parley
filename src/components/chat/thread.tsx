@@ -1,5 +1,5 @@
-import { AlertCircle, ArrowDown } from "lucide-react";
-import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle } from "lucide-react";
+import { Fragment, memo, useMemo } from "react";
 import {
   AssistantMessage,
   ReasoningBlock,
@@ -9,6 +9,11 @@ import {
   UserMessage,
 } from "~/components/chat/items";
 import { Button } from "~/components/ui/button";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "~/components/ui/conversation";
 import type { ConversationDetail } from "~/functions/conversations";
 import type { ActiveTurn } from "~/lib/chat-store";
 import type {
@@ -18,7 +23,6 @@ import type {
   ORItem,
   ReasoningItem,
 } from "~/lib/openresponses";
-import { cn } from "~/lib/utils";
 
 export interface ThreadEntry {
   key: string;
@@ -93,9 +97,6 @@ export function buildThread(
   return entries;
 }
 
-const isRecordItem = (item: ORItem): item is ORItem & Record<string, unknown> =>
-  typeof item === "object" && item !== null;
-
 export const Thread = memo(function Thread({
   entries,
   active,
@@ -118,41 +119,6 @@ export const Thread = memo(function Thread({
   onDismissError?: () => void;
   disabled?: boolean;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [atBottom, setAtBottom] = useState(true);
-  const stickToBottom = useRef(true);
-
-  /* Track whether the user is near the bottom. */
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-      stickToBottom.current = near;
-      setAtBottom(near);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  /* Follow the stream while the user is at the bottom. */
-  const streamSignature = useMemo(() => {
-    const last = entries[entries.length - 1];
-    if (!last) return "empty";
-    const record: Record<string, unknown> = isRecordItem(last.item)
-      ? last.item
-      : {};
-    return `${entries.length}:${JSON.stringify(record.content ?? record.arguments ?? "").length}`;
-  }, [entries]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll follows content growth
-  useEffect(() => {
-    if (stickToBottom.current) {
-      bottomRef.current?.scrollIntoView({ block: "end" });
-    }
-  }, [streamSignature]);
-
   /* Pair function_call items with their outputs. */
   const pairedOutputs = useMemo(() => {
     const map = new Map<string, FunctionCallOutputItem>();
@@ -184,11 +150,8 @@ export const Thread = memo(function Thread({
   const activeError = active?.error ?? null;
 
   return (
-    <div
-      ref={scrollRef}
-      className="relative flex-1 overflow-y-auto scrollbar-thin"
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pt-6 pb-10">
+    <Conversation className="scrollbar-thin">
+      <ConversationContent className="mx-auto w-full max-w-3xl px-4 pt-6 pb-10">
         {entries.map((entry) => {
           const { item } = entry;
 
@@ -296,29 +259,10 @@ export const Thread = memo(function Thread({
             Generation stopped.
           </div>
         )}
+      </ConversationContent>
 
-        <div ref={bottomRef} className="h-px" />
-      </div>
-
-      <div
-        className={cn(
-          "pointer-events-none sticky bottom-4 flex justify-center transition-opacity",
-          atBottom ? "opacity-0" : "opacity-100",
-        )}
-      >
-        <Button
-          variant="outline"
-          size="icon"
-          className="pointer-events-auto size-8 rounded-full shadow-md"
-          onClick={() =>
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-          }
-          aria-label="Scroll to bottom"
-        >
-          <ArrowDown className="size-4" />
-        </Button>
-      </div>
-    </div>
+      <ConversationScrollButton />
+    </Conversation>
   );
 });
 
