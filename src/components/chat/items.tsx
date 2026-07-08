@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "~/components/chat/markdown";
+import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -140,9 +141,8 @@ export const UserMessage = memo(function UserMessage({
           {text}
         </div>
       )}
-      <div className="flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
-        <Button
-          variant="ghost"
+      <Actions className="gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
+        <Action
           size="icon"
           className="size-7 text-muted-foreground"
           onClick={copy}
@@ -153,10 +153,9 @@ export const UserMessage = memo(function UserMessage({
           ) : (
             <Copy className="size-3.5" />
           )}
-        </Button>
+        </Action>
         {onEdit && (
-          <Button
-            variant="ghost"
+          <Action
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={() => setEditing(true)}
@@ -164,9 +163,9 @@ export const UserMessage = memo(function UserMessage({
             aria-label="Edit message"
           >
             <Pencil className="size-3.5" />
-          </Button>
+          </Action>
         )}
-      </div>
+      </Actions>
     </div>
   );
 });
@@ -208,9 +207,8 @@ export const AssistantMessage = memo(function AssistantMessage({
         <span className="ml-0.5 inline-block h-4 w-2 animate-pulse rounded-sm bg-foreground/70 align-text-bottom" />
       )}
       {!streaming && (
-        <div className="mt-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover/assistant:opacity-100">
-          <Button
-            variant="ghost"
+        <Actions className="mt-1.5 gap-0.5 opacity-0 transition-opacity group-hover/assistant:opacity-100">
+          <Action
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={copy}
@@ -221,19 +219,18 @@ export const AssistantMessage = memo(function AssistantMessage({
             ) : (
               <Copy className="size-3.5" />
             )}
-          </Button>
+          </Action>
           {isLast && onRegenerate && (
-            <Button
-              variant="ghost"
+            <Action
               size="icon"
               className="size-7 text-muted-foreground"
               onClick={onRegenerate}
               aria-label="Regenerate response"
             >
               <RefreshCw className="size-3.5" />
-            </Button>
+            </Action>
           )}
-        </div>
+        </Actions>
       )}
     </div>
   );
