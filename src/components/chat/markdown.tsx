@@ -1,7 +1,14 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CodeBlock } from "~/components/chat/code-block";
+import type { BundledLanguage } from "shiki";
+import {
+  CodeBlock,
+  CodeBlockCopyButton,
+  CodeBlockFilename,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from "~/components/ui/code-block";
 import { cn } from "~/lib/utils";
 
 /**
@@ -95,11 +102,19 @@ export const Markdown = memo(function Markdown({
                 </code>
               );
             }
+            const language = (match?.[1] ?? "text") as BundledLanguage;
             return (
               <CodeBlock
                 code={String(children).replace(/\n$/, "")}
-                language={match?.[1] ?? "text"}
-              />
+                language={language}
+              >
+                <CodeBlockHeader>
+                  <CodeBlockTitle>
+                    <CodeBlockFilename>{language}</CodeBlockFilename>
+                  </CodeBlockTitle>
+                  <CodeBlockCopyButton />
+                </CodeBlockHeader>
+              </CodeBlock>
             );
           },
           pre: ({ children }) => <>{children}</>,
