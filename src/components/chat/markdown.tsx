@@ -1,7 +1,6 @@
 import { memo } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { BundledLanguage } from "shiki";
+import { Streamdown } from "streamdown";
 import {
   CodeBlock,
   CodeBlockCopyButton,
@@ -14,13 +13,26 @@ import { cn } from "~/lib/utils";
 /**
  * Chat-tuned markdown. Styled to feel like ChatGPT: comfortable line height,
  * tight headings, bordered tables, and syntax-highlighted code blocks.
+ *
+ * Rendered with Streamdown (https://streamdown.ai) instead of a hand-rolled
+ * react-markdown setup: it's purpose-built for streaming LLM output, safely
+ * parsing incomplete/unterminated markdown (e.g. an unclosed code fence or
+ * list mid-stream) instead of rendering it as broken raw text.
+ *
+ * Fenced code blocks are still rendered with our own CodeBlock component
+ * (see ~/components/ui/code-block) — Streamdown's own Shiki-powered code
+ * plugin is intentionally not installed, so there's a single source of
+ * truth for code highlighting.
  */
 export const Markdown = memo(function Markdown({
   text,
   className,
+  streaming,
 }: {
   text: string;
   className?: string;
+  /** Disables copy affordances and incomplete-code-fence hooks while true. */
+  streaming?: boolean;
 }) {
   return (
     <div
@@ -30,8 +42,8 @@ export const Markdown = memo(function Markdown({
         className,
       )}
     >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+      <Streamdown
+        isAnimating={streaming}
         components={{
           h1: ({ children }) => (
             <h1 className="mt-6 mb-3 font-semibold text-2xl">{children}</h1>
@@ -89,19 +101,21 @@ export const Markdown = memo(function Markdown({
               {children}
             </td>
           ),
-          code: ({ className, children, node, ...props }) => {
+          // Inline `code` spans (single backticks). Fenced blocks are
+          // handled separately below by `code`, so this only ever receives
+          // inline content.
+          inlineCode: ({ children, ...props }) => (
+            <code
+              className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[0.85em]"
+              {...props}
+            >
+              {children}
+            </code>
+          ),
+          // Fenced code blocks (triple backticks). Streamdown routes inline
+          // spans to `inlineCode` above, so this only ever receives blocks.
+          code: ({ className, children }) => {
             const match = /language-(\w+)/.exec(className ?? "");
-            const isBlock = match !== null || String(children).includes("\n");
-            if (!isBlock) {
-              return (
-                <code
-                  className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[0.85em]"
-                  {...props}
-                >
-                  {children}
-                </code>
-              );
-            }
             const language = (match?.[1] ?? "text") as BundledLanguage;
             return (
               <CodeBlock
@@ -117,11 +131,16 @@ export const Markdown = memo(function Markdown({
               </CodeBlock>
             );
           },
-          pre: ({ children }) => <>{children}</>,
+          // No `pre` override: Streamdown's default `pre` component flattens
+          // itself to just its child `code` element while tagging it with
+          // `data-block="true"` — that tag is how `code` above is told
+          // "this is a fenced block" vs. "this is an inline span". Overriding
+          // `pre` with a bare passthrough (as react-markdown required) drops
+          // that tag and silently breaks block-code detection.
         }}
       >
         {text}
-      </ReactMarkdown>
+      </Streamdown>
     </div>
   );
 });

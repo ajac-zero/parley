@@ -202,7 +202,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           {refusal}
         </div>
       ) : (
-        <Markdown text={text} />
+        <Markdown text={text} streaming={streaming} />
       )}
       {streaming && (
         <span className="ml-0.5 inline-block h-4 w-2 animate-pulse rounded-sm bg-foreground/70 align-text-bottom" />
@@ -270,7 +270,11 @@ export const ReasoningBlock = memo(function ReasoningBlock({
       </button>
       {(open || streaming) && hasContent && (
         <div className="mt-2 border-border border-l-2 pl-4 text-muted-foreground text-sm">
-          <Markdown text={summary} className="text-sm leading-6" />
+          <Markdown
+            text={summary}
+            className="text-sm leading-6"
+            streaming={streaming}
+          />
         </div>
       )}
     </div>
