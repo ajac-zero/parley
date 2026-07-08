@@ -21,14 +21,17 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Generates src/routeTree.gen.ts and dist/server/server.js as a
+      # side effect of the TanStack Start Vite plugin, both of which
+      # Typecheck below imports and needs to already exist on disk.
+      - name: Build
+        run: bun run build
+
       - name: Typecheck
         run: bun run typecheck
 
       - name: Unit tests
         run: bun run test
-
-      - name: Build
-        run: bun run build
 
   docker:
     runs-on: ubuntu-latest
