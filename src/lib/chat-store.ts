@@ -77,6 +77,14 @@ const emptyTurn = (key: string): ActiveTurn => ({
 
 class ChatStore {
   #entries = new Map<string, ActiveTurn>();
+  /**
+   * Maps a stale key (e.g. NEW_CHAT_KEY) to the canonical key an entry was
+   * migrated to. Lets components that haven't re-rendered/unmounted yet
+   * (e.g. the /chat page during the brief window before the router swaps to
+   * /chat/$conversationId) keep resolving to the same live entry instead of
+   * observing it disappear mid-transition.
+   */
+  #aliases = new Map<string, string>();
   #listeners = new Set<Listener>();
   handlers: ChatStoreHandlers = {};
 
@@ -85,7 +93,19 @@ class ChatStore {
     return () => this.#listeners.delete(listener);
   };
 
-  get = (key: string): ActiveTurn | undefined => this.#entries.get(key);
+  /** Resolves a possibly-stale key to the entry's current canonical key. */
+  #resolve(key: string): string {
+    const seen = new Set<string>();
+    let current = key;
+    while (this.#aliases.has(current) && !seen.has(current)) {
+      seen.add(current);
+      current = this.#aliases.get(current) as string;
+    }
+    return current;
+  }
+
+  get = (key: string): ActiveTurn | undefined =>
+    this.#entries.get(this.#resolve(key));
 
   #emit() {
     for (const listener of this.#listeners) listener();
@@ -97,30 +117,33 @@ class ChatStore {
   }
 
   #update(key: string, patch: Partial<ActiveTurn>) {
-    const current = this.#entries.get(key);
+    const canonical = this.#resolve(key);
+    const current = this.#entries.get(canonical);
     if (!current) return;
-    this.#set(key, { ...current, ...patch });
+    this.#set(canonical, { ...current, ...patch });
   }
 
   /** Removes a finished entry (after the server transcript was refetched). */
   remove(key: string) {
-    if (this.#entries.delete(key)) this.#emit();
+    const canonical = this.#resolve(key);
+    const deleted = this.#entries.delete(canonical);
+    for (const [alias, target] of this.#aliases) {
+      if (target === canonical) this.#aliases.delete(alias);
+    }
+    if (deleted) this.#emit();
   }
 
   /** True if a turn is currently running for this key. */
   isActive(key: string): boolean {
-    const entry = this.#entries.get(key);
+    const entry = this.get(key);
     return entry !== undefined && entry.phase !== "finished";
   }
 
   async cancel(key: string): Promise<void> {
-    const entry = this.#entries.get(key);
+    const entry = this.get(key);
     if (!entry) return;
-    if (!entry.turnId) {
-      this.#update(key, { cancelRequested: true });
-      return;
-    }
     this.#update(key, { cancelRequested: true });
+    if (!entry.turnId) return;
     await fetch(`/api/chat/${entry.turnId}/cancel`, { method: "POST" }).catch(
       () => {},
     );
@@ -130,6 +153,9 @@ class ChatStore {
   send(options: SendOptions): void {
     const key = options.conversationId ?? NEW_CHAT_KEY;
     if (this.isActive(key)) return;
+    // Starting a fresh draft under this key: drop any stale alias left over
+    // from a previously migrated (or finished) entry so it doesn't leak in.
+    this.#aliases.delete(key);
 
     const optimistic: ORItem | null =
       options.text.trim().length > 0 || (options.fileIds?.length ?? 0) > 0
@@ -236,14 +262,24 @@ class ChatStore {
     conversationId: string,
     onCreated?: (id: string) => void,
   ) {
-    const entry = this.#entries.get(fromKey);
+    const canonicalFrom = this.#resolve(fromKey);
+    const entry = this.#entries.get(canonicalFrom);
     if (!entry) return;
-    this.#entries.delete(fromKey);
-    this.#entries.set(conversationId, {
-      ...entry,
-      key: conversationId,
-      conversationId,
-    });
+    if (canonicalFrom !== conversationId) {
+      this.#entries.delete(canonicalFrom);
+      this.#entries.set(conversationId, {
+        ...entry,
+        key: conversationId,
+        conversationId,
+      });
+    }
+    // Keep fromKey (and anything already aliased to canonicalFrom) resolving
+    // to the live entry so consumers still reading the old key (e.g. a page
+    // that hasn't unmounted yet) don't observe a gap during the transition.
+    for (const [alias, target] of this.#aliases) {
+      if (target === canonicalFrom) this.#aliases.set(alias, conversationId);
+    }
+    this.#aliases.set(fromKey, conversationId);
     this.#emit();
     onCreated?.(conversationId);
   }
@@ -397,9 +433,10 @@ class ChatStore {
   }
 
   #fail(key: string, message: string) {
-    const entry = this.#entries.get(key);
+    const canonical = this.#resolve(key);
+    const entry = this.#entries.get(canonical);
     if (!entry) return;
-    this.#set(key, {
+    this.#set(canonical, {
       ...entry,
       phase: "finished",
       finishedStatus: "failed",
