@@ -1,0 +1,55 @@
+# Production-ish single-host deployment: Parley + Postgres + Redis.
+#
+#   1. Generate a secret:  openssl rand -base64 32
+#   2. APP_SECRET=... APP_URL=http://localhost:3000 docker compose up -d
+#   3. Open http://localhost:3000 and create the first (admin) account.
+
+services:
+  parley:
+    build: .
+    # image: ghcr.io/your-org/parley:latest   # use a prebuilt image instead
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_SECRET: ${APP_SECRET:?Set APP_SECRET (openssl rand -base64 32)}
+      DATABASE_URL: postgres://parley:${POSTGRES_PASSWORD:-parley}@postgres:5432/parley
+      REDIS_URL: redis://redis:6379
+      DEMO_AGENT: ${DEMO_AGENT:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: parley
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-parley}
+      POSTGRES_DB: parley
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parley -d parley"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

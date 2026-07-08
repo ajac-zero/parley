@@ -1,0 +1,40 @@
+# Development infrastructure only (run the app with `bun run dev`).
+name: parley-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parley
+      POSTGRES_PASSWORD: parley
+      POSTGRES_DB: parley
+    ports:
+      # Host port 5433 to avoid clashing with a locally running Postgres.
+      - "${PARLEY_DEV_PG_PORT:-5433}:5432"
+    volumes:
+      - parley_dev_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parley -d parley"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Host port 6380 to avoid clashing with a locally running Redis.
+      - "${PARLEY_DEV_REDIS_PORT:-6380}:6379"
+    volumes:
+      - parley_dev_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  parley_dev_pg:
+  parley_dev_redis:
