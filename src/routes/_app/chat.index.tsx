@@ -85,13 +85,12 @@ function NewChatPage() {
           />
 
           {/* Floats over the top of the thread, so messages scroll cleanly
-           * underneath it instead of hard-clipping right at its edge. The
-           * header itself is solid (so its own content stays crisp instead
-           * of fading), with a short gradient strip right underneath it so
-           * messages fade out over ~24px just before reaching it, rather
-           * than vanishing abruptly. The header's height is fixed (see
-           * `HEADER_INSET` in thread.tsx), so unlike the composer it
-           * doesn't need to be measured. */}
+           * underneath it instead of getting clipped by the flex layout
+           * before reaching it. No extra buffer/fade beyond the header's
+           * own height (see `HEADER_INSET` in thread.tsx) — it covers what
+           * it necessarily has to and nothing more, so content otherwise
+           * just scrolls past its edge like it would past any other edge
+           * of the screen. */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
             <header className="pointer-events-auto flex h-13 items-center gap-1 bg-background px-14 md:px-12">
               <AgentPicker
@@ -101,7 +100,6 @@ function NewChatPage() {
                 disabled={busy}
               />
             </header>
-            <div className="h-6 bg-gradient-to-b from-background to-transparent" />
           </div>
 
           {/* Floats over the bottom of the thread; the gradient scrim fades

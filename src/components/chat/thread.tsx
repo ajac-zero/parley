@@ -122,14 +122,17 @@ const DEFAULT_COMPOSER_CARD_HEIGHT = 56;
 const SCROLL_BUTTON_GAP = 16;
 
 /**
- * Top padding so messages clear the floating header overlay (mirrors the
- * composer's bottom inset). The header's height (`h-13`, 52px) is fixed —
- * unlike the composer, it never grows with content — so this can be a
- * plain constant rather than something measured: 52px header + 24px
- * breathing room, matching the original `pt-6` gap used before the header
- * became a floating overlay.
+ * Top padding so messages start clear of the floating header overlay.
+ * Matches the header's actual footprint exactly (`h-13`, 52px) — no extra
+ * buffer. The header necessarily covers that much regardless (it's real
+ * UI chrome sitting somewhere), but padding beyond that would hide content
+ * that's otherwise still "in view" for no functional reason; content
+ * should just scroll on and off past the header's edge like it would past
+ * any other edge of the screen. The header's height is fixed — unlike the
+ * composer, it never grows with content — so this can be a plain constant
+ * rather than something measured.
  */
-const HEADER_INSET = 52 + 24;
+const HEADER_INSET = 52;
 
 export const Thread = memo(function Thread({
   entries,
