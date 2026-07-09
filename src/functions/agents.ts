@@ -6,7 +6,9 @@ import {
   runApp,
   runAppOrThrow,
 } from "~/functions/context";
+import { prefillFromAgentCard } from "~/lib/agent-card";
 import { AgentInputSchema } from "~/lib/agent-schema";
+import { fetchAgentCard } from "~/server/agent-card";
 import { Agents, toPublicAgent } from "~/server/services/agents";
 
 // `strict: false` relaxes type-level serialization checks: agent `params` are
@@ -51,6 +53,26 @@ export const updateAgent = createServerFn({ method: "POST", strict: false })
       ),
     );
     return toPublicAgent(row);
+  });
+
+/**
+ * Resolves an A2A well-known agent card (/.well-known/agent-card.json) for a
+ * user-supplied URL and maps it onto agent form fields. `baseUrl` is only
+ * present when the card declares an Open Responses interface (strict
+ * `protocolBinding` match — see OPEN_RESPONSES_PROTOCOL_BINDING).
+ */
+export const importAgentCard = createServerFn({ method: "POST" })
+  .validator(
+    Schema.standardSchemaV1(
+      Schema.Struct({
+        url: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(2000)),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    await requireUser();
+    const { cardUrl, card } = await runAppOrThrow(fetchAgentCard(data.url));
+    return { cardUrl, prefill: prefillFromAgentCard(card) };
   });
 
 export const deleteAgent = createServerFn({ method: "POST" })

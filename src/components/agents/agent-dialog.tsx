@@ -21,7 +21,7 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
-import { createAgent, updateAgent } from "~/functions/agents";
+import { createAgent, importAgentCard, updateAgent } from "~/functions/agents";
 import type { PublicAgent } from "~/server/services/agents";
 
 interface AgentFormState {
@@ -29,6 +29,8 @@ interface AgentFormState {
   description: string;
   avatar: string;
   baseUrl: string;
+  /** A2A well-known card URL this agent was imported from (null = manual). */
+  cardUrl: string | null;
   apiKey: string;
   apiKeyDirty: boolean;
   model: string;
@@ -46,6 +48,7 @@ const emptyForm = (): AgentFormState => ({
   description: "",
   avatar: "",
   baseUrl: "",
+  cardUrl: null,
   apiKey: "",
   apiKeyDirty: false,
   model: "",
@@ -63,6 +66,7 @@ const formFromAgent = (agent: PublicAgent): AgentFormState => ({
   description: agent.description ?? "",
   avatar: agent.avatar ?? "",
   baseUrl: agent.baseUrl,
+  cardUrl: agent.cardUrl,
   apiKey: "",
   apiKeyDirty: false,
   model: agent.model ?? "",
@@ -92,11 +96,15 @@ export function AgentDialog({
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AgentFormState>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [importNote, setImportNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setForm(agent ? formFromAgent(agent) : emptyForm());
       setFormError(null);
+      setImportUrl("");
+      setImportNote(null);
     }
   }, [open, agent]);
 
@@ -104,6 +112,36 @@ export function AgentDialog({
     key: K,
     value: AgentFormState[K],
   ) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const importMutation = useMutation({
+    mutationFn: (url: string) => importAgentCard({ data: { url } }),
+    onSuccess: ({ cardUrl, prefill }) => {
+      setForm((prev) => ({
+        ...prev,
+        name: prefill.name || prev.name,
+        description: prefill.description ?? prev.description,
+        baseUrl: prefill.baseUrl ?? prev.baseUrl,
+        supportsImages: prefill.supportsImages,
+        supportsFiles: prefill.supportsFiles,
+        cardUrl,
+      }));
+      setFormError(null);
+      if (prefill.baseUrl) {
+        setImportNote("Agent card imported. Review the fields below and save.");
+      } else {
+        setImportNote(
+          "Card imported, but it doesn't declare an Open Responses interface — enter the base URL manually.",
+        );
+      }
+    },
+    onError: (error) => setImportNote(error.message),
+  });
+
+  const runImport = (url: string) => {
+    if (url.trim().length === 0 || importMutation.isPending) return;
+    setImportNote(null);
+    importMutation.mutate(url.trim());
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -128,6 +166,7 @@ export function AgentDialog({
         description: form.description.trim() || null,
         avatar: form.avatar.trim() || null,
         baseUrl: form.baseUrl.trim(),
+        cardUrl: form.cardUrl,
         // null = keep existing key, "" = clear it, other = set it
         apiKey: agent
           ? form.apiKeyDirty
@@ -186,6 +225,61 @@ export function AgentDialog({
             if (canSubmit) mutation.mutate();
           }}
         >
+          {!agent && (
+            <div className="space-y-1.5 rounded-md border p-3">
+              <Label htmlFor="agent-import-url">Import from agent card</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="agent-import-url"
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://my-agent.example.com"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      runImport(importUrl);
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    importUrl.trim().length === 0 || importMutation.isPending
+                  }
+                  onClick={() => runImport(importUrl)}
+                >
+                  {importMutation.isPending ? "Fetching…" : "Import"}
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Fetches <code>/.well-known/agent-card.json</code> (A2A agent
+                card) and prefills the form, including the Open Responses URL.
+              </p>
+              {importNote && <p className="text-xs">{importNote}</p>}
+            </div>
+          )}
+
+          {agent && form.cardUrl && (
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <p className="text-muted-foreground min-w-0 truncate text-xs">
+                Imported from <code>{form.cardUrl}</code>
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={importMutation.isPending}
+                onClick={() => runImport(form.cardUrl ?? "")}
+              >
+                {importMutation.isPending ? "Syncing…" : "Re-sync"}
+              </Button>
+            </div>
+          )}
+          {agent && form.cardUrl && importNote && (
+            <p className="text-xs">{importNote}</p>
+          )}
+
           <div className="grid grid-cols-[1fr_5.5rem] gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="agent-name">Name *</Label>

@@ -176,6 +176,40 @@ Run it (`bun run agent.ts`), then in Parley add an agent with base URL
 > summaries, tool calls, attachments, and the non-streaming fallback in one
 > file.
 
+## Make your agent importable by URL (A2A agent card)
+
+Parley can register your agent from a single URL. Publish an
+[A2A agent card](https://a2a-protocol.org/dev/specification/#8-agent-discovery-the-agent-card)
+at `https://{your-domain}/.well-known/agent-card.json` and declare your Open
+Responses endpoint as a custom-binding interface (A2A §5.8) using the exact
+identifier `https://openresponses.org/v1`:
+
+```json
+{
+  "name": "My Research Agent",
+  "description": "Finds and summarizes sources.",
+  "version": "1.0.0",
+  "capabilities": {},
+  "defaultInputModes": ["text/plain", "image/png"],
+  "defaultOutputModes": ["text/plain"],
+  "skills": [],
+  "supportedInterfaces": [
+    {
+      "url": "https://my-agent.example.com/v1",
+      "protocolBinding": "https://openresponses.org/v1",
+      "protocolVersion": "1.0"
+    }
+  ]
+}
+```
+
+When a user pastes any URL on your domain into "Import from agent card",
+Parley fetches the card and prefills the agent's name, description, base URL
+(from the interface above), and image/file input support (from
+`defaultInputModes`: any `image/*` mode enables image input; modes beyond
+text/JSON/images enable file input). The card URL is stored so the agent can
+be re-synced later from the edit dialog.
+
 ## Operational notes
 
 - **Timeouts:** Parley disconnects if your agent sends nothing for
