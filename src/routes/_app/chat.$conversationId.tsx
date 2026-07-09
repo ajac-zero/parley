@@ -99,29 +99,40 @@ function ConversationPage() {
         )}
       </header>
 
-      <Thread
-        entries={entries}
-        active={active}
-        lastTurnError={lastTurnError}
-        lastTurnCancelled={lastTurnCancelled ?? false}
-        onEditMessage={editMessage}
-        onRegenerate={regenerate}
-        onRetry={regenerate}
-        onDismissError={() => chatStore.remove(conversationId)}
-        disabled={busy}
-      />
-
-      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-2">
-        <Composer
-          onSend={send}
-          onStop={() => chatStore.cancel(conversationId)}
-          busy={busy}
-          disabled={!agent?.isEnabled}
-          placeholder={agent ? `Message ${agent.name}…` : "Agent unavailable"}
-          supportsAttachments={agent?.supportsImages || agent?.supportsFiles}
-          disclaimer={config.chatDisclaimer}
-          fileMaxMb={config.fileMaxMb}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Thread
+          entries={entries}
+          active={active}
+          lastTurnError={lastTurnError}
+          lastTurnCancelled={lastTurnCancelled ?? false}
+          onEditMessage={editMessage}
+          onRegenerate={regenerate}
+          onRetry={regenerate}
+          onDismissError={() => chatStore.remove(conversationId)}
+          disabled={busy}
         />
+
+        {/* Floats over the bottom of the thread; the gradient scrim fades
+         * messages into the page background as they scroll underneath it,
+         * so the composer's rounded card reads cleanly on top. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2">
+          <div className="pointer-events-auto w-full max-w-3xl">
+            <Composer
+              onSend={send}
+              onStop={() => chatStore.cancel(conversationId)}
+              busy={busy}
+              disabled={!agent?.isEnabled}
+              placeholder={
+                agent ? `Message ${agent.name}…` : "Agent unavailable"
+              }
+              supportsAttachments={
+                agent?.supportsImages || agent?.supportsFiles
+              }
+              disclaimer={config.chatDisclaimer}
+              fileMaxMb={config.fileMaxMb}
+            />
+          </div>
+        </div>
       </div>
     </main>
   );

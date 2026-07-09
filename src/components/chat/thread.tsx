@@ -151,7 +151,9 @@ export const Thread = memo(function Thread({
 
   return (
     <Conversation className="scrollbar-thin">
-      <ConversationContent className="mx-auto w-full max-w-3xl px-4 pt-6 pb-10">
+      {/* Extra bottom padding keeps the last message clear of the floating
+       * composer, which overlaps the bottom of this scroll area. */}
+      <ConversationContent className="mx-auto w-full max-w-3xl px-4 pt-6 pb-40">
         {entries.map((entry) => {
           const { item } = entry;
 

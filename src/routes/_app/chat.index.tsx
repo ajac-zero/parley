@@ -78,26 +78,32 @@ function NewChatPage() {
       </header>
 
       {active ? (
-        <>
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <Thread
             entries={thread}
             active={active}
             onRetry={() => chatStore.remove(NEW_CHAT_KEY)}
             onDismissError={() => chatStore.remove(NEW_CHAT_KEY)}
           />
-          <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-2">
-            <Composer
-              onSend={handleSend}
-              onStop={() => chatStore.cancel(NEW_CHAT_KEY)}
-              busy={busy}
-              disclaimer={config.chatDisclaimer}
-              supportsAttachments={
-                selectedAgent?.supportsImages || selectedAgent?.supportsFiles
-              }
-              fileMaxMb={config.fileMaxMb}
-            />
+
+          {/* Floats over the bottom of the thread; the gradient scrim fades
+           * messages into the page background as they scroll underneath it,
+           * so the composer's rounded card reads cleanly on top. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2">
+            <div className="pointer-events-auto w-full max-w-3xl">
+              <Composer
+                onSend={handleSend}
+                onStop={() => chatStore.cancel(NEW_CHAT_KEY)}
+                busy={busy}
+                disclaimer={config.chatDisclaimer}
+                supportsAttachments={
+                  selectedAgent?.supportsImages || selectedAgent?.supportsFiles
+                }
+                fileMaxMb={config.fileMaxMb}
+              />
+            </div>
           </div>
-        </>
+        </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24">
           <div className="w-full max-w-3xl">
