@@ -100,15 +100,12 @@ function ConversationPage() {
           composerCardHeight={composerCardHeight}
         />
 
-        {/* Floats over the top of the thread, so messages scroll cleanly
-         * underneath it instead of getting clipped by the flex layout
-         * before reaching it. No extra buffer/fade beyond the header's own
-         * height (see `HEADER_INSET` in thread.tsx) — it covers what it
-         * necessarily has to and nothing more, so content otherwise just
-         * scrolls past its edge like it would past any other edge of the
-         * screen. */}
+        {/* Floats over the top of the thread with no backdrop at all — the
+         * agent name/icon just float directly over the thread, which stays
+         * fully visible and sharp scrolling underneath, instead of being
+         * hidden or blurred behind anything. */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
-          <header className="pointer-events-auto flex h-13 items-center gap-2 bg-background px-14 md:px-12">
+          <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-12">
             {agent ? (
               <div className="flex min-w-0 items-center gap-2">
                 <AgentAvatar agent={agent} className="size-5 text-xs" />
