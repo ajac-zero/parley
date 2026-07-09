@@ -68,19 +68,11 @@ function NewChatPage() {
 
   const { ref: composerOverlayRef, height: composerHeight } =
     useElementHeight<HTMLDivElement>();
+  const { ref: composerCardRef, height: composerCardHeight } =
+    useElementHeight<HTMLDivElement>();
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col">
-      {/* Header */}
-      <header className="flex h-13 shrink-0 items-center gap-1 px-14 md:px-12">
-        <AgentPicker
-          agents={agents}
-          selectedId={selectedAgentId}
-          onSelect={setSelectedAgentId}
-          disabled={busy}
-        />
-      </header>
-
+    <main className="relative flex h-full min-w-0 flex-1 flex-col">
       {active ? (
         <div className="relative flex min-h-0 flex-1 flex-col">
           <Thread
@@ -89,7 +81,26 @@ function NewChatPage() {
             onRetry={() => chatStore.remove(NEW_CHAT_KEY)}
             onDismissError={() => chatStore.remove(NEW_CHAT_KEY)}
             composerHeight={composerHeight}
+            composerCardHeight={composerCardHeight}
           />
+
+          {/* Floats over the top of the thread on a solid backdrop, so
+           * messages scroll cleanly underneath it instead of hard-clipping
+           * right at its edge. Solid rather than a gradient fade (like the
+           * composer below) — a fade here read as distracting rather than
+           * helpful. The header's height is fixed (see `HEADER_INSET` in
+           * thread.tsx), so unlike the composer it doesn't need to be
+           * measured. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background pt-0 pb-6">
+            <header className="pointer-events-auto flex h-13 items-center gap-1 px-14 md:px-12">
+              <AgentPicker
+                agents={agents}
+                selectedId={selectedAgentId}
+                onSelect={setSelectedAgentId}
+                disabled={busy}
+              />
+            </header>
+          </div>
 
           {/* Floats over the bottom of the thread; the gradient scrim fades
            * messages into the page background as they scroll underneath it,
@@ -101,7 +112,10 @@ function NewChatPage() {
             ref={composerOverlayRef}
             className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2"
           >
-            <div className="pointer-events-auto w-full max-w-3xl">
+            <div
+              ref={composerCardRef}
+              className="pointer-events-auto w-full max-w-3xl"
+            >
               <Composer
                 onSend={handleSend}
                 onStop={() => chatStore.cancel(NEW_CHAT_KEY)}
@@ -116,29 +130,42 @@ function NewChatPage() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24">
-          <div className="w-full max-w-3xl">
-            <h1 className="mb-8 text-center font-medium text-[28px] text-foreground/90 tracking-tight">
-              {greeting(session?.user.name)}
-            </h1>
-            <Composer
-              onSend={handleSend}
-              busy={false}
-              disabled={!selectedAgentId}
-              placeholder={
-                selectedAgent
-                  ? `Message ${selectedAgent.name}…`
-                  : "Add an agent to start chatting"
-              }
-              disclaimer={config.chatDisclaimer}
-              supportsAttachments={
-                selectedAgent?.supportsImages || selectedAgent?.supportsFiles
-              }
-              fileMaxMb={config.fileMaxMb}
-              autoFocus
+        <>
+          {/* No active thread yet: still show the picker header (not
+           * floating — there's no scrollable content underneath it to
+           * fade). */}
+          <header className="flex h-13 shrink-0 items-center gap-1 px-14 md:px-12">
+            <AgentPicker
+              agents={agents}
+              selectedId={selectedAgentId}
+              onSelect={setSelectedAgentId}
+              disabled={busy}
             />
+          </header>
+          <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24">
+            <div className="w-full max-w-3xl">
+              <h1 className="mb-8 text-center font-medium text-[28px] text-foreground/90 tracking-tight">
+                {greeting(session?.user.name)}
+              </h1>
+              <Composer
+                onSend={handleSend}
+                busy={false}
+                disabled={!selectedAgentId}
+                placeholder={
+                  selectedAgent
+                    ? `Message ${selectedAgent.name}…`
+                    : "Add an agent to start chatting"
+                }
+                disclaimer={config.chatDisclaimer}
+                supportsAttachments={
+                  selectedAgent?.supportsImages || selectedAgent?.supportsFiles
+                }
+                fileMaxMb={config.fileMaxMb}
+                autoFocus
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </main>
   );

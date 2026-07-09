@@ -109,6 +109,28 @@ const DEFAULT_COMPOSER_INSET = 160;
  * gradient scrim, on top of its measured height. */
 const COMPOSER_INSET_GAP = 16;
 
+/**
+ * Fallback height for the composer's own card (not the full overlay, which
+ * also includes its transparent top fade) — used to float the
+ * scroll-to-bottom button just above the input itself, matching the same
+ * relationship it had pre-overlay (`bottom-4`-ish gap above the composer).
+ */
+const DEFAULT_COMPOSER_CARD_HEIGHT = 56;
+
+/** Gap between the scroll-to-bottom button and the top of the composer
+ * card underneath it. */
+const SCROLL_BUTTON_GAP = 16;
+
+/**
+ * Top padding so messages clear the floating header overlay (mirrors the
+ * composer's bottom inset). The header's height (`h-13`, 52px) is fixed —
+ * unlike the composer, it never grows with content — so this can be a
+ * plain constant rather than something measured: 52px header + 24px
+ * breathing room, matching the original `pt-6` gap used before the header
+ * became a floating overlay.
+ */
+const HEADER_INSET = 52 + 24;
+
 export const Thread = memo(function Thread({
   entries,
   active,
@@ -120,6 +142,7 @@ export const Thread = memo(function Thread({
   onDismissError,
   disabled,
   composerHeight,
+  composerCardHeight,
 }: {
   entries: ThreadEntry[];
   active: ActiveTurn | undefined;
@@ -138,6 +161,14 @@ export const Thread = memo(function Thread({
    * `DEFAULT_COMPOSER_INSET` when not yet measured.
    */
   composerHeight?: number;
+  /**
+   * Measured height (px) of just the composer's visible card, excluding the
+   * overlay's transparent top fade — used to position the scroll-to-bottom
+   * button snug above the input rather than above the whole gradient
+   * region. Falls back to `DEFAULT_COMPOSER_CARD_HEIGHT` when not yet
+   * measured.
+   */
+  composerCardHeight?: number;
 }) {
   /* Pair function_call items with their outputs. */
   const pairedOutputs = useMemo(() => {
@@ -171,12 +202,15 @@ export const Thread = memo(function Thread({
 
   return (
     <Conversation className="scrollbar-thin">
-      {/* Bottom padding tracks the floating composer's measured height (see
-       * `composerHeight`) so the last message always clears it, even as the
-       * composer grows with attachments or a multi-line draft. */}
+      {/* Top padding clears the floating header overlay (fixed height, see
+       * `HEADER_INSET`); bottom padding tracks the floating composer's
+       * measured height (see `composerHeight`) so the last message always
+       * clears it, even as the composer grows with attachments or a
+       * multi-line draft. */}
       <ConversationContent
-        className="mx-auto w-full max-w-3xl px-4 pt-6"
+        className="mx-auto w-full max-w-3xl px-4"
         style={{
+          paddingTop: HEADER_INSET,
           paddingBottom:
             (composerHeight ?? DEFAULT_COMPOSER_INSET) + COMPOSER_INSET_GAP,
         }}
@@ -290,7 +324,17 @@ export const Thread = memo(function Thread({
         )}
       </ConversationContent>
 
-      <ConversationScrollButton />
+      {/* Offset to clear the floating composer overlay (z-20 vs its z-10),
+       * otherwise this button renders hidden and unclickable underneath it.
+       * Uses the composer *card's* height (not the full overlay, which
+       * includes a large transparent top fade) so the button sits snug
+       * above the input instead of floating oddly high above it. */}
+      <ConversationScrollButton
+        bottomOffset={
+          (composerCardHeight ?? DEFAULT_COMPOSER_CARD_HEIGHT) +
+          SCROLL_BUTTON_GAP
+        }
+      />
     </Conversation>
   );
 });

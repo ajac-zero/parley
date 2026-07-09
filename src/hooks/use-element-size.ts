@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 /**
  * Tracks an element's rendered height via `ResizeObserver`, so layout
@@ -10,12 +10,20 @@ import { useEffect, useRef, useState } from "react";
  * Returns `undefined` until the element has been measured (including
  * during SSR, where there's no DOM to measure) — callers should supply a
  * sensible fallback for that initial render.
+ *
+ * Uses `useLayoutEffect` (not `useEffect`) so the first real measurement
+ * lands synchronously before the browser paints, instead of one frame
+ * after. Otherwise, on every mount, dependent layout (like scroll
+ * padding sized off this height) visibly jumps from its fallback value to
+ * the real one post-paint — which also unsettles the scrollable area's
+ * `scrollHeight` right after it's first rendered, and can leave a stale
+ * scrollbar thumb behind until the next scroll/resize forces a recalc.
  */
 export function useElementHeight<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [height, setHeight] = useState<number | undefined>(undefined);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
 

@@ -80,29 +80,11 @@ function ConversationPage() {
 
   const { ref: composerOverlayRef, height: composerHeight } =
     useElementHeight<HTMLDivElement>();
+  const { ref: composerCardRef, height: composerCardHeight } =
+    useElementHeight<HTMLDivElement>();
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col">
-      <header className="flex h-13 shrink-0 items-center gap-2 px-14 md:px-12">
-        {agent ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <AgentAvatar agent={agent} className="size-5 text-xs" />
-            <span className="truncate font-medium text-[15px]">
-              {agent.name}
-            </span>
-            {!agent.isEnabled && (
-              <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
-                disabled
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-sm">
-            Agent unavailable
-          </span>
-        )}
-      </header>
-
+    <main className="relative flex h-full min-w-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
         <Thread
           entries={entries}
@@ -115,7 +97,37 @@ function ConversationPage() {
           onDismissError={() => chatStore.remove(conversationId)}
           disabled={busy}
           composerHeight={composerHeight}
+          composerCardHeight={composerCardHeight}
         />
+
+        {/* Floats over the top of the thread on a solid backdrop, so
+         * messages scroll cleanly underneath it instead of hard-clipping
+         * right at its edge. Solid rather than a gradient fade (like the
+         * composer below) — a fade here read as distracting rather than
+         * helpful. The header's height is fixed (see `HEADER_INSET` in
+         * thread.tsx), so unlike the composer it doesn't need to be
+         * measured. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background pt-0 pb-6">
+          <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-12">
+            {agent ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <AgentAvatar agent={agent} className="size-5 text-xs" />
+                <span className="truncate font-medium text-[15px]">
+                  {agent.name}
+                </span>
+                {!agent.isEnabled && (
+                  <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
+                    disabled
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                Agent unavailable
+              </span>
+            )}
+          </header>
+        </div>
 
         {/* Floats over the bottom of the thread; the gradient scrim fades
          * messages into the page background as they scroll underneath it,
@@ -126,7 +138,10 @@ function ConversationPage() {
           ref={composerOverlayRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2"
         >
-          <div className="pointer-events-auto w-full max-w-3xl">
+          <div
+            ref={composerCardRef}
+            className="pointer-events-auto w-full max-w-3xl"
+          >
             <Composer
               onSend={send}
               onStop={() => chatStore.cancel(conversationId)}
