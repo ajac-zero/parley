@@ -97,6 +97,18 @@ export function buildThread(
   return entries;
 }
 
+/**
+ * Fallback bottom padding used before the floating composer's real height
+ * has been measured (e.g. on first render/SSR). Roughly matches a
+ * single-line composer plus its gradient scrim, so there's no visible pop
+ * once the real measurement lands.
+ */
+const DEFAULT_COMPOSER_INSET = 160;
+
+/** Breathing room between the last message and the top of the composer's
+ * gradient scrim, on top of its measured height. */
+const COMPOSER_INSET_GAP = 16;
+
 export const Thread = memo(function Thread({
   entries,
   active,
@@ -107,6 +119,7 @@ export const Thread = memo(function Thread({
   onRetry,
   onDismissError,
   disabled,
+  composerHeight,
 }: {
   entries: ThreadEntry[];
   active: ActiveTurn | undefined;
@@ -118,6 +131,13 @@ export const Thread = memo(function Thread({
   onRetry?: () => void;
   onDismissError?: () => void;
   disabled?: boolean;
+  /**
+   * Measured height (px) of the floating composer overlay that sits on top
+   * of this thread, so the scroll area's bottom padding can track it
+   * precisely instead of guessing at a fixed value. Falls back to
+   * `DEFAULT_COMPOSER_INSET` when not yet measured.
+   */
+  composerHeight?: number;
 }) {
   /* Pair function_call items with their outputs. */
   const pairedOutputs = useMemo(() => {
@@ -151,9 +171,16 @@ export const Thread = memo(function Thread({
 
   return (
     <Conversation className="scrollbar-thin">
-      {/* Extra bottom padding keeps the last message clear of the floating
-       * composer, which overlaps the bottom of this scroll area. */}
-      <ConversationContent className="mx-auto w-full max-w-3xl px-4 pt-6 pb-40">
+      {/* Bottom padding tracks the floating composer's measured height (see
+       * `composerHeight`) so the last message always clears it, even as the
+       * composer grows with attachments or a multi-line draft. */}
+      <ConversationContent
+        className="mx-auto w-full max-w-3xl px-4 pt-6"
+        style={{
+          paddingBottom:
+            (composerHeight ?? DEFAULT_COMPOSER_INSET) + COMPOSER_INSET_GAP,
+        }}
+      >
         {entries.map((entry) => {
           const { item } = entry;
 

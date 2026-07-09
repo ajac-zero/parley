@@ -5,6 +5,7 @@ import { AgentPicker } from "~/components/agent-picker";
 import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
 import { useActiveTurn } from "~/hooks/use-active-turn";
+import { useElementHeight } from "~/hooks/use-element-size";
 import { chatStore, NEW_CHAT_KEY } from "~/lib/chat-store";
 import { agentsQuery } from "~/lib/queries";
 
@@ -65,6 +66,9 @@ function NewChatPage() {
   const thread = buildThread(null, active);
   const busy = active !== undefined && active.phase !== "finished";
 
+  const { ref: composerOverlayRef, height: composerHeight } =
+    useElementHeight<HTMLDivElement>();
+
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
@@ -84,12 +88,19 @@ function NewChatPage() {
             active={active}
             onRetry={() => chatStore.remove(NEW_CHAT_KEY)}
             onDismissError={() => chatStore.remove(NEW_CHAT_KEY)}
+            composerHeight={composerHeight}
           />
 
           {/* Floats over the bottom of the thread; the gradient scrim fades
            * messages into the page background as they scroll underneath it,
-           * so the composer's rounded card reads cleanly on top. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2">
+           * so the composer's rounded card reads cleanly on top. Its
+           * measured height feeds back into the thread's bottom padding
+           * above, so the last message always clears it regardless of
+           * composer size. */}
+          <div
+            ref={composerOverlayRef}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2"
+          >
             <div className="pointer-events-auto w-full max-w-3xl">
               <Composer
                 onSend={handleSend}

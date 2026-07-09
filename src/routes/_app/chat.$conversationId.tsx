@@ -6,6 +6,7 @@ import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
 import { Button } from "~/components/ui/button";
 import { useActiveTurn } from "~/hooks/use-active-turn";
+import { useElementHeight } from "~/hooks/use-element-size";
 import { chatStore } from "~/lib/chat-store";
 import { conversationQuery } from "~/lib/queries";
 
@@ -77,6 +78,9 @@ function ConversationPage() {
 
   const agent = detail?.agent ?? null;
 
+  const { ref: composerOverlayRef, height: composerHeight } =
+    useElementHeight<HTMLDivElement>();
+
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col">
       <header className="flex h-13 shrink-0 items-center gap-2 px-14 md:px-12">
@@ -110,12 +114,18 @@ function ConversationPage() {
           onRetry={regenerate}
           onDismissError={() => chatStore.remove(conversationId)}
           disabled={busy}
+          composerHeight={composerHeight}
         />
 
         {/* Floats over the bottom of the thread; the gradient scrim fades
          * messages into the page background as they scroll underneath it,
-         * so the composer's rounded card reads cleanly on top. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2">
+         * so the composer's rounded card reads cleanly on top. Its measured
+         * height feeds back into the thread's bottom padding above, so the
+         * last message always clears it regardless of composer size. */}
+        <div
+          ref={composerOverlayRef}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2"
+        >
           <div className="pointer-events-auto w-full max-w-3xl">
             <Composer
               onSend={send}
