@@ -100,15 +100,16 @@ function ConversationPage() {
           composerCardHeight={composerCardHeight}
         />
 
-        {/* Floats over the top of the thread on a solid backdrop, so
-         * messages scroll cleanly underneath it instead of hard-clipping
-         * right at its edge. Solid rather than a gradient fade (like the
-         * composer below) — a fade here read as distracting rather than
-         * helpful. The header's height is fixed (see `HEADER_INSET` in
-         * thread.tsx), so unlike the composer it doesn't need to be
-         * measured. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background pt-0 pb-6">
-          <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-12">
+        {/* Floats over the top of the thread, so messages scroll cleanly
+         * underneath it instead of hard-clipping right at its edge. The
+         * header itself is solid (so its own text stays crisp instead of
+         * fading), with a short gradient strip right underneath it so
+         * messages fade out over ~24px just before reaching it, rather
+         * than vanishing abruptly. The header's height is fixed (see
+         * `HEADER_INSET` in thread.tsx), so unlike the composer it doesn't
+         * need to be measured. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
+          <header className="pointer-events-auto flex h-13 items-center gap-2 bg-background px-14 md:px-12">
             {agent ? (
               <div className="flex min-w-0 items-center gap-2">
                 <AgentAvatar agent={agent} className="size-5 text-xs" />
@@ -127,6 +128,7 @@ function ConversationPage() {
               </span>
             )}
           </header>
+          <div className="h-6 bg-gradient-to-b from-background to-transparent" />
         </div>
 
         {/* Floats over the bottom of the thread; the gradient scrim fades
