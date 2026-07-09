@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   const { config, session } = Route.useRouteContext();
   const queryClient = useQueryClient();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   /* Wire the chat store to the query cache. */
@@ -59,11 +59,16 @@ function AppLayout() {
       <aside
         className={cn(
           "hidden shrink-0 overflow-hidden border-sidebar-border border-r transition-[width] duration-200 md:block",
-          sidebarOpen ? "w-[268px]" : "w-0 border-r-0",
+          sidebarCollapsed ? "w-16" : "w-[268px]",
         )}
       >
-        <div className="h-full w-[268px]">
-          <AppSidebar config={config} user={session.user} />
+        <div className="h-full w-full">
+          <AppSidebar
+            config={config}
+            user={session.user}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          />
         </div>
       </aside>
 
@@ -79,26 +84,22 @@ function AppLayout() {
         </SheetContent>
       </Sheet>
 
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        {/* Sidebar toggles */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2.5 left-2.5 z-20 hidden text-muted-foreground md:flex"
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="Toggle sidebar"
-        >
-          <PanelLeft className="size-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2.5 left-2.5 z-20 text-muted-foreground md:hidden"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Open sidebar"
-        >
-          <PanelLeft className="size-5" />
-        </Button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-2 border-sidebar-border border-b px-2 py-2 md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open sidebar"
+          >
+            <PanelLeft className="size-5" />
+          </Button>
+          <span className="truncate font-semibold text-[15px]">
+            {config.appName}
+          </span>
+        </div>
 
         <Outlet />
       </div>

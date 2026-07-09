@@ -8,6 +8,7 @@ import {
   Monitor,
   Moon,
   MoreHorizontal,
+  PanelLeft,
   Pencil,
   Search,
   Settings,
@@ -16,6 +17,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useTheme } from "~/components/theme";
@@ -30,6 +32,12 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import type { AppConfig } from "~/functions/config";
 import {
   deleteConversation,
@@ -74,10 +82,14 @@ export function AppSidebar({
   config,
   user,
   onNavigate,
+  collapsed = false,
+  onToggleCollapse,
 }: {
   config: AppConfig;
   user: SessionUserLike;
   onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const [search, setSearch] = useState("");
   const { data: conversations } = useQuery(conversationsQuery());
@@ -102,95 +114,238 @@ export function AppSidebar({
   }, [conversations, search]);
 
   return (
-    <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-        <Link
-          to="/chat"
-          onClick={onNavigate}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-sidebar-accent"
+    <TooltipProvider delayDuration={300}>
+      <div className="flex h-full w-full flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
+        {/* Header */}
+        <div className="flex items-center gap-1 px-3 pt-3 pb-1">
+          <SidebarLogoToggle
+            config={config}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+            onToggleCollapse={onToggleCollapse}
+          />
+          {onToggleCollapse && (
+            <div
+              className={cn(
+                "shrink-0 overflow-hidden transition-[max-width,opacity] duration-200",
+                collapsed ? "max-w-0 opacity-0" : "max-w-10 opacity-100",
+              )}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent"
+                    onClick={onToggleCollapse}
+                    aria-label="Collapse sidebar"
+                    tabIndex={collapsed ? -1 : 0}
+                  >
+                    <PanelLeft className="size-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Collapse sidebar</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-0.5 px-3 py-2">
+          <SidebarNavItem
+            to="/chat"
+            icon={<MessageSquarePlus className="size-4.5 shrink-0" />}
+            label="New chat"
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+          <SidebarNavItem
+            to="/agents"
+            icon={<Bot className="size-4.5 shrink-0" />}
+            label="Agents"
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+            activeProps={{ className: "bg-sidebar-accent" }}
+          />
+        </div>
+
+        {/* Search */}
+        <div
+          className={cn(
+            "overflow-hidden px-3 transition-[max-height,opacity] duration-200",
+            collapsed ? "max-h-0 opacity-0" : "max-h-12 pb-2 opacity-100",
+          )}
+        >
+          <div className="relative">
+            <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chats"
+              className="h-8 border-transparent bg-sidebar-accent/60 pl-8 text-sm focus-visible:border-input focus-visible:bg-background"
+            />
+          </div>
+        </div>
+
+        {/* Conversations */}
+        <div
+          className={cn(
+            "flex-1 overflow-hidden transition-opacity duration-200",
+            collapsed && "pointer-events-none opacity-0",
+          )}
+        >
+          <nav className="h-full overflow-y-auto px-3 pb-2 scrollbar-thin">
+            {groups.length === 0 && (
+              <p className="px-2 py-6 text-center text-muted-foreground text-sm">
+                {search ? "No chats match your search." : "No chats yet."}
+              </p>
+            )}
+            {groups.map((group) => (
+              <div key={group.label} className="mb-3">
+                <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
+                  {group.label}
+                </div>
+                <ul className="space-y-px">
+                  {group.list.map((conversation) => (
+                    <ConversationRow
+                      key={conversation.id}
+                      id={conversation.id}
+                      title={conversation.title}
+                      active={conversation.id === activeId}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
+        </div>
+
+        {/* User footer */}
+        <div className="border-sidebar-border border-t p-3">
+          <UserMenu user={user} onNavigate={onNavigate} collapsed={collapsed} />
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function SidebarNavItem({
+  to,
+  icon,
+  label,
+  collapsed,
+  onNavigate,
+  activeProps,
+}: {
+  to: string;
+  icon: ReactNode;
+  label: string;
+  collapsed: boolean;
+  onNavigate?: () => void;
+  activeProps?: { className: string };
+}) {
+  const content = (
+    <Link
+      to={to}
+      onClick={onNavigate}
+      activeProps={activeProps}
+      className={cn(
+        "flex items-center overflow-hidden rounded-lg text-sm transition-colors hover:bg-sidebar-accent",
+        collapsed ? "size-9 shrink-0 justify-center" : "gap-2.5 px-2 py-2",
+      )}
+      aria-label={label}
+    >
+      {icon}
+      <span
+        className={cn(
+          "truncate transition-[max-width,opacity] duration-200",
+          collapsed ? "max-w-0 opacity-0" : "max-w-[200px] opacity-100",
+        )}
+      >
+        {label}
+      </span>
+    </Link>
+  );
+
+  if (!collapsed) return content;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SidebarLogoToggle({
+  config,
+  collapsed,
+  onNavigate,
+  onToggleCollapse,
+}: {
+  config: AppConfig;
+  collapsed: boolean;
+  onNavigate?: () => void;
+  onToggleCollapse?: () => void;
+}) {
+  const content = (
+    <Link
+      to="/chat"
+      onClick={(e) => {
+        if (collapsed && onToggleCollapse) {
+          e.preventDefault();
+          onToggleCollapse();
+        } else {
+          onNavigate?.();
+        }
+      }}
+      className={cn(
+        "group flex items-center overflow-hidden rounded-lg transition-colors hover:bg-sidebar-accent",
+        collapsed
+          ? "size-9 shrink-0 justify-center"
+          : "min-w-0 flex-1 gap-2 py-1.5 pl-2",
+      )}
+      aria-label={collapsed ? "Expand sidebar" : config.appName}
+    >
+      <span className="relative flex size-6 shrink-0 items-center justify-center">
+        <span
+          className={cn(
+            "flex items-center justify-center transition-opacity",
+            collapsed && "group-hover:opacity-0",
+          )}
         >
           {config.appLogoUrl ? (
             <img
               src={config.appLogoUrl}
               alt=""
-              className="size-6 shrink-0 rounded-md object-contain"
+              className="size-6 rounded-md object-contain"
             />
           ) : (
-            <ParleyMark className="size-6 shrink-0" />
+            <ParleyMark className="size-6" />
           )}
-          <span className="truncate font-semibold text-[15px]">
-            {config.appName}
-          </span>
-        </Link>
-      </div>
-
-      {/* Actions */}
-      <div className="space-y-0.5 px-3 py-2">
-        <Link
-          to="/chat"
-          onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-        >
-          <MessageSquarePlus className="size-4.5" />
-          New chat
-        </Link>
-        <Link
-          to="/agents"
-          onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-          activeProps={{ className: "bg-sidebar-accent" }}
-        >
-          <Bot className="size-4.5" />
-          Agents
-        </Link>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 pb-2">
-        <div className="relative">
-          <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search chats"
-            className="h-8 border-transparent bg-sidebar-accent/60 pl-8 text-sm focus-visible:border-input focus-visible:bg-background"
-          />
-        </div>
-      </div>
-
-      {/* Conversations */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-2 scrollbar-thin">
-        {groups.length === 0 && (
-          <p className="px-2 py-6 text-center text-muted-foreground text-sm">
-            {search ? "No chats match your search." : "No chats yet."}
-          </p>
+        </span>
+        {collapsed && (
+          <PanelLeft className="absolute inset-0 m-auto size-4.5 opacity-0 transition-opacity group-hover:opacity-100" />
         )}
-        {groups.map((group) => (
-          <div key={group.label} className="mb-3">
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-              {group.label}
-            </div>
-            <ul className="space-y-px">
-              {group.list.map((conversation) => (
-                <ConversationRow
-                  key={conversation.id}
-                  id={conversation.id}
-                  title={conversation.title}
-                  active={conversation.id === activeId}
-                  onNavigate={onNavigate}
-                />
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
+      </span>
+      <span
+        className={cn(
+          "truncate font-semibold text-[15px] transition-[max-width,opacity] duration-200",
+          collapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100",
+        )}
+      >
+        {config.appName}
+      </span>
+    </Link>
+  );
 
-      {/* User footer */}
-      <div className="border-sidebar-border border-t p-3">
-        <UserMenu user={user} onNavigate={onNavigate} />
-      </div>
-    </div>
+  if (!collapsed) return content;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side="right">Expand sidebar</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -321,9 +476,11 @@ function ConversationRow({
 function UserMenu({
   user,
   onNavigate,
+  collapsed = false,
 }: {
   user: SessionUserLike;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
@@ -334,29 +491,48 @@ function UserMenu({
     .join("")
     .toUpperCase();
 
+  const trigger = (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-2 py-2 text-left transition-colors hover:bg-sidebar-accent"
+      aria-label={user.name}
+    >
+      <Avatar className="size-7 shrink-0">
+        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+          {initials || "?"}
+        </AvatarFallback>
+      </Avatar>
+      <span
+        className={cn(
+          "min-w-0 transition-[max-width,opacity] duration-200",
+          collapsed ? "max-w-0 opacity-0" : "max-w-[180px] flex-1 opacity-100",
+        )}
+      >
+        <span className="block truncate font-medium text-sm">{user.name}</span>
+        <span className="block truncate text-muted-foreground text-xs">
+          {user.email}
+        </span>
+      </span>
+    </button>
+  );
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-sidebar-accent"
-        >
-          <Avatar className="size-7">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-              {initials || "?"}
-            </AvatarFallback>
-          </Avatar>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium text-sm">
-              {user.name}
-            </span>
-            <span className="block truncate text-muted-foreground text-xs">
-              {user.email}
-            </span>
-          </span>
-        </button>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+            <TooltipContent side="right">{user.name}</TooltipContent>
+          </Tooltip>
+        ) : (
+          trigger
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-56">
+      <DropdownMenuContent
+        align="start"
+        side={collapsed ? "right" : "top"}
+        className="w-56"
+      >
         <DropdownMenuLabel className="text-muted-foreground text-xs">
           Theme
         </DropdownMenuLabel>
