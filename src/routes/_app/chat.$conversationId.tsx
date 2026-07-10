@@ -6,6 +6,7 @@ import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
 import { Button } from "~/components/ui/button";
 import { useActiveTurn } from "~/hooks/use-active-turn";
+import { useElementHeight } from "~/hooks/use-element-size";
 import { chatStore } from "~/lib/chat-store";
 import { conversationQuery } from "~/lib/queries";
 
@@ -77,51 +78,90 @@ function ConversationPage() {
 
   const agent = detail?.agent ?? null;
 
+  const { ref: composerOverlayRef, height: composerHeight } =
+    useElementHeight<HTMLDivElement>();
+  const { ref: composerCardRef, height: composerCardHeight } =
+    useElementHeight<HTMLDivElement>();
+
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col">
-      <header className="flex h-13 shrink-0 items-center gap-2 px-14 md:px-12">
-        {agent ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <AgentAvatar agent={agent} className="size-5 text-xs" />
-            <span className="truncate font-medium text-[15px]">
-              {agent.name}
-            </span>
-            {!agent.isEnabled && (
-              <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
-                disabled
+    <main className="relative flex h-full min-w-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Thread
+          entries={entries}
+          active={active}
+          lastTurnError={lastTurnError}
+          lastTurnCancelled={lastTurnCancelled ?? false}
+          onEditMessage={editMessage}
+          onRegenerate={regenerate}
+          onRetry={regenerate}
+          onDismissError={() => chatStore.remove(conversationId)}
+          disabled={busy}
+          composerHeight={composerHeight}
+          composerCardHeight={composerCardHeight}
+        />
+
+        {/* Floats over the top of the thread with no backdrop at all — the
+         * agent name/icon just float directly over the thread, which stays
+         * fully visible and sharp scrolling underneath, instead of being
+         * hidden or blurred behind anything. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
+          <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-12">
+            {agent ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <AgentAvatar agent={agent} className="size-5 text-xs" />
+                <span className="truncate font-medium text-[15px]">
+                  {agent.name}
+                </span>
+                {!agent.isEnabled && (
+                  <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
+                    disabled
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                Agent unavailable
               </span>
             )}
+          </header>
+        </div>
+
+        {/* Floats over the bottom of the thread. No fade — messages stay
+         * fully sharp until they're covered by this overlay. Its own solid
+         * background spans its *whole* box (not just a rectangle behind
+         * the input card), so it also plugs the notch beside the card's
+         * rounded corners and covers the disclaimer text underneath the
+         * card — both of which sit over otherwise-transparent space and
+         * would let content bleed through if only the card's own opaque
+         * background were relied on. Stops short of the scroll area's
+         * right edge so the scrollbar stays visible, instead of being
+         * painted over by this overlay. Its measured height feeds back
+         * into the thread's bottom padding above, so the last message
+         * always clears it regardless of composer size. */}
+        <div
+          ref={composerOverlayRef}
+          className="pointer-events-none absolute right-2.5 bottom-0 left-0 z-10 flex justify-center bg-background px-4 pb-2"
+        >
+          <div
+            ref={composerCardRef}
+            className="pointer-events-auto w-full max-w-3xl"
+          >
+            <Composer
+              onSend={send}
+              onStop={() => chatStore.cancel(conversationId)}
+              busy={busy}
+              disabled={!agent?.isEnabled}
+              placeholder={
+                agent ? `Message ${agent.name}…` : "Agent unavailable"
+              }
+              supportsAttachments={
+                agent?.supportsImages || agent?.supportsFiles
+              }
+              disclaimer={config.chatDisclaimer}
+              fileMaxMb={config.fileMaxMb}
+            />
           </div>
-        ) : (
-          <span className="text-muted-foreground text-sm">
-            Agent unavailable
-          </span>
-        )}
-      </header>
-
-      <Thread
-        entries={entries}
-        active={active}
-        lastTurnError={lastTurnError}
-        lastTurnCancelled={lastTurnCancelled ?? false}
-        onEditMessage={editMessage}
-        onRegenerate={regenerate}
-        onRetry={regenerate}
-        onDismissError={() => chatStore.remove(conversationId)}
-        disabled={busy}
-      />
-
-      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-2">
-        <Composer
-          onSend={send}
-          onStop={() => chatStore.cancel(conversationId)}
-          busy={busy}
-          disabled={!agent?.isEnabled}
-          placeholder={agent ? `Message ${agent.name}…` : "Agent unavailable"}
-          supportsAttachments={agent?.supportsImages || agent?.supportsFiles}
-          disclaimer={config.chatDisclaimer}
-          fileMaxMb={config.fileMaxMb}
-        />
+        </div>
       </div>
     </main>
   );

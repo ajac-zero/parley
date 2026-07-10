@@ -97,6 +97,43 @@ export function buildThread(
   return entries;
 }
 
+/**
+ * Fallback bottom padding used before the floating composer's real height
+ * has been measured (e.g. on first render/SSR). Roughly matches a
+ * single-line composer plus its bottom padding, so there's no visible pop
+ * once the real measurement lands.
+ */
+const DEFAULT_COMPOSER_INSET = 160;
+
+/** Breathing room between the last message and the top of the composer
+ * overlay, on top of its measured height. */
+const COMPOSER_INSET_GAP = 16;
+
+/**
+ * Fallback height for the composer's own card (not the full overlay, which
+ * also includes its own bottom padding below the card) — used to float the
+ * scroll-to-bottom button just above the input itself, matching the same
+ * relationship it had pre-overlay (`bottom-4`-ish gap above the composer).
+ */
+const DEFAULT_COMPOSER_CARD_HEIGHT = 56;
+
+/** Gap between the scroll-to-bottom button and the top of the composer
+ * card underneath it. */
+const SCROLL_BUTTON_GAP = 16;
+
+/**
+ * Top padding so messages start clear of the floating header overlay.
+ * Matches the header's actual footprint exactly (`h-13`, 52px) — no extra
+ * buffer. The header necessarily covers that much regardless (it's real
+ * UI chrome sitting somewhere), but padding beyond that would hide content
+ * that's otherwise still "in view" for no functional reason; content
+ * should just scroll on and off past the header's edge like it would past
+ * any other edge of the screen. The header's height is fixed — unlike the
+ * composer, it never grows with content — so this can be a plain constant
+ * rather than something measured.
+ */
+const HEADER_INSET = 52;
+
 export const Thread = memo(function Thread({
   entries,
   active,
@@ -107,6 +144,8 @@ export const Thread = memo(function Thread({
   onRetry,
   onDismissError,
   disabled,
+  composerHeight,
+  composerCardHeight,
 }: {
   entries: ThreadEntry[];
   active: ActiveTurn | undefined;
@@ -118,6 +157,21 @@ export const Thread = memo(function Thread({
   onRetry?: () => void;
   onDismissError?: () => void;
   disabled?: boolean;
+  /**
+   * Measured height (px) of the floating composer overlay that sits on top
+   * of this thread, so the scroll area's bottom padding can track it
+   * precisely instead of guessing at a fixed value. Falls back to
+   * `DEFAULT_COMPOSER_INSET` when not yet measured.
+   */
+  composerHeight?: number;
+  /**
+   * Measured height (px) of just the composer's visible card, excluding the
+   * overlay's own bottom padding below it — used to position the
+   * scroll-to-bottom button snug above the input rather than above the
+   * whole overlay. Falls back to `DEFAULT_COMPOSER_CARD_HEIGHT` when not
+   * yet measured.
+   */
+  composerCardHeight?: number;
 }) {
   /* Pair function_call items with their outputs. */
   const pairedOutputs = useMemo(() => {
@@ -151,7 +205,19 @@ export const Thread = memo(function Thread({
 
   return (
     <Conversation className="scrollbar-thin">
-      <ConversationContent className="mx-auto w-full max-w-3xl px-4 pt-6 pb-10">
+      {/* Top padding clears the floating header overlay (fixed height, see
+       * `HEADER_INSET`); bottom padding tracks the floating composer's
+       * measured height (see `composerHeight`) so the last message always
+       * clears it, even as the composer grows with attachments or a
+       * multi-line draft. */}
+      <ConversationContent
+        className="mx-auto w-full max-w-3xl px-4"
+        style={{
+          paddingTop: HEADER_INSET,
+          paddingBottom:
+            (composerHeight ?? DEFAULT_COMPOSER_INSET) + COMPOSER_INSET_GAP,
+        }}
+      >
         {entries.map((entry) => {
           const { item } = entry;
 
@@ -261,7 +327,18 @@ export const Thread = memo(function Thread({
         )}
       </ConversationContent>
 
-      <ConversationScrollButton />
+      {/* Offset to clear the floating composer overlay (z-20 vs its z-10),
+       * otherwise this button renders hidden and unclickable underneath it.
+       * Uses the composer *card's* height (not the full overlay, which
+       * also includes its own bottom padding below the card) so the button
+       * sits snug above the input instead of floating oddly high above
+       * it. */}
+      <ConversationScrollButton
+        bottomOffset={
+          (composerCardHeight ?? DEFAULT_COMPOSER_CARD_HEIGHT) +
+          SCROLL_BUTTON_GAP
+        }
+      />
     </Conversation>
   );
 });

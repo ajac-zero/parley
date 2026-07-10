@@ -76,10 +76,19 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
+export type ConversationScrollButtonProps = ComponentProps<typeof Button> & {
+  /**
+   * Bottom offset in px, e.g. to clear a floating composer that overlaps
+   * this conversation. Defaults to a plain `bottom-4` via `className` when
+   * omitted.
+   */
+  bottomOffset?: number;
+};
 
 export const ConversationScrollButton = ({
   className,
+  bottomOffset,
+  style,
   ...props
 }: ConversationScrollButtonProps) => {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
@@ -92,9 +101,11 @@ export const ConversationScrollButton = ({
     !isAtBottom && (
       <Button
         className={cn(
-          "absolute bottom-4 left-[50%] translate-x-[-50%] size-8 rounded-full shadow-md",
+          "absolute left-[50%] z-20 translate-x-[-50%] size-8 rounded-full shadow-md",
+          bottomOffset === undefined && "bottom-4",
           className,
         )}
+        style={bottomOffset === undefined ? style : { bottom: bottomOffset, ...style }}
         onClick={handleScrollToBottom}
         size="icon"
         type="button"
