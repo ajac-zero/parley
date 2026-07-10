@@ -127,40 +127,39 @@ function ConversationPage() {
         </div>
 
         {/* Floats over the bottom of the thread. No fade — messages stay
-         * fully sharp until they're covered by the composer's own opaque
-         * card. The short solid strip right above the card (matching its
-         * `rounded-[26px]` corner radius) plugs the gap between the card's
-         * rounded corners and its bounding box, so content can't peek
-         * through the notch beside those corners. Stops short of the
-         * scroll area's right edge so the scrollbar stays visible, instead
-         * of being painted over by this overlay. Its measured height feeds
-         * back into the thread's bottom padding above, so the last message
+         * fully sharp until they're covered by this overlay. Its own solid
+         * background spans its *whole* box (not just a rectangle behind
+         * the input card), so it also plugs the notch beside the card's
+         * rounded corners and covers the disclaimer text underneath the
+         * card — both of which sit over otherwise-transparent space and
+         * would let content bleed through if only the card's own opaque
+         * background were relied on. Stops short of the scroll area's
+         * right edge so the scrollbar stays visible, instead of being
+         * painted over by this overlay. Its measured height feeds back
+         * into the thread's bottom padding above, so the last message
          * always clears it regardless of composer size. */}
         <div
           ref={composerOverlayRef}
-          className="pointer-events-none absolute right-2.5 bottom-0 left-0 z-10 flex flex-col pb-2"
+          className="pointer-events-none absolute right-2.5 bottom-0 left-0 z-10 flex justify-center bg-background px-4 pb-2"
         >
-          <div className="h-[26px] bg-background" aria-hidden />
-          <div className="flex justify-center px-4">
-            <div
-              ref={composerCardRef}
-              className="pointer-events-auto w-full max-w-3xl"
-            >
-              <Composer
-                onSend={send}
-                onStop={() => chatStore.cancel(conversationId)}
-                busy={busy}
-                disabled={!agent?.isEnabled}
-                placeholder={
-                  agent ? `Message ${agent.name}…` : "Agent unavailable"
-                }
-                supportsAttachments={
-                  agent?.supportsImages || agent?.supportsFiles
-                }
-                disclaimer={config.chatDisclaimer}
-                fileMaxMb={config.fileMaxMb}
-              />
-            </div>
+          <div
+            ref={composerCardRef}
+            className="pointer-events-auto w-full max-w-3xl"
+          >
+            <Composer
+              onSend={send}
+              onStop={() => chatStore.cancel(conversationId)}
+              busy={busy}
+              disabled={!agent?.isEnabled}
+              placeholder={
+                agent ? `Message ${agent.name}…` : "Agent unavailable"
+              }
+              supportsAttachments={
+                agent?.supportsImages || agent?.supportsFiles
+              }
+              disclaimer={config.chatDisclaimer}
+              fileMaxMb={config.fileMaxMb}
+            />
           </div>
         </div>
       </div>

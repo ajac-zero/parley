@@ -100,8 +100,8 @@ export function buildThread(
 /**
  * Fallback bottom padding used before the floating composer's real height
  * has been measured (e.g. on first render/SSR). Roughly matches a
- * single-line composer plus the short solid strip that plugs its rounded
- * corners, so there's no visible pop once the real measurement lands.
+ * single-line composer plus its bottom padding, so there's no visible pop
+ * once the real measurement lands.
  */
 const DEFAULT_COMPOSER_INSET = 160;
 
@@ -111,7 +111,7 @@ const COMPOSER_INSET_GAP = 16;
 
 /**
  * Fallback height for the composer's own card (not the full overlay, which
- * also includes the short solid strip above it) — used to float the
+ * also includes its own bottom padding below the card) — used to float the
  * scroll-to-bottom button just above the input itself, matching the same
  * relationship it had pre-overlay (`bottom-4`-ish gap above the composer).
  */
@@ -166,10 +166,10 @@ export const Thread = memo(function Thread({
   composerHeight?: number;
   /**
    * Measured height (px) of just the composer's visible card, excluding the
-   * short solid strip above it that plugs its rounded corners — used to
-   * position the scroll-to-bottom button snug above the input rather than
-   * above the whole overlay. Falls back to `DEFAULT_COMPOSER_CARD_HEIGHT`
-   * when not yet measured.
+   * overlay's own bottom padding below it — used to position the
+   * scroll-to-bottom button snug above the input rather than above the
+   * whole overlay. Falls back to `DEFAULT_COMPOSER_CARD_HEIGHT` when not
+   * yet measured.
    */
   composerCardHeight?: number;
 }) {
@@ -330,8 +330,9 @@ export const Thread = memo(function Thread({
       {/* Offset to clear the floating composer overlay (z-20 vs its z-10),
        * otherwise this button renders hidden and unclickable underneath it.
        * Uses the composer *card's* height (not the full overlay, which
-       * also includes the short solid strip above it) so the button sits
-       * snug above the input instead of floating oddly high above it. */}
+       * also includes its own bottom padding below the card) so the button
+       * sits snug above the input instead of floating oddly high above
+       * it. */}
       <ConversationScrollButton
         bottomOffset={
           (composerCardHeight ?? DEFAULT_COMPOSER_CARD_HEIGHT) +
