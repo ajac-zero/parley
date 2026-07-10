@@ -83,6 +83,11 @@ Completed items are persisted verbatim to Postgres for lossless replay.
 - [docs/configuration.md](docs/configuration.md) — every environment variable
 - [docs/theming.md](docs/theming.md) — branding and custom CSS themes
 
+## Roadmap
+
+- [docs/generative-ui.md](docs/generative-ui.md) — standards-first support for
+  A2UI catalogs and MCP Apps
+
 ## License
 
 [MIT](LICENSE)
