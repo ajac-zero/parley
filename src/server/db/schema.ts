@@ -1,7 +1,6 @@
 import {
   bigserial,
   boolean,
-  customType,
   index,
   integer,
   jsonb,
@@ -10,12 +9,6 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-
-const bytea = customType<{ data: Uint8Array; notNull: true }>({
-  dataType() {
-    return "bytea";
-  },
-});
 
 /* -------------------------------------------------------------------------- */
 /*  better-auth tables                                                        */
@@ -255,7 +248,7 @@ export const conversationItems = pgTable(
   ],
 );
 
-/** Uploaded attachments, stored in Postgres for dependency-free self-hosting. */
+/** Uploaded attachment metadata; bytes live in S3-compatible object storage. */
 export const files = pgTable(
   "files",
   {
@@ -266,7 +259,8 @@ export const files = pgTable(
     name: text("name").notNull(),
     mimeType: text("mime_type").notNull(),
     size: integer("size").notNull(),
-    data: bytea("data").notNull(),
+    /** Object key within the configured S3 bucket. */
+    storageKey: text("storage_key").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

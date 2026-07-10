@@ -169,7 +169,13 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
         return item;
       });
 
-    /** Replaces parley-file references with inline base64 payloads. */
+    /**
+     * Replaces parley-file references with either a presigned URL (cheap,
+     * used when a publicly-reachable S3 endpoint is configured via
+     * S3_PUBLIC_URL) or an inline base64 payload (safe default — works even
+     * when the agent can't reach the object store's network, e.g. the
+     * default bundled MinIO).
+     */
     const hydrateItem = (userId: string, item: ORItem) =>
       Effect.gen(function* () {
         const record = item as unknown as Record<string, unknown>;
@@ -185,15 +191,27 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             partRecord.image_url.startsWith(FILE_REF_PREFIX)
           ) {
             const id = partRecord.image_url.slice(FILE_REF_PREFIX.length);
-            const file = yield* files
-              .getOwned(userId, id)
-              .pipe(Effect.orElseSucceed(() => null));
-            if (file) {
+            const { file, url } = yield* files
+              .getUrl(userId, id)
+              .pipe(Effect.orElseSucceed(() => ({ file: null, url: null })));
+            if (file && url) {
               content.push({
                 ...partRecord,
-                image_url: `data:${file.mimeType};base64,${Buffer.from(file.data).toString("base64")}`,
+                image_url: url,
               } as ContentPart);
               continue;
+            }
+            if (file) {
+              const { data } = yield* files
+                .getBytes(userId, id)
+                .pipe(Effect.orElseSucceed(() => ({ data: null })));
+              if (data) {
+                content.push({
+                  ...partRecord,
+                  image_url: `data:${file.mimeType};base64,${Buffer.from(data).toString("base64")}`,
+                } as ContentPart);
+                continue;
+              }
             }
             content.push({
               type: "input_text",
@@ -207,17 +225,30 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             partRecord.file_url.startsWith(FILE_REF_PREFIX)
           ) {
             const id = partRecord.file_url.slice(FILE_REF_PREFIX.length);
-            const file = yield* files
-              .getOwned(userId, id)
-              .pipe(Effect.orElseSucceed(() => null));
-            if (file) {
-              const { file_url: _drop, ...rest } = partRecord;
+            const { file, url } = yield* files
+              .getUrl(userId, id)
+              .pipe(Effect.orElseSucceed(() => ({ file: null, url: null })));
+            if (file && url) {
               content.push({
-                ...rest,
+                ...partRecord,
                 filename: file.name,
-                file_data: Buffer.from(file.data).toString("base64"),
+                file_url: url,
               } as ContentPart);
               continue;
+            }
+            if (file) {
+              const { data } = yield* files
+                .getBytes(userId, id)
+                .pipe(Effect.orElseSucceed(() => ({ data: null })));
+              if (data) {
+                const { file_url: _drop, ...rest } = partRecord;
+                content.push({
+                  ...rest,
+                  filename: file.name,
+                  file_data: Buffer.from(data).toString("base64"),
+                } as ContentPart);
+                continue;
+              }
             }
             content.push({
               type: "input_text",

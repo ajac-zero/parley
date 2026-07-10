@@ -1,4 +1,8 @@
 # Development infrastructure only (run the app with `bun run dev`).
+#
+# MinIO is exposed on the host at localhost:9000 (API) and localhost:9001
+# (console, default creds parley/parleyparley) so `bun run dev` can reach it
+# directly without any S3_* env vars needed beyond the defaults in env.ts.
 name: parley-dev
 
 services:
@@ -35,6 +39,39 @@ services:
       timeout: 3s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: parley
+      MINIO_ROOT_PASSWORD: parleyparley
+    ports:
+      - "${PARLEY_DEV_S3_PORT:-9000}:9000"
+      - "${PARLEY_DEV_S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - parley_dev_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: parley
+      MINIO_ROOT_PASSWORD: parleyparley
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 parley parleyparley &&
+      mc mb -p local/parley
+      "
+
 volumes:
   parley_dev_pg:
   parley_dev_redis:
+  parley_dev_minio:

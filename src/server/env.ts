@@ -24,6 +24,35 @@ const envConfig = Config.all({
   demoAgent: Config.boolean("DEMO_AGENT").pipe(Config.withDefault(true)),
   /** Max upload size for attachments, in megabytes. */
   fileMaxMb: Config.number("FILE_MAX_MB").pipe(Config.withDefault(10)),
+  /** S3-compatible endpoint used to store uploaded attachments. */
+  s3Endpoint: Config.string("S3_ENDPOINT").pipe(
+    Config.withDefault("http://localhost:9000"),
+  ),
+  s3Region: Config.string("S3_REGION").pipe(Config.withDefault("us-east-1")),
+  s3Bucket: Config.string("S3_BUCKET").pipe(Config.withDefault("parley")),
+  s3AccessKeyId: Config.string("S3_ACCESS_KEY_ID").pipe(
+    Config.withDefault("parley"),
+  ),
+  s3SecretAccessKey: Config.redacted("S3_SECRET_ACCESS_KEY").pipe(
+    Config.withDefault(Redacted.make("parleyparley")),
+  ),
+  /** Required for MinIO and most non-AWS S3-compatible endpoints. */
+  s3ForcePathStyle: Config.boolean("S3_FORCE_PATH_STYLE").pipe(
+    Config.withDefault(true),
+  ),
+  /**
+   * Publicly reachable base URL for the S3 endpoint (e.g. a real S3/R2/B2
+   * endpoint, or a bundled MinIO exposed behind a public reverse proxy).
+   * When set, attachments are sent to agents as presigned URLs instead of
+   * inline base64 — cheaper and avoids re-encoding on every replayed turn.
+   * When unset (e.g. the default bundled MinIO, reachable only on the
+   * deployment's private network), attachments always fall back to base64,
+   * since an external agent could never fetch a private-network URL.
+   */
+  s3PublicUrl: Config.string("S3_PUBLIC_URL").pipe(
+    Config.withDefault(""),
+    Config.map((v) => (v.trim().length > 0 ? v.trim() : null)),
+  ),
   /** Chat messages per user per minute. 0 disables rate limiting. */
   chatRateLimit: Config.number("CHAT_RATE_LIMIT").pipe(Config.withDefault(30)),
   /** Abort a turn if the agent sends no events for this many seconds. */
@@ -58,6 +87,11 @@ function loadEnv(): AppEnv {
   ) {
     throw new Error(
       "APP_SECRET must be set in production. Generate one with: openssl rand -base64 32",
+    );
+  }
+  if (isProd && Redacted.value(env.s3SecretAccessKey) === "parleyparley") {
+    throw new Error(
+      "S3_SECRET_ACCESS_KEY must be set in production for attachment storage.",
     );
   }
   return env;
