@@ -14,7 +14,7 @@ export const Route = createFileRoute("/api/files/$fileId")({
         const result = await serverRuntime.runPromise(
           Effect.gen(function* () {
             const files = yield* Files;
-            return yield* files.getOwned(session.user.id, params.fileId);
+            return yield* files.getBytes(session.user.id, params.fileId);
           }).pipe(
             Effect.map((value) => ({ ok: true as const, value })),
             Effect.catchTag("FileNotFoundError", () =>

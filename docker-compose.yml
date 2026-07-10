@@ -1,8 +1,21 @@
-# Production-ish single-host deployment: Parley + Postgres + Redis.
+# Production-ish single-host deployment: Parley + Postgres + Redis + MinIO.
 #
 #   1. Generate a secret:  openssl rand -base64 32
 #   2. APP_SECRET=... APP_URL=http://localhost:3000 docker compose up -d
 #   3. Open http://localhost:3000 and create the first (admin) account.
+#
+# Note on attachments: the bundled `minio` service is only reachable on this
+# compose network, not the public internet. That's fine if your agents run
+# on the same network, but if you're calling an external cloud model
+# provider (OpenAI, Anthropic, etc.), it can't fetch attachment URLs from
+# your private MinIO. In that case either:
+#   - set S3_PUBLIC_URL to a publicly reachable address for this MinIO
+#     (e.g. behind a TLS-terminating reverse proxy), or
+#   - point S3_ENDPOINT at a real public S3-compatible provider (S3, R2,
+#     B2, ...) instead of the bundled `minio` service, and set
+#     S3_PUBLIC_URL to that same endpoint.
+# Leaving S3_PUBLIC_URL unset is always safe: attachments are inlined as
+# base64 instead of sent as URLs.
 
 services:
   parley:
@@ -16,11 +29,19 @@ services:
       DATABASE_URL: postgres://parley:${POSTGRES_PASSWORD:-parley}@postgres:5432/parley
       REDIS_URL: redis://redis:6379
       DEMO_AGENT: ${DEMO_AGENT:-true}
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-parley}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-parley}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD (openssl rand -base64 32)}
+      S3_FORCE_PATH_STYLE: "true"
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   postgres:
@@ -50,6 +71,39 @@ services:
       retries: 10
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-parley}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD (openssl rand -base64 32)}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot init container: creates the attachments bucket if it doesn't
+  # already exist, then exits. `parley` waits on this completing.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-parley}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD (openssl rand -base64 32)}
+      S3_BUCKET: ${S3_BUCKET:-parley}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" &&
+      mc mb -p local/$$S3_BUCKET
+      "
+
 volumes:
   postgres-data:
   redis-data:
+  minio-data:

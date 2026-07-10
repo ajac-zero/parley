@@ -15,6 +15,13 @@
       "when": 1783605368422,
       "tag": "0001_bizarre_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783702345000,
+      "tag": "0002_flat_dust",
+      "breakpoints": true
     }
   ]
 }

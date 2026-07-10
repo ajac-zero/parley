@@ -7,12 +7,14 @@ import { Crypto } from "~/server/services/crypto";
 import { Files } from "~/server/services/files";
 import { RateLimit } from "~/server/services/rate-limit";
 import { Redis } from "~/server/services/redis";
+import { S3 } from "~/server/services/s3";
 import { Settings } from "~/server/services/settings";
 import { Turns } from "~/server/services/turns";
 
 const AppLayer = Layer.mergeAll(
   Db.Default,
   Redis.Default,
+  S3.Default,
   Crypto.Default,
   Settings.Default,
   Agents.Default,

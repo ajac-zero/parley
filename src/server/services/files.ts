@@ -3,6 +3,7 @@ import { Data, Effect } from "effect";
 import { Db, schema } from "~/server/db/client";
 import { appEnv } from "~/server/env";
 import { fileId } from "~/server/ids";
+import { S3 } from "~/server/services/s3";
 
 export class FileNotFoundError extends Data.TaggedError("FileNotFoundError")<{
   message: string;
@@ -21,9 +22,13 @@ const ALLOWED_IMAGE_TYPES = new Set([
 
 export const isImageMime = (mime: string) => ALLOWED_IMAGE_TYPES.has(mime);
 
+/** Presigned URL lifetime handed to agents — just long enough to cover a slow fetch. */
+const PRESIGNED_URL_TTL_SECONDS = 600;
+
 export class Files extends Effect.Service<Files>()("Files", {
   effect: Effect.gen(function* () {
     const { db } = yield* Db;
+    const s3 = yield* S3;
     const maxBytes = Math.floor(appEnv.fileMaxMb * 1024 * 1024);
 
     const save = (
@@ -39,6 +44,8 @@ export class Files extends Effect.Service<Files>()("Files", {
           });
         }
         const id = fileId();
+        const storageKey = `${userId}/${id}`;
+        yield* s3.putObject(storageKey, data, mimeType);
         yield* Effect.promise(() =>
           db.insert(schema.files).values({
             id,
@@ -46,12 +53,13 @@ export class Files extends Effect.Service<Files>()("Files", {
             name: name.slice(0, 300) || "file",
             mimeType: mimeType.slice(0, 200) || "application/octet-stream",
             size: data.byteLength,
-            data,
+            storageKey,
           }),
         );
         return { id, name, mimeType, size: data.byteLength };
       });
 
+    /** Ownership-checked metadata lookup (no bytes). */
     const getOwned = (userId: string, id: string) =>
       Effect.gen(function* () {
         const rows = yield* Effect.promise(() =>
@@ -69,7 +77,30 @@ export class Files extends Effect.Service<Files>()("Files", {
         return row;
       });
 
-    return { save, getOwned, maxBytes };
+    /** Ownership-checked byte fetch, e.g. for direct download or base64 hydration. */
+    const getBytes = (userId: string, id: string) =>
+      Effect.gen(function* () {
+        const file = yield* getOwned(userId, id);
+        const data = yield* s3.getObjectBytes(file.storageKey);
+        return { ...file, data };
+      });
+
+    /**
+     * Presigned URL for an external agent to fetch the file directly, or
+     * `null` if no publicly-reachable S3 endpoint is configured — callers
+     * should fall back to inlining base64 via `getBytes` in that case.
+     */
+    const getUrl = (userId: string, id: string) =>
+      Effect.gen(function* () {
+        const file = yield* getOwned(userId, id);
+        const url = yield* s3.getPresignedUrl(
+          file.storageKey,
+          PRESIGNED_URL_TTL_SECONDS,
+        );
+        return { file, url };
+      });
+
+    return { save, getOwned, getBytes, getUrl, maxBytes };
   }),
-  dependencies: [Db.Default],
+  dependencies: [Db.Default, S3.Default],
 }) {}

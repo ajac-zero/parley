@@ -50,14 +50,26 @@ jobs:
             -e POSTGRES_USER=parley -e POSTGRES_PASSWORD=parley -e POSTGRES_DB=parley \
             postgres:17-alpine
           docker run -d --name redis --network parley-ci redis:7-alpine
+          docker run -d --name minio --network parley-ci \
+            -e MINIO_ROOT_USER=parley -e MINIO_ROOT_PASSWORD=parleyparleyparley \
+            minio/minio:latest server /data
           for i in $(seq 1 30); do
             docker exec pg pg_isready -U parley -d parley && break || sleep 1
+          done
+          for i in $(seq 1 30); do
+            docker run --rm --network parley-ci --entrypoint sh minio/mc:latest -c \
+              "mc alias set local http://minio:9000 parley parleyparleyparley && mc mb -p local/parley" \
+              && break || sleep 1
           done
           docker run -d --name parley --network parley-ci -p 3000:3000 \
             -e APP_URL=http://localhost:3000 \
             -e APP_SECRET="$(openssl rand -base64 32)" \
             -e DATABASE_URL=postgres://parley:parley@pg:5432/parley \
             -e REDIS_URL=redis://redis:6379 \
+            -e S3_ENDPOINT=http://minio:9000 \
+            -e S3_BUCKET=parley \
+            -e S3_ACCESS_KEY_ID=parley \
+            -e S3_SECRET_ACCESS_KEY=parleyparleyparley \
             parley:ci
           for i in $(seq 1 30); do
             curl -fsS http://localhost:3000/api/health && exit 0 || sleep 2
