@@ -99,30 +99,39 @@ function NewChatPage() {
             </header>
           </div>
 
-          {/* Floats over the bottom of the thread; the gradient scrim fades
-           * messages into the page background as they scroll underneath it,
-           * so the composer's rounded card reads cleanly on top. Its
-           * measured height feeds back into the thread's bottom padding
-           * above, so the last message always clears it regardless of
-           * composer size. */}
+          {/* Floats over the bottom of the thread. No fade — messages stay
+           * fully sharp until they're covered by the composer's own opaque
+           * card. The short solid strip right above the card (matching its
+           * `rounded-[26px]` corner radius) plugs the gap between the
+           * card's rounded corners and its bounding box, so content can't
+           * peek through the notch beside those corners. Stops short of
+           * the scroll area's right edge so the scrollbar stays visible,
+           * instead of being painted over by this overlay. Its measured
+           * height feeds back into the thread's bottom padding above, so
+           * the last message always clears it regardless of composer
+           * size. */}
           <div
             ref={composerOverlayRef}
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background via-background/90 to-transparent px-4 pt-10 pb-2"
+            className="pointer-events-none absolute right-2.5 bottom-0 left-0 z-10 flex flex-col pb-2"
           >
-            <div
-              ref={composerCardRef}
-              className="pointer-events-auto w-full max-w-3xl"
-            >
-              <Composer
-                onSend={handleSend}
-                onStop={() => chatStore.cancel(NEW_CHAT_KEY)}
-                busy={busy}
-                disclaimer={config.chatDisclaimer}
-                supportsAttachments={
-                  selectedAgent?.supportsImages || selectedAgent?.supportsFiles
-                }
-                fileMaxMb={config.fileMaxMb}
-              />
+            <div className="h-[26px] bg-background" aria-hidden />
+            <div className="flex justify-center px-4">
+              <div
+                ref={composerCardRef}
+                className="pointer-events-auto w-full max-w-3xl"
+              >
+                <Composer
+                  onSend={handleSend}
+                  onStop={() => chatStore.cancel(NEW_CHAT_KEY)}
+                  busy={busy}
+                  disclaimer={config.chatDisclaimer}
+                  supportsAttachments={
+                    selectedAgent?.supportsImages ||
+                    selectedAgent?.supportsFiles
+                  }
+                  fileMaxMb={config.fileMaxMb}
+                />
+              </div>
             </div>
           </div>
         </div>
