@@ -648,10 +648,16 @@ export type PromptInputActionMenuContentProps = ComponentProps<
 
 export const PromptInputActionMenuContent = ({
   align = "start",
+  side = "top",
   className,
   ...props
 }: PromptInputActionMenuContentProps) => (
-  <DropdownMenuContent align={align} className={cn("w-56", className)} {...props} />
+  <DropdownMenuContent
+    align={align}
+    side={side}
+    className={cn("w-56", className)}
+    {...props}
+  />
 );
 
 export type PromptInputActionMenuItemProps = ComponentProps<
