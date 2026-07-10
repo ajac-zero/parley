@@ -135,6 +135,12 @@ export const agents = pgTable(
     avatar: text("avatar"),
     /** Base URL of the Open Responses API, e.g. https://agent.example.com/v1 */
     baseUrl: text("base_url").notNull(),
+    /**
+     * A2A well-known agent card URL this agent was imported from
+     * (https://{domain}/.well-known/agent-card.json). Null = manually added.
+     * Kept so the agent can be re-synced from its card later.
+     */
+    cardUrl: text("card_url"),
     /** AES-256-GCM encrypted bearer token, base64. Null = no auth header. */
     apiKeyCiphertext: text("api_key_ciphertext"),
     /** Value for the `model` request field. */

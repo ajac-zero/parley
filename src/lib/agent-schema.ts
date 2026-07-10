@@ -12,6 +12,11 @@ export const AgentInputSchema = Schema.Struct({
   description: Schema.NullOr(Schema.String.pipe(Schema.maxLength(500))),
   avatar: Schema.NullOr(Schema.String.pipe(Schema.maxLength(16))),
   baseUrl: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(2000)),
+  /** A2A well-known agent card URL this agent was imported from, if any. */
+  cardUrl: Schema.optionalWith(
+    Schema.NullOr(Schema.String.pipe(Schema.maxLength(2000))),
+    { default: () => null },
+  ),
   /** Plaintext API key; null keeps the existing key, "" clears it. */
   apiKey: Schema.optional(
     Schema.NullOr(Schema.String.pipe(Schema.maxLength(4000))),
