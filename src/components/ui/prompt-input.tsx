@@ -19,8 +19,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { CornerDownLeft, Loader2, Square, X } from "lucide-react";
+import { CornerDownLeft, ImagePlus, Loader2, Plus, Square, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 
 /**
@@ -598,5 +604,93 @@ export const PromptInputSubmit = ({
     >
       {children ?? icon}
     </Button>
+  );
+};
+
+/**
+ * A "+" trigger that expands into a dropdown of composer actions (e.g. add
+ * attachments). Mirrors AI Elements' `PromptInputActionMenu` family, built
+ * on this app's existing `~/components/ui/dropdown-menu` primitives.
+ */
+export type PromptInputActionMenuProps = ComponentProps<typeof DropdownMenu>;
+
+export const PromptInputActionMenu = (props: PromptInputActionMenuProps) => (
+  <DropdownMenu {...props} />
+);
+
+export type PromptInputActionMenuTriggerProps = ComponentProps<typeof Button>;
+
+export const PromptInputActionMenuTrigger = ({
+  className,
+  children,
+  ...props
+}: PromptInputActionMenuTriggerProps) => (
+  <DropdownMenuTrigger asChild>
+    <Button
+      aria-label="More actions"
+      className={cn(
+        "size-9 shrink-0 rounded-full text-muted-foreground",
+        className,
+      )}
+      size="icon"
+      type="button"
+      variant="ghost"
+      {...props}
+    >
+      {children ?? <Plus className="size-4.5" />}
+    </Button>
+  </DropdownMenuTrigger>
+);
+
+export type PromptInputActionMenuContentProps = ComponentProps<
+  typeof DropdownMenuContent
+>;
+
+export const PromptInputActionMenuContent = ({
+  align = "start",
+  className,
+  ...props
+}: PromptInputActionMenuContentProps) => (
+  <DropdownMenuContent align={align} className={cn("w-56", className)} {...props} />
+);
+
+export type PromptInputActionMenuItemProps = ComponentProps<
+  typeof DropdownMenuItem
+>;
+
+export const PromptInputActionMenuItem = (
+  props: PromptInputActionMenuItemProps,
+) => <DropdownMenuItem {...props} />;
+
+export type PromptInputActionAddAttachmentsProps = ComponentProps<
+  typeof DropdownMenuItem
+> & {
+  label?: string;
+};
+
+/** Menu item that opens the composer's file dialog when clicked. */
+export const PromptInputActionAddAttachments = ({
+  label = "Add photos or files",
+  onClick,
+  children,
+  ...props
+}: PromptInputActionAddAttachmentsProps) => {
+  const attachments = usePromptInputAttachments();
+
+  return (
+    <DropdownMenuItem
+      onClick={(e) => {
+        attachments.openFileDialog();
+        onClick?.(e);
+      }}
+      {...props}
+    >
+      {children ?? (
+        <>
+          <ImagePlus className="size-4" />
+          {label}
+        </>
+      )}
+    </DropdownMenuItem>
   );
 };
