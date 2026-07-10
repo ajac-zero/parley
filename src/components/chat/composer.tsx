@@ -1,9 +1,12 @@
-import { ArrowUp, Loader2, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Loader2, Square, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "~/components/ui/button";
 import {
   PromptInput,
+  PromptInputActionAddAttachments,
+  PromptInputActionMenu,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuTrigger,
   type PromptInputAttachment,
   type PromptInputMessage,
   PromptInputProvider,
@@ -183,17 +186,12 @@ function ComposerInner({
 
         <div className="flex items-end gap-1.5 p-2.5">
           {supportsAttachments && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-9 shrink-0 rounded-full text-muted-foreground"
-              onClick={attachments.openFileDialog}
-              disabled={disabled}
-              aria-label="Attach files"
-            >
-              <Paperclip className="size-4.5" />
-            </Button>
+            <PromptInputActionMenu>
+              <PromptInputActionMenuTrigger disabled={disabled} />
+              <PromptInputActionMenuContent>
+                <PromptInputActionAddAttachments />
+              </PromptInputActionMenuContent>
+            </PromptInputActionMenu>
           )}
 
           <PromptInputTextarea
