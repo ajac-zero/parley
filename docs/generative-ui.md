@@ -42,9 +42,9 @@ actions back to the service that owns the workflow.
 
 ## Progressive support
 
-### Level 1: Official A2UI Basic Catalog
+### Level 1: Official A2UI Basic Catalog (implemented)
 
-Parley will first support the official A2UI Basic Catalog and render
+Parley supports the official A2UI Basic Catalog and renders
 `application/a2ui+json` resources using native Parley components.
 
 This is the portable baseline. Tool providers can describe layouts, forms,
@@ -52,9 +52,31 @@ lists, media, and actions using a shared catalog without depending on
 Parley-specific components. Different hosts may render the same resource in
 their own visual language while preserving its structure and behavior.
 
-Parley should advertise only the A2UI protocol versions and catalog IDs that
-it fully supports. Tool providers should include a useful textual fallback for
-clients that cannot render the resource.
+Parley advertises only the A2UI protocol versions and catalog IDs that it
+fully supports (see `A2UI_SUPPORTED_VERSIONS` and
+`A2UI_SUPPORTED_CATALOG_IDS` in `src/lib/a2ui.ts`). Tool providers should
+include a useful textual fallback for clients that cannot render the
+resource.
+
+How it works today:
+
+- Detection: Parley scans `function_call_output` items for A2UI resources
+  encoded per the A2UI-over-MCP convention — an MCP embedded resource
+  (`{type: "resource", resource: {mimeType: "application/a2ui+json",
+  text}}`) among the output content parts, or a JSON string of an MCP
+  `CallToolResult`. A bare A2UI message array is also accepted. Nothing
+  else is sniffed (`extractA2uiResources` in `src/lib/a2ui.ts`).
+- Rendering: surfaces are reduced from the standard `createSurface` /
+  `updateComponents` / `updateDataModel` / `deleteSurface` messages and
+  rendered with native components (`src/components/a2ui/`). Data binding is
+  local and two-way; unsupported catalogs or protocol versions degrade to
+  the tool's text fallback without executing anything.
+- Actions: a user action becomes a new user turn whose text is a readable
+  summary, plus an `a2ui` content part carrying the standard A2UI
+  client -> server messages verbatim (the Open Responses analog of A2A's
+  DataPart binding). The agent owns routing the action back to the tool
+  that produced the surface; the built-in demo agent shows the loop
+  (ask it to "book a table").
 
 ### Level 2: Custom catalog plugins
 

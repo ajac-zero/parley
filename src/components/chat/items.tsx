@@ -1,5 +1,14 @@
-import { Check, ChevronRight, Copy, Pencil, RefreshCw } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  MousePointerClick,
+  Pencil,
+  RefreshCw,
+} from "lucide-react";
 import { memo, useMemo, useState } from "react";
+import type { A2uiActionHandler } from "~/components/a2ui/context";
+import { A2uiToolSurfaces } from "~/components/a2ui/surface";
 import { Markdown } from "~/components/chat/markdown";
 import { useShowReasoning } from "~/components/reasoning-preference";
 import { Action, Actions } from "~/components/ui/actions";
@@ -18,6 +27,7 @@ import {
   ToolOutput,
   type ToolState,
 } from "~/components/ui/tool";
+import { extractA2uiResources, messageA2uiActions } from "~/lib/a2ui";
 import {
   type ContentPart,
   type FunctionCallItem,
@@ -71,6 +81,22 @@ export const UserMessage = memo(function UserMessage({
 
   const images = parts.filter((p) => p.type === "input_image");
   const files = parts.filter((p) => p.type === "input_file");
+  const a2uiActions = useMemo(() => messageA2uiActions(item), [item]);
+
+  /* A UI interaction routed back through the agent: show a compact chip
+   * instead of the machine-readable text fallback. */
+  if (a2uiActions.length > 0) {
+    return (
+      <div className="flex w-full justify-end">
+        <div className="flex max-w-[85%] items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-muted-foreground text-sm">
+          <MousePointerClick className="size-3.5 shrink-0" />
+          <span className="truncate">
+            {a2uiActions.map((action) => action.name).join(", ")}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -299,16 +325,28 @@ export const ToolCallBlock = memo(function ToolCallBlock({
   call,
   output,
   streaming,
+  onA2uiAction,
+  disabled,
 }: {
   call: FunctionCallItem;
   output?: FunctionCallOutputItem | null;
   streaming?: boolean;
+  /** Routes an A2UI action from a rendered surface back to the agent. */
+  onA2uiAction?: A2uiActionHandler;
+  disabled?: boolean;
 }) {
   const outputText = useMemo(() => {
     if (!output) return null;
     if (typeof output.output === "string") return tryPrettyJson(output.output);
     return JSON.stringify(output.output, null, 2);
   }, [output]);
+
+  /* Typed A2UI resources in the result render as native UI below the tool
+   * card; the raw result stays available inside the collapsible. */
+  const a2ui = useMemo(
+    () => extractA2uiResources(output?.output ?? null),
+    [output],
+  );
 
   const state: ToolState = output
     ? "completed"
@@ -317,13 +355,20 @@ export const ToolCallBlock = memo(function ToolCallBlock({
       : "pending";
 
   return (
-    <Tool>
-      <ToolHeader title={call.name} state={state} />
-      <ToolContent>
-        <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
-        <ToolOutput output={outputText} />
-      </ToolContent>
-    </Tool>
+    <div className="flex w-full flex-col gap-3">
+      <Tool>
+        <ToolHeader title={call.name} state={state} />
+        <ToolContent>
+          <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
+          <ToolOutput output={outputText} />
+        </ToolContent>
+      </Tool>
+      <A2uiToolSurfaces
+        extraction={a2ui}
+        onAction={onA2uiAction}
+        disabled={disabled}
+      />
+    </div>
   );
 });
 

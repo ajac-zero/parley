@@ -9,6 +9,7 @@ import {
   Ref,
   Stream,
 } from "effect";
+import { A2UI_MIME_TYPE } from "~/lib/a2ui";
 import {
   type ContentPart,
   finalizePartialItems,
@@ -46,6 +47,8 @@ export interface StartTurnParams {
   message?: {
     text: string;
     fileIds: string[];
+    /** A2UI client -> server messages (user actions from surfaces). */
+    a2ui?: unknown[];
   } | null;
   /** Re-run the last turn (drops its previous output). */
   regenerate?: boolean;
@@ -124,12 +127,27 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
       });
 
     /** Builds the outbound content parts for a user message. */
-    const buildUserMessage = (actor: Actor, text: string, fileIds: string[]) =>
+    const buildUserMessage = (
+      actor: Actor,
+      text: string,
+      fileIds: string[],
+      a2ui: unknown[] = [],
+    ) =>
       Effect.gen(function* () {
         const parts: ContentPart[] = [];
         const trimmed = text.trim();
         if (trimmed.length > 0) {
           parts.push({ type: "input_text", text: trimmed });
+        }
+        if (a2ui.length > 0) {
+          /* A2UI actions ride along as a typed part (the Open Responses
+           * analog of A2A's DataPart binding); the text above is the
+           * fallback for agents that only read text. */
+          parts.push({
+            type: "a2ui",
+            mime_type: A2UI_MIME_TYPE,
+            data: a2ui,
+          } as unknown as ContentPart);
         }
         for (const id of fileIds.slice(0, 10)) {
           const file = yield* files.getOwned(actor.userId, id).pipe(
@@ -666,7 +684,11 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           }),
         );
 
-        if (params.message && params.message.text.trim().length > 0) {
+        if (
+          params.message &&
+          (params.message.text.trim().length > 0 ||
+            (params.message.a2ui?.length ?? 0) > 0)
+        ) {
           if (params.message.text.length > 64_000) {
             return yield* new TurnError({
               message: "Message is too long (max 64k characters).",
@@ -677,6 +699,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             actor,
             params.message.text,
             params.message.fileIds ?? [],
+            params.message.a2ui ?? [],
           );
           const rows = yield* conversations.appendItems(
             conversation.id,

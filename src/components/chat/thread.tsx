@@ -1,5 +1,6 @@
 import { AlertCircle } from "lucide-react";
 import { Fragment, memo, useMemo } from "react";
+import type { A2uiActionHandler } from "~/components/a2ui/context";
 import {
   AssistantMessage,
   ReasoningBlock,
@@ -161,6 +162,7 @@ export const Thread = memo(function Thread({
   onRegenerate,
   onRetry,
   onDismissError,
+  onA2uiAction,
   disabled,
   composerHeight,
   composerCardHeight,
@@ -174,6 +176,8 @@ export const Thread = memo(function Thread({
   onRegenerate?: () => void;
   onRetry?: () => void;
   onDismissError?: () => void;
+  /** Routes an A2UI action from a rendered tool surface back to the agent. */
+  onA2uiAction?: A2uiActionHandler;
   disabled?: boolean;
   /**
    * Measured height (px) of the floating composer overlay that sits on top
@@ -301,6 +305,8 @@ export const Thread = memo(function Thread({
                 call={call}
                 output={pairedOutputs.get(call.call_id) ?? null}
                 streaming={entry.streaming}
+                onA2uiAction={onA2uiAction}
+                disabled={disabled}
               />
             );
           }

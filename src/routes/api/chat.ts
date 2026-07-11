@@ -15,6 +15,11 @@ const ChatRequestSchema = Schema.Struct({
           Schema.Array(Schema.String).pipe(Schema.maxItems(10)),
           { default: () => [] },
         ),
+        /** A2UI client -> server messages (user actions from surfaces). */
+        a2ui: Schema.optionalWith(
+          Schema.Array(Schema.Unknown).pipe(Schema.maxItems(16)),
+          { default: () => [] },
+        ),
       }),
     ),
   ),
@@ -59,6 +64,7 @@ export const Route = createFileRoute("/api/chat")({
                 ? {
                     text: params.message.text,
                     fileIds: [...params.message.fileIds],
+                    a2ui: [...params.message.a2ui],
                   }
                 : null,
               regenerate: params.regenerate,
