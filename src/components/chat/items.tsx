@@ -26,7 +26,7 @@ import {
   ToolOutput,
   type ToolState,
 } from "~/components/ui/tool";
-import { extractA2uiResources, messageA2uiActions } from "~/lib/a2ui";
+import { type A2uiCallSurfaces, messageA2uiActions } from "~/lib/a2ui";
 import {
   type ContentPart,
   type FunctionCallItem,
@@ -326,12 +326,20 @@ export const ToolCallBlock = memo(function ToolCallBlock({
   call,
   output,
   streaming,
+  a2ui,
   onA2uiAction,
   disabled,
 }: {
   call: FunctionCallItem;
   output?: FunctionCallOutputItem | null;
   streaming?: boolean;
+  /**
+   * A2UI surfaces anchored at this call, reduced conversation-wide by the
+   * thread (later tool results may have updated them in place). They render
+   * as native UI below the tool card; the raw result stays available inside
+   * the collapsible.
+   */
+  a2ui?: A2uiCallSurfaces | null;
   /** Routes an A2UI action from a rendered surface back to the agent. */
   onA2uiAction?: A2uiActionHandler;
   disabled?: boolean;
@@ -341,13 +349,6 @@ export const ToolCallBlock = memo(function ToolCallBlock({
     if (typeof output.output === "string") return tryPrettyJson(output.output);
     return JSON.stringify(output.output, null, 2);
   }, [output]);
-
-  /* Typed A2UI resources in the result render as native UI below the tool
-   * card; the raw result stays available inside the collapsible. */
-  const a2ui = useMemo(
-    () => extractA2uiResources(output?.output ?? null),
-    [output],
-  );
 
   const state: ToolState = output
     ? "completed"
@@ -364,11 +365,13 @@ export const ToolCallBlock = memo(function ToolCallBlock({
           <ToolOutput output={outputText} />
         </ToolContent>
       </Tool>
-      <A2uiToolSurfaces
-        extraction={a2ui}
-        onAction={onA2uiAction}
-        disabled={disabled}
-      />
+      {a2ui ? (
+        <A2uiToolSurfaces
+          group={a2ui}
+          onAction={onA2uiAction}
+          disabled={disabled}
+        />
+      ) : null}
     </div>
   );
 });

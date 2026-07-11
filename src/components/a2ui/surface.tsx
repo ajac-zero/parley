@@ -1,12 +1,15 @@
 /**
  * A2UI surface rendering: turns the typed `application/a2ui+json` resources
- * found in a tool result into live, locally-stateful UI (Level 1 of
+ * found in tool results into live, locally-stateful UI (Level 1 of
  * docs/generative-ui.md).
  *
  * Each surface owns a local data model: input components read from and
  * write to it immediately (two-way binding, no network traffic). State
  * reaches the agent only when the user triggers an action, which the host
- * routes back as a user turn via `onAction`.
+ * routes back as a user turn via `onAction`. Surfaces are conversation-wide
+ * state — a later tool result may update this surface's components or data
+ * model in place (see `reduceA2uiOutputs`), which lands here as new
+ * `surface.dataOps` / `surface.components` props.
  */
 
 import { LayoutDashboard } from "lucide-react";
@@ -19,11 +22,11 @@ import {
 } from "~/components/a2ui/context";
 import { Markdown } from "~/components/chat/markdown";
 import {
-  type A2uiExtraction,
+  type A2uiCallSurfaces,
   type A2uiSurface,
+  applyA2uiDataOps,
   buildA2uiClientMessages,
   pointerSet,
-  reduceA2uiMessages,
   resolveDynamic,
   summarizeA2uiAction,
   toDisplayString,
@@ -45,6 +48,21 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   disabled?: boolean;
 }) {
   const [dataModel, setDataModel] = useState<unknown>(() => surface.dataModel);
+  /* Merge server data-model updates that arrive after mount (a later tool
+   * result patching this surface) into local state without clobbering the
+   * user's edits: apply only the ops not yet applied. Render-phase state
+   * adjustment, so the same commit that swaps components sees the new data.
+   * If history was rewritten (ops shrank — e.g. an edited turn), reseed
+   * from the server model and drop local edits. */
+  const [appliedOps, setAppliedOps] = useState(surface.dataOps.length);
+  if (surface.dataOps.length !== appliedOps) {
+    setDataModel(
+      surface.dataOps.length < appliedOps
+        ? surface.dataModel
+        : applyA2uiDataOps(dataModel, surface.dataOps.slice(appliedOps)),
+    );
+    setAppliedOps(surface.dataOps.length);
+  }
   /* Mirror for reads inside event handlers (dispatch resolves bindings at
    * interaction time, against the latest local edits). */
   const modelRef = useRef(dataModel);
@@ -137,29 +155,23 @@ function UnsupportedSurface({
 }
 
 /**
- * Renders every A2UI surface found in one tool output. Returns null when
- * the extraction has no resources, so callers can use it unconditionally.
+ * Renders the A2UI surfaces anchored at one tool call (see
+ * `reduceA2uiOutputs`: surfaces render where they were created, and may
+ * have been updated in place by later tool results). Returns null when
+ * there is nothing to show, so callers can use it unconditionally.
  */
 export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
-  extraction,
+  group,
   onAction,
   disabled,
 }: {
-  extraction: A2uiExtraction;
+  group: A2uiCallSurfaces;
   onAction?: A2uiActionHandler;
   disabled?: boolean;
 }) {
-  const surfaces = useMemo(
-    () =>
-      reduceA2uiMessages(
-        extraction.resources.flatMap((resource) => resource.messages),
-      ),
-    [extraction],
-  );
-
-  if (surfaces.length === 0) {
-    if (extraction.resources.length === 0) return null;
-    /* Resources were tagged as A2UI but reduced to nothing renderable. */
+  if (group.surfaces.length === 0) {
+    if (!group.showFallback) return null;
+    /* Resources were tagged as A2UI but applied to nothing renderable. */
     return (
       <UnsupportedSurface
         surface={{
@@ -168,16 +180,17 @@ export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
           theme: null,
           components: {},
           dataModel: {},
+          dataOps: [],
           supported: false,
         }}
-        fallbackText={extraction.fallbackText}
+        fallbackText={group.fallbackText}
       />
     );
   }
 
   return (
     <div className="flex w-full flex-col gap-3">
-      {surfaces.map((surface) =>
+      {group.surfaces.map((surface) =>
         surface.supported ? (
           <A2uiSurfaceView
             key={surface.surfaceId}
@@ -189,7 +202,7 @@ export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
           <UnsupportedSurface
             key={surface.surfaceId}
             surface={surface}
-            fallbackText={extraction.fallbackText}
+            fallbackText={group.fallbackText}
           />
         ),
       )}

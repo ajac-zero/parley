@@ -285,57 +285,72 @@ function reservationFormMessages(): Array<Record<string, unknown>> {
   ];
 }
 
-/** A confirmation card (exercises template children + relative bindings). */
-function confirmationCardMessages(
+/**
+ * The confirmation: no new surface — these envelopes target the existing
+ * `demo_reservation_form` surface (created by an earlier tool result) and
+ * morph it in place, the standard A2UI way to reflect an action's outcome.
+ * Data lands first so the swapped components bind in the same commit; the
+ * details are server-written (not read from the client's local edits) so
+ * replaying the conversation reproduces the confirmed state.
+ * (Exercises template children + relative bindings.)
+ */
+function confirmationUpdateMessages(
   details: Array<{ label: string; value: string }>,
 ): Array<Record<string, unknown>> {
-  const surfaceId = "demo_reservation_confirmation";
+  const surfaceId = "demo_reservation_form";
   const components = [
-    { id: "root", component: "Card", child: "layout" },
+    // Re-point the existing root at the confirmation layout; the old form
+    // components stay in the surface's map, just unreferenced.
+    { id: "root", component: "Card", child: "confirm_layout" },
     {
-      id: "layout",
+      id: "confirm_layout",
       component: "Column",
-      children: ["header", "rule", "details", "footnote"],
+      children: [
+        "confirm_header",
+        "confirm_rule",
+        "confirm_details",
+        "confirm_footnote",
+      ],
     },
     {
-      id: "header",
+      id: "confirm_header",
       component: "Row",
       align: "center",
-      children: ["check_icon", "confirm_title"],
+      children: ["confirm_icon", "confirm_title"],
     },
-    { id: "check_icon", component: "Icon", name: "check" },
+    { id: "confirm_icon", component: "Icon", name: "check" },
     {
       id: "confirm_title",
       component: "Text",
       variant: "h4",
       text: "Reservation confirmed",
     },
-    { id: "rule", component: "Divider" },
+    { id: "confirm_rule", component: "Divider" },
     {
-      id: "details",
+      id: "confirm_details",
       component: "List",
-      children: { path: "/details", componentId: "detail_row" },
+      children: { path: "/confirmation/details", componentId: "confirm_row" },
     },
     {
-      id: "detail_row",
+      id: "confirm_row",
       component: "Row",
       justify: "spaceBetween",
-      children: ["detail_label", "detail_value"],
+      children: ["confirm_label", "confirm_value"],
     },
     {
-      id: "detail_label",
+      id: "confirm_label",
       component: "Text",
       variant: "caption",
       text: { path: "label" },
     },
     {
-      id: "detail_value",
+      id: "confirm_value",
       component: "Text",
       variant: "h5",
       text: { path: "value" },
     },
     {
-      id: "footnote",
+      id: "confirm_footnote",
       component: "Text",
       variant: "caption",
       text: "Confirmation #PARLEY-0042 — the demo bistro never overbooks.",
@@ -344,13 +359,13 @@ function confirmationCardMessages(
   return [
     {
       version: A2UI_VERSION,
-      createSurface: { surfaceId, catalogId: A2UI_CATALOG_ID },
+      updateDataModel: {
+        surfaceId,
+        path: "/confirmation",
+        value: { details },
+      },
     },
     { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
-    {
-      version: A2UI_VERSION,
-      updateDataModel: { surfaceId, path: "/details", value: details },
-    },
   ];
 }
 
@@ -399,21 +414,21 @@ function replyForA2uiAction(action: DemoA2uiAction): BuiltReply {
   ];
 
   return {
-    reasoning: `The user submitted the reservation form (an A2UI action routed back through the conversation). I'll confirm the booking for ${name} and return a confirmation card.`,
+    reasoning: `The user submitted the reservation form (an A2UI action routed back through the conversation). I'll confirm the booking for ${name} by updating the existing form surface in place.`,
     reply: `All set, **${name}**! Your table for **${partySize}** is requested${
       when ? ` for **${when}**` : ""
     }${seating ? ` in the **${seating}**` : ""}. ${
       notify
         ? "A (pretend) confirmation email is on its way."
         : "No confirmation email will be sent."
-    }\n\nThat's the full A2UI loop: tool → typed resource → rendered form → user action → back through the agent.`,
+    }\n\nNotice the form above turned into the confirmation **in place**: \`confirm_reservation\` returned \`updateComponents\`/\`updateDataModel\` envelopes targeting the *same* \`surfaceId\`, so Parley morphed the existing surface instead of rendering a new one. That's the full A2UI loop: tool → typed resource → rendered form → user action → agent-driven update.`,
     tool: {
       name: "confirm_reservation",
       args: JSON.stringify({ name, when, party_size: partySize, seating }),
       output: a2uiToolOutput(
         "a2ui://demo/reservation-confirmation",
         `Reservation confirmed for ${name} (party of ${partySize}).`,
-        confirmationCardMessages(details),
+        confirmationUpdateMessages(details),
       ),
     },
   };
@@ -450,7 +465,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     return {
       reasoning:
         "The user wants to see generative UI. I'll call the demo find_table tool, which returns an A2UI form resource, and invite them to submit it.",
-      reply: `I called the \`find_table\` tool and it returned a **typed A2UI resource** (\`application/a2ui+json\`) along with its JSON result — Parley rendered it as the form above using native components.\n\nFill it in and hit **Request reservation**: the action flows back to me through the conversation, and I'll confirm your booking.`,
+      reply: `I called the \`find_table\` tool and it returned a **typed A2UI resource** (\`application/a2ui+json\`) along with its JSON result — Parley rendered it as the form above using native components.\n\nFill it in and hit **Request reservation**: the action flows back to me through the conversation, and I'll confirm your booking by updating this same surface in place.`,
       tool: {
         name: "find_table",
         args: JSON.stringify({ venue: "Chez Parley", date: "tonight" }),
