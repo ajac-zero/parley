@@ -5,6 +5,7 @@ import {
   MousePointerClick,
   Pencil,
   RefreshCw,
+  Wrench,
 } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import type { A2uiActionHandler } from "~/components/a2ui/context";
@@ -12,6 +13,11 @@ import { A2uiToolSurfaces } from "~/components/a2ui/surface";
 import { Markdown } from "~/components/chat/markdown";
 import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import {
   Reasoning,
   ReasoningContent,
@@ -356,15 +362,45 @@ export const ToolCallBlock = memo(function ToolCallBlock({
       ? "running"
       : "pending";
 
+  /* When the result rendered as an A2UI surface — or applied updates to a
+   * surface elsewhere in the thread — the surface is the response, so the
+   * full tool card is demoted to a compact disclosure chip. It stays one
+   * click from the raw args/output (a surface shows what the tool wants
+   * seen; the raw result shows what it actually returned), and the full
+   * card still appears while the call is running (progress) and for
+   * unsupported/fallback results (the card is the content there). */
+  const demoted =
+    output != null &&
+    a2ui != null &&
+    (a2ui.surfaces.some((surface) => surface.supported) ||
+      (a2ui.surfaces.length === 0 && !a2ui.showFallback));
+
   return (
     <div className="flex w-full flex-col gap-3">
-      <Tool>
-        <ToolHeader title={call.name} state={state} />
-        <ToolContent>
-          <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
-          <ToolOutput output={outputText} />
-        </ToolContent>
-      </Tool>
+      {demoted ? (
+        <Collapsible className="w-full">
+          <CollapsibleTrigger className="group inline-flex max-w-full items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent/50">
+            <Wrench className="size-3 shrink-0" />
+            <span className="truncate font-mono">{call.name}</span>
+            <Check className="size-3 shrink-0 text-green-600" />
+            <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-3 overflow-hidden rounded-xl border bg-card px-3.5 py-3">
+              <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
+              <ToolOutput output={outputText} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <Tool>
+          <ToolHeader title={call.name} state={state} />
+          <ToolContent>
+            <ToolInput input={tryPrettyJson(call.arguments || "{}")} />
+            <ToolOutput output={outputText} />
+          </ToolContent>
+        </Tool>
+      )}
       {a2ui ? (
         <A2uiToolSurfaces
           group={a2ui}
