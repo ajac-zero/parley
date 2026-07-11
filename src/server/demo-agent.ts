@@ -5,7 +5,7 @@
  * integration tests.
  */
 
-import { A2UI_MIME_TYPE } from "~/lib/a2ui";
+import { A2UI_CHARTS_CATALOG_ID, A2UI_MIME_TYPE } from "~/lib/a2ui";
 import type { ContentPart, ORItem } from "~/lib/openresponses";
 import { newId } from "~/server/ids";
 
@@ -369,11 +369,297 @@ function confirmationUpdateMessages(
   ];
 }
 
+/* ------------------------- A2UI charts showcase --------------------------- */
+
+/** The fabricated monthly figures behind the demo revenue report. */
+const REVENUE_MONTHS = [
+  { month: "Jan", revenue: 186_000, expenses: 152_000 },
+  { month: "Feb", revenue: 198_500, expenses: 156_400 },
+  { month: "Mar", revenue: 224_300, expenses: 161_200 },
+  { month: "Apr", revenue: 209_800, expenses: 173_900 },
+  { month: "May", revenue: 241_600, expenses: 178_300 },
+  { month: "Jun", revenue: 253_100, expenses: 182_700 },
+  { month: "Jul", revenue: 275_400, expenses: 189_500 },
+  { month: "Aug", revenue: 291_200, expenses: 196_800 },
+] as const;
+
+type RevenueMonth = (typeof REVENUE_MONTHS)[number];
+
+const REVENUE_LAST = REVENUE_MONTHS[REVENUE_MONTHS.length - 1] as RevenueMonth;
+
+const sum = (pick: (m: RevenueMonth) => number): number =>
+  REVENUE_MONTHS.reduce((total, m) => total + pick(m), 0);
+
+const monthMargin = (m: RevenueMonth): number =>
+  (m.revenue - m.expenses) / m.revenue;
+
+/**
+ * The revenue report surface — Parley's first-party charts catalog (Basic
+ * Catalog + Chart/Stat). The Chart's point selection binds to /selection in
+ * the surface's local data model; the analyze Button sends it back as
+ * action context.
+ */
+function revenueReportMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_report";
+  const first = REVENUE_MONTHS[0] as RevenueMonth;
+  const totalRevenue = sum((m) => m.revenue);
+  const totalExpenses = sum((m) => m.expenses);
+  const components = [
+    { id: "root", component: "Card", child: "report_layout" },
+    {
+      id: "report_layout",
+      component: "Column",
+      children: [
+        "report_title",
+        "report_subtitle",
+        "report_stats",
+        "report_chart",
+        "report_hint",
+        "report_footer",
+      ],
+    },
+    {
+      id: "report_title",
+      component: "Text",
+      variant: "h3",
+      text: "Revenue report — FY26",
+    },
+    {
+      id: "report_subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Rendered from Parley's first-party charts catalog: the A2UI Basic Catalog extended with native Chart and Stat components.",
+    },
+    {
+      id: "report_stats",
+      component: "Row",
+      children: ["stat_revenue", "stat_expenses", "stat_margin"],
+    },
+    {
+      id: "stat_revenue",
+      component: "Stat",
+      label: "Revenue (8 mo)",
+      value: { path: "/report/stats/revenue" },
+      format: "currency",
+      delta: { path: "/report/stats/revenueDelta" },
+      weight: 1,
+    },
+    {
+      id: "stat_expenses",
+      component: "Stat",
+      label: "Expenses (8 mo)",
+      value: { path: "/report/stats/expenses" },
+      format: "currency",
+      delta: { path: "/report/stats/expensesDelta" },
+      weight: 1,
+    },
+    {
+      id: "stat_margin",
+      component: "Stat",
+      label: "Net margin",
+      value: { path: "/report/stats/margin" },
+      format: "percent",
+      delta: { path: "/report/stats/marginDelta" },
+      weight: 1,
+    },
+    {
+      id: "report_chart",
+      component: "Chart",
+      variant: "bar",
+      title: "Revenue vs expenses by month",
+      data: { path: "/report/monthly" },
+      x: { key: "month", label: "Month" },
+      series: [
+        { key: "revenue", label: "Revenue", color: "chart-1" },
+        { key: "expenses", label: "Expenses", color: "chart-5" },
+      ],
+      height: 260,
+      selection: { path: "/selection", mode: "point" },
+    },
+    {
+      id: "report_hint",
+      component: "Text",
+      variant: "caption",
+      text: {
+        call: "formatString",
+        args: {
+          value:
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+            "Selected month: ${/selection/x}. Click a bar to change the selection, then analyze it.",
+        },
+      },
+    },
+    {
+      id: "report_footer",
+      component: "Row",
+      justify: "end",
+      children: ["analyze"],
+    },
+    { id: "analyze_text", component: "Text", text: "Analyze selection" },
+    {
+      id: "analyze",
+      component: "Button",
+      variant: "primary",
+      child: "analyze_text",
+      action: {
+        event: {
+          name: "analyze_revenue",
+          context: { selection: { path: "/selection" } },
+        },
+      },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/report",
+        value: {
+          monthly: REVENUE_MONTHS.map((m) => ({ ...m })),
+          stats: {
+            revenue: totalRevenue,
+            expenses: totalExpenses,
+            margin: (totalRevenue - totalExpenses) / totalRevenue,
+            revenueDelta: REVENUE_LAST.revenue / first.revenue - 1,
+            expensesDelta: REVENUE_LAST.expenses / first.expenses - 1,
+            marginDelta: monthMargin(REVENUE_LAST) - monthMargin(first),
+          },
+        },
+      },
+    },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/selection",
+        value: {
+          mode: "point",
+          index: REVENUE_MONTHS.length - 1,
+          x: REVENUE_LAST.month,
+          values: {
+            revenue: REVENUE_LAST.revenue,
+            expenses: REVENUE_LAST.expenses,
+          },
+        },
+      },
+    },
+  ];
+}
+
+/**
+ * The analysis for one selected month: update envelopes targeting the
+ * existing `demo_revenue_report` surface — the insight section is appended
+ * to the report card in place, never a new surface.
+ */
+function revenueInsightMessages(
+  row: RevenueMonth,
+  summary: string,
+): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_report";
+  const components = [
+    {
+      id: "report_layout",
+      component: "Column",
+      children: [
+        "report_title",
+        "report_subtitle",
+        "report_stats",
+        "report_chart",
+        "report_hint",
+        "report_footer",
+        "insight_rule",
+        "insight_title",
+        "insight_body",
+      ],
+    },
+    { id: "insight_rule", component: "Divider" },
+    {
+      id: "insight_title",
+      component: "Text",
+      variant: "h5",
+      text: {
+        call: "formatString",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+        args: { value: "Analysis — ${/insight/month}" },
+      },
+    },
+    {
+      id: "insight_body",
+      component: "Text",
+      text: { path: "/insight/summary" },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/insight",
+        value: { month: row.month, summary },
+      },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+  ];
+}
+
+const usd = (value: number): string =>
+  `$${Math.round(value).toLocaleString("en-US")}`;
+const pct = (fraction: number): string =>
+  `${fraction >= 0 ? "+" : ""}${(fraction * 100).toFixed(1)}%`;
+
+/** Builds the analysis turn for an `analyze_revenue` action. */
+function replyForRevenueAnalysis(action: DemoA2uiAction): BuiltReply {
+  const selection =
+    typeof action.context.selection === "object" &&
+    action.context.selection !== null
+      ? (action.context.selection as Record<string, unknown>)
+      : {};
+  /* The server owns the report data: the selection only names the month,
+   * and the figures are recomputed from the source of truth. */
+  const row =
+    REVENUE_MONTHS.find((m) => m.month === selection.x) ?? REVENUE_LAST;
+
+  const avgRevenue = sum((m) => m.revenue) / REVENUE_MONTHS.length;
+  const avgExpenses = sum((m) => m.expenses) / REVENUE_MONTHS.length;
+  const margin = monthMargin(row);
+  const avgMargin =
+    (sum((m) => m.revenue) - sum((m) => m.expenses)) / sum((m) => m.revenue);
+  const summary =
+    `**${row.month}** brought in **${usd(row.revenue)}** against ` +
+    `**${usd(row.expenses)}** in expenses — a **${(margin * 100).toFixed(1)}%** net margin. ` +
+    `Revenue ran **${pct(row.revenue / avgRevenue - 1)}** vs the eight-month average and ` +
+    `expenses **${pct(row.expenses / avgExpenses - 1)}**, leaving the margin ` +
+    `${margin >= avgMargin ? "ahead of" : "behind"} the period's ${(avgMargin * 100).toFixed(1)}% baseline.`;
+
+  return {
+    reasoning: `The user selected ${row.month} in the revenue chart and asked for an analysis (an A2UI action carrying the chart's selection binding). I'll run analyze_selection and append the insight to the existing report surface in place.`,
+    reply: `I analyzed **${row.month}**: revenue ${usd(row.revenue)}, expenses ${usd(row.expenses)}, a ${(margin * 100).toFixed(1)}% net margin.\n\nThe \`analyze_selection\` tool returned \`updateDataModel\`/\`updateComponents\` envelopes for the *same* \`surfaceId\`, so the analysis was appended to the report card above **in place**. Click a different bar and analyze again — the section refreshes instead of stacking up.`,
+    tool: {
+      name: "analyze_selection",
+      args: JSON.stringify({ month: row.month }),
+      output: a2uiToolOutput(
+        "a2ui://demo/revenue-insight",
+        `Analysis for ${row.month}: revenue ${usd(row.revenue)}, expenses ${usd(row.expenses)}, net margin ${(margin * 100).toFixed(1)}%.`,
+        revenueInsightMessages(row, summary),
+      ),
+    },
+  };
+}
+
 const str = (value: unknown, max = 120): string =>
   typeof value === "string" ? value.slice(0, max) : "";
 
 /** Builds the confirmation turn for a submitted reservation action. */
 function replyForA2uiAction(action: DemoA2uiAction): BuiltReply {
+  if (action.name === "analyze_revenue") {
+    return replyForRevenueAnalysis(action);
+  }
   if (action.name !== "submit_reservation") {
     return {
       reasoning: `The user triggered the A2UI action "${str(action.name, 60)}". I'll acknowledge it and echo the context so they can see the round-trip.`,
@@ -461,6 +747,25 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     };
   }
 
+  if (/\b(charts?|revenue|graphs?|dashboard)\b/.test(lower)) {
+    const totalRevenue = sum((m) => m.revenue);
+    const totalExpenses = sum((m) => m.expenses);
+    return {
+      reasoning:
+        "The user wants to see charts. I'll call the demo get_revenue_report tool, which returns an A2UI surface using Parley's first-party charts catalog, and explain the selection loop.",
+      reply: `I called the \`get_revenue_report\` tool and it returned an A2UI surface using **Parley's charts catalog** — the official Basic Catalog extended with native \`Chart\` and \`Stat\` components (the catalog ID names a published JSON Schema contract; nothing is fetched or executed at runtime).\n\nClick a bar to select a month, then hit **Analyze selection**: the chart's selection binding rides along as action context, and my analysis lands on this same surface in place.`,
+      tool: {
+        name: "get_revenue_report",
+        args: JSON.stringify({ period: "Jan–Aug FY26", currency: "USD" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/revenue-report",
+          `Revenue report Jan–Aug FY26: revenue ${usd(totalRevenue)}, expenses ${usd(totalExpenses)}, net margin ${(((totalRevenue - totalExpenses) / totalRevenue) * 100).toFixed(1)}%.`,
+          revenueReportMessages(),
+        ),
+      },
+    };
+  }
+
   if (/\b(a2ui|book|reserve|reservation|table|form)\b/.test(lower)) {
     return {
       reasoning:
@@ -528,7 +833,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }

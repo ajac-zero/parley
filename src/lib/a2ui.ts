@@ -28,12 +28,27 @@ const A2UI_LEGACY_MIME_TYPE = "application/json+a2ui";
 export const A2UI_SUPPORTED_VERSIONS: readonly string[] = ["v0.9", "v0.9.1"];
 
 /**
- * Catalog IDs Parley fully supports: the official A2UI Basic Catalog.
+ * The official A2UI Basic Catalog (both spec revisions Parley renders).
  * Catalog IDs are opaque identifiers agreed out-of-band, not fetched URLs.
  */
-export const A2UI_SUPPORTED_CATALOG_IDS: readonly string[] = [
+export const A2UI_BASIC_CATALOG_IDS: readonly string[] = [
   "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json",
+];
+
+/**
+ * Parley's first-party charts catalog: the Basic Catalog plus `Chart` and
+ * `Stat` leaf components (Level 2 of docs/generative-ui.md). The ID names
+ * the published contract in catalogs/charts/v1/catalog.json — it is never
+ * fetched at runtime.
+ */
+export const A2UI_CHARTS_CATALOG_ID =
+  "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
+
+/** Catalog IDs Parley fully supports (and advertises). */
+export const A2UI_SUPPORTED_CATALOG_IDS: readonly string[] = [
+  ...A2UI_BASIC_CATALOG_IDS,
+  A2UI_CHARTS_CATALOG_ID,
 ];
 
 /** Version Parley stamps on the client -> server messages it emits. */

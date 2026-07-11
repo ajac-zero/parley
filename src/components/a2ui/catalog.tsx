@@ -1,10 +1,15 @@
 /**
- * Native renderers for the official A2UI Basic Catalog (v0.9 / v0.9.1).
+ * Native renderers for the catalogs Parley supports, and the registry that
+ * maps a surface's `catalogId` to its component views.
  *
- * Each A2UI component maps onto Parley's own visual language (shadcn +
- * Tailwind); the resource's structure and behavior are preserved while the
- * look stays native to the host, as the A2UI spec intends. Unknown
- * component types render an inert placeholder — never executed content.
+ * This file implements the official A2UI Basic Catalog (v0.9 / v0.9.1);
+ * Parley's first-party charts catalog extends it with lazily-loaded views
+ * from ~/components/a2ui/charts (see `catalogComponentViews` at the
+ * bottom). Each A2UI component maps onto Parley's own visual language
+ * (shadcn + Tailwind); the resource's structure and behavior are preserved
+ * while the look stays native to the host, as the A2UI spec intends.
+ * Unknown component types render an inert, labeled placeholder — never
+ * executed content.
  */
 
 import {
@@ -68,7 +73,16 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import {
+  Component,
+  type ComponentType,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 import { useA2uiSurface } from "~/components/a2ui/context";
 import { Markdown } from "~/components/chat/markdown";
 import { Button } from "~/components/ui/button";
@@ -86,6 +100,8 @@ import { Slider } from "~/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import {
+  A2UI_BASIC_CATALOG_IDS,
+  A2UI_CHARTS_CATALOG_ID,
   type A2uiComponent,
   failedChecks,
   pointerGet,
@@ -128,53 +144,21 @@ export function CatalogNode({ id, base }: { id: string; base: string }) {
   // until the component arrives.
   if (!component) return null;
 
-  switch (component.component) {
-    case "Text":
-      return <TextView component={component} base={base} />;
-    case "Image":
-      return <ImageView component={component} base={base} />;
-    case "Icon":
-      return <IconView component={component} base={base} />;
-    case "Video":
-      return <VideoView component={component} base={base} />;
-    case "AudioPlayer":
-      return <AudioPlayerView component={component} base={base} />;
-    case "Row":
-      return <FlexView component={component} base={base} axis="row" />;
-    case "Column":
-      return <FlexView component={component} base={base} axis="column" />;
-    case "List":
-      return <ListView component={component} base={base} />;
-    case "Card":
-      return <CardView component={component} base={base} />;
-    case "Tabs":
-      return <TabsView component={component} base={base} />;
-    case "Modal":
-      return <ModalView component={component} base={base} />;
-    case "Divider":
-      return <DividerView component={component} />;
-    case "Button":
-      return <ButtonView component={component} base={base} />;
-    case "TextField":
-      return <TextFieldView component={component} base={base} />;
-    case "CheckBox":
-      return <CheckBoxView component={component} base={base} />;
-    case "ChoicePicker":
-      return <ChoicePickerView component={component} base={base} />;
-    case "Slider":
-      return <SliderView component={component} base={base} />;
-    case "DateTimeInput":
-      return <DateTimeInputView component={component} base={base} />;
-    default:
-      return (
-        <div className="rounded-lg border border-dashed px-2.5 py-1.5 font-mono text-muted-foreground text-xs">
-          {component.component}
-        </div>
-      );
+  const View = catalogComponentViews(surface.catalogId)[component.component];
+  if (!View) {
+    /* Unknown component within a supported catalog: a safe, labeled
+     * placeholder — never guessed rendering, never executed content. */
+    return (
+      <div className="rounded-lg border border-dashed px-2.5 py-1.5 text-muted-foreground text-xs">
+        Unsupported component{" "}
+        <span className="font-mono">{component.component}</span>
+      </div>
+    );
   }
+  return <View component={component} base={base} />;
 }
 
-interface ViewProps {
+export interface ViewProps {
   component: A2uiComponent;
   base: string;
 }
@@ -409,7 +393,7 @@ function ModalView({ component, base }: ViewProps) {
   );
 }
 
-function DividerView({ component }: { component: A2uiComponent }) {
+function DividerView({ component }: ViewProps) {
   const vertical = toDisplayString(component.axis) === "vertical";
   return (
     <Separator
@@ -437,10 +421,13 @@ function TextView({ component, base }: ViewProps) {
   const text = resolveString(component.text, dataModel, base);
   const variant = toDisplayString(component.variant) || "body";
   if (variant === "body") {
-    /* Body text supports simple Markdown, per the catalog. */
+    /* Body text supports simple Markdown, per the catalog. Keyed by the
+     * resolved text: Streamdown is built for append-only streaming and
+     * keeps stale DOM when a data binding *replaces* the text, so a
+     * rebind remounts it (these are small, atomic strings). */
     return (
       <div className="min-w-0">
-        <Markdown text={text} />
+        <Markdown key={text} text={text} />
       </div>
     );
   }
@@ -939,4 +926,139 @@ function DateTimeInputView({ component, base }: ViewProps) {
       />
     </div>
   );
+}
+
+/* -------------------------------- registry -------------------------------- */
+
+/** Component views one catalog provides, keyed by `component` type. */
+export type A2uiComponentViews = Record<
+  string,
+  ComponentType<ViewProps> | undefined
+>;
+
+function RowView(props: ViewProps) {
+  return <FlexView {...props} axis="row" />;
+}
+
+function ColumnView(props: ViewProps) {
+  return <FlexView {...props} axis="column" />;
+}
+
+const basicComponentViews: A2uiComponentViews = {
+  Text: TextView,
+  Image: ImageView,
+  Icon: IconView,
+  Video: VideoView,
+  AudioPlayer: AudioPlayerView,
+  Row: RowView,
+  Column: ColumnView,
+  List: ListView,
+  Card: CardView,
+  Tabs: TabsView,
+  Modal: ModalView,
+  Divider: DividerView,
+  Button: ButtonView,
+  TextField: TextFieldView,
+  CheckBox: CheckBoxView,
+  ChoicePicker: ChoicePickerView,
+  Slider: SliderView,
+  DateTimeInput: DateTimeInputView,
+};
+
+/* The charts catalog adds Chart and Stat on top of the Basic Catalog.
+ * Recharts is heavy, so those views load lazily — the chunk downloads only
+ * when a chart actually renders, behind a skeleton fallback. */
+
+const LazyChartView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.ChartView,
+  })),
+);
+
+const LazyStatView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.StatView,
+  })),
+);
+
+/**
+ * Contains failures from the charting library (or a chunk that failed to
+ * load) to an inert placeholder: a malformed chart resource must degrade
+ * like any other unsupported content, never take down the conversation.
+ */
+class ChartViewBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="rounded-lg border border-dashed px-2.5 py-1.5 text-muted-foreground text-xs">
+        This chart couldn't be rendered.
+      </div>
+    );
+  }
+}
+
+function SuspendedChartView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-64 w-full animate-pulse rounded-lg bg-muted/40"
+          />
+        }
+      >
+        <LazyChartView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
+function SuspendedStatView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-16 w-28 animate-pulse rounded-lg bg-muted/40"
+          />
+        }
+      >
+        <LazyStatView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
+const chartsComponentViews: A2uiComponentViews = {
+  ...basicComponentViews,
+  Chart: SuspendedChartView,
+  Stat: SuspendedStatView,
+};
+
+/**
+ * The renderer registry: catalogId -> component views. Built directly from
+ * the supported-catalog constants in ~/lib/a2ui so the advertised IDs and
+ * the renderers cannot drift apart.
+ */
+const catalogViews: Record<string, A2uiComponentViews> = Object.fromEntries([
+  ...A2UI_BASIC_CATALOG_IDS.map((id) => [id, basicComponentViews] as const),
+  [A2UI_CHARTS_CATALOG_ID, chartsComponentViews] as const,
+]);
+
+/**
+ * Resolves the component views for a catalog. Unknown catalogs fall back to
+ * the Basic Catalog views: surfaces with unsupported catalogs never reach
+ * `CatalogNode` (they degrade to the text fallback), so this is defensive.
+ */
+export function catalogComponentViews(catalogId: string): A2uiComponentViews {
+  return catalogViews[catalogId] ?? basicComponentViews;
 }
