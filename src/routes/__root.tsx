@@ -6,6 +6,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { ShowReasoningProvider } from "~/components/reasoning-preference";
 import { ThemeProvider } from "~/components/theme";
 import { Toaster } from "~/components/ui/sonner";
 import { getAppContext } from "~/functions/config";
@@ -55,8 +56,10 @@ function RootComponent() {
   return (
     <RootDocument customCss={config.customCss}>
       <ThemeProvider>
-        <Outlet />
-        <Toaster position="top-center" />
+        <ShowReasoningProvider>
+          <Outlet />
+          <Toaster position="top-center" />
+        </ShowReasoningProvider>
       </ThemeProvider>
     </RootDocument>
   );

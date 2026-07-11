@@ -1,11 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Info, Monitor, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useShowReasoning } from "~/components/reasoning-preference";
 import { useTheme } from "~/components/theme";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 
@@ -16,6 +24,7 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsPage() {
   const { session } = Route.useRouteContext();
   const { preference, setPreference } = useTheme();
+  const { showReasoning, setShowReasoning } = useShowReasoning();
 
   const [name, setName] = useState(session?.user.name ?? "");
   const [savingName, setSavingName] = useState(false);
@@ -80,6 +89,31 @@ function SettingsPage() {
                 {label}
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="font-medium text-lg">Behavior</h2>
+          <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="show-reasoning">Show reasoning</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="size-3.5 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Keep an agent's thinking expanded by default. Off keeps it
+                    collapsed until you click to expand it.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Switch
+              id="show-reasoning"
+              checked={showReasoning}
+              onCheckedChange={setShowReasoning}
+            />
           </div>
         </section>
 
