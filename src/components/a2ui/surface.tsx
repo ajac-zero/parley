@@ -12,7 +12,7 @@
  * `surface.dataOps` / `surface.components` props.
  */
 
-import { LayoutDashboard, Pin, PinOff } from "lucide-react";
+import { LayoutDashboard, Pin } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { CatalogNode } from "~/components/a2ui/catalog";
 import {
@@ -160,18 +160,16 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
         className="group/surface relative w-full max-w-lg"
         data-a2ui-surface={surface.surfaceId}
       >
-        {host?.togglePin && (
+        {/* Pin affordance only: a pinned surface renders in the canvas,
+         * whose item header already has an always-visible unpin button. */}
+        {host?.togglePin && !pinned && (
           <button
             type="button"
             onClick={() => host.togglePin?.(surface.surfaceId)}
-            title={pinned ? "Unpin" : "Pin to canvas"}
+            title="Pin to canvas"
             className="absolute -top-2 -right-2 z-10 rounded-full border bg-card p-1.5 text-muted-foreground opacity-0 shadow-xs transition-opacity focus-visible:opacity-100 group-hover/surface:opacity-100 hover:text-foreground"
           >
-            {pinned ? (
-              <PinOff className="size-3.5" />
-            ) : (
-              <Pin className="size-3.5" />
-            )}
+            <Pin className="size-3.5" />
           </button>
         )}
         <CatalogNode id="root" base="" />
