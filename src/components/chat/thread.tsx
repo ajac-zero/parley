@@ -57,12 +57,30 @@ export function buildThread(
     }
   }
 
-  const entries: ThreadEntry[] = serverItems.map((row) => ({
-    key: row.id,
-    item: row.payload,
-    source: row.source,
-    itemDbId: row.id,
-  }));
+  // Agent-generated items (reasoning/message/tool calls) only receive their
+  // real DB id once the turn is persisted — before that they're keyed by
+  // their live stream position (`${turnId}:${output_index}`, see below).
+  // Reusing that same `turnId:index` key here (instead of switching to
+  // `row.id`) lets React reconcile the just-finished turn's items in place
+  // rather than unmounting/remounting them the moment the active stream
+  // entry is replaced by the persisted transcript — which previously caused
+  // every reasoning block in the turn to snap shut simultaneously instead
+  // of collapsing individually as each one finished streaming.
+  const turnAgentIndex = new Map<string, number>();
+  const entries: ThreadEntry[] = serverItems.map((row) => {
+    let key = row.id;
+    if (row.source === "agent" && row.turnId) {
+      const index = turnAgentIndex.get(row.turnId) ?? 0;
+      turnAgentIndex.set(row.turnId, index + 1);
+      key = `${row.turnId}:${index}`;
+    }
+    return {
+      key,
+      item: row.payload,
+      source: row.source,
+      itemDbId: row.id,
+    };
+  });
 
   if (active) {
     if (active.userItems.length > 0) {
@@ -84,7 +102,7 @@ export function buildThread(
     active.state.items.forEach((item, index) => {
       if (!item) return;
       entries.push({
-        key: `__stream_${index}`,
+        key: active.turnId ? `${active.turnId}:${index}` : `__stream_${index}`,
         item,
         source: "agent",
         streaming:
