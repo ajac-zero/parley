@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   A2UI_MIME_TYPE,
+  applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
   extractA2uiResources,
@@ -15,11 +16,12 @@ import {
   pointerGet,
   pointerSet,
   reduceA2uiMessages,
+  reduceA2uiOutputs,
   resolveDynamic,
   resolvePath,
   summarizeA2uiAction,
 } from "~/lib/a2ui";
-import type { MessageItem } from "~/lib/openresponses";
+import type { ContentPart, MessageItem } from "~/lib/openresponses";
 
 const BASIC_CATALOG =
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json";
@@ -176,6 +178,157 @@ describe("reduceA2uiMessages", () => {
       },
     ]);
     expect(surfaces).toHaveLength(0);
+  });
+
+  it("records data ops; replaying them reproduces the model", () => {
+    const [surface] = reduceA2uiMessages([
+      createSurface(),
+      {
+        updateDataModel: {
+          surfaceId: "s1",
+          path: "/user",
+          value: { name: "Ada", tmp: 1 },
+        },
+      },
+      { updateDataModel: { surfaceId: "s1", path: "/user/tmp" } },
+    ]);
+    expect(surface?.dataOps).toHaveLength(2);
+    expect(surface?.dataModel).toEqual({ user: { name: "Ada" } });
+    expect(applyA2uiDataOps({}, surface?.dataOps ?? [])).toEqual(
+      surface?.dataModel,
+    );
+  });
+
+  it("re-creating a surface resets its accumulated data ops", () => {
+    const [surface] = reduceA2uiMessages([
+      createSurface(),
+      { updateDataModel: { surfaceId: "s1", path: "/a", value: 1 } },
+      createSurface(),
+    ]);
+    expect(surface?.dataOps).toHaveLength(0);
+    expect(surface?.dataModel).toEqual({});
+  });
+});
+
+/* ------------------------- conversation-level state ------------------------ */
+
+describe("reduceA2uiOutputs", () => {
+  const asOutput = (msgs: unknown[]): ContentPart[] => [
+    { type: "output_text", text: "fallback" },
+    {
+      type: "resource",
+      resource: { mimeType: A2UI_MIME_TYPE, text: JSON.stringify(msgs) },
+    } as never,
+  ];
+
+  const formMessages = [
+    createSurface(),
+    {
+      updateComponents: {
+        surfaceId: "s1",
+        components: [{ id: "root", component: "Text", text: "form" }],
+      },
+    },
+    {
+      updateDataModel: { surfaceId: "s1", path: "/user", value: { name: "" } },
+    },
+  ];
+
+  it("anchors surfaces at the creating call; later outputs update in place", () => {
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_1", output: asOutput(formMessages) },
+      {
+        callId: "call_2",
+        output: asOutput([
+          {
+            updateDataModel: {
+              surfaceId: "s1",
+              path: "/user/name",
+              value: "Ada",
+            },
+          },
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "done" }],
+            },
+          },
+        ]),
+      },
+    ]);
+
+    const creator = byCall.get("call_1");
+    expect(creator?.surfaces).toHaveLength(1);
+    const surface = creator?.surfaces[0];
+    expect(surface?.components.root?.text).toBe("done");
+    expect(pointerGet(surface?.dataModel, "/user/name")).toBe("Ada");
+    expect(surface?.dataOps).toHaveLength(2);
+
+    /* The updating call renders nothing of its own — its effect is
+     * visible at the surface's anchor. */
+    const updater = byCall.get("call_2");
+    expect(updater?.surfaces).toHaveLength(0);
+    expect(updater?.showFallback).toBe(false);
+  });
+
+  it("flags update-only outputs that reference no known surface", () => {
+    const byCall = reduceA2uiOutputs([
+      {
+        callId: "call_1",
+        output: asOutput([
+          { updateDataModel: { surfaceId: "ghost", path: "/x", value: 1 } },
+        ]),
+      },
+    ]);
+    expect(byCall.get("call_1")?.surfaces).toHaveLength(0);
+    expect(byCall.get("call_1")?.showFallback).toBe(true);
+    expect(byCall.get("call_1")?.fallbackText).toBe("fallback");
+  });
+
+  it("a later deleteSurface removes the surface with no fallback anywhere", () => {
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_1", output: asOutput(formMessages) },
+      {
+        callId: "call_2",
+        output: asOutput([{ deleteSurface: { surfaceId: "s1" } }]),
+      },
+    ]);
+    expect(byCall.get("call_1")?.surfaces).toHaveLength(0);
+    expect(byCall.get("call_1")?.showFallback).toBe(false);
+    expect(byCall.get("call_2")?.surfaces).toHaveLength(0);
+    expect(byCall.get("call_2")?.showFallback).toBe(false);
+  });
+
+  it("re-creating a deleted surface moves its anchor to the later call", () => {
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_1", output: asOutput(formMessages) },
+      {
+        callId: "call_2",
+        output: asOutput([
+          { deleteSurface: { surfaceId: "s1" } },
+          createSurface(),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "fresh" }],
+            },
+          },
+        ]),
+      },
+    ]);
+    expect(byCall.get("call_1")?.surfaces).toHaveLength(0);
+    expect(byCall.get("call_2")?.surfaces).toHaveLength(1);
+    expect(byCall.get("call_2")?.surfaces[0]?.components.root?.text).toBe(
+      "fresh",
+    );
+  });
+
+  it("omits outputs with no A2UI content", () => {
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_1", output: JSON.stringify({ city: "Tokyo" }) },
+      { callId: "call_2", output: null },
+    ]);
+    expect(byCall.size).toBe(0);
   });
 });
 

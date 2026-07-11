@@ -16,6 +16,7 @@ import {
   ConversationScrollButton,
 } from "~/components/ui/conversation";
 import type { ConversationDetail } from "~/functions/conversations";
+import { type A2uiOutputRef, reduceA2uiOutputs } from "~/lib/a2ui";
 import type { ActiveTurn } from "~/lib/chat-store";
 import type {
   FunctionCallItem,
@@ -207,6 +208,22 @@ export const Thread = memo(function Thread({
     return map;
   }, [entries]);
 
+  /* A2UI surfaces are conversation-wide state: reduce every tool output in
+   * order so a later result can update or delete a surface created by an
+   * earlier call, then render each surface at the call that created it. */
+  const a2uiByCall = useMemo(() => {
+    const outputs: A2uiOutputRef[] = [];
+    for (const entry of entries) {
+      if (entry.item.type === "function_call_output") {
+        const output = entry.item as FunctionCallOutputItem;
+        if (output.call_id) {
+          outputs.push({ callId: output.call_id, output: output.output });
+        }
+      }
+    }
+    return reduceA2uiOutputs(outputs);
+  }, [entries]);
+
   const lastAssistantKey = useMemo(() => {
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i];
@@ -305,6 +322,7 @@ export const Thread = memo(function Thread({
                 call={call}
                 output={pairedOutputs.get(call.call_id) ?? null}
                 streaming={entry.streaming}
+                a2ui={a2uiByCall.get(call.call_id) ?? null}
                 onA2uiAction={onA2uiAction}
                 disabled={disabled}
               />

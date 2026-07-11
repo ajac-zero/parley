@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractA2uiResources, reduceA2uiMessages } from "~/lib/a2ui";
+import {
+  extractA2uiResources,
+  pointerGet,
+  reduceA2uiMessages,
+  reduceA2uiOutputs,
+} from "~/lib/a2ui";
 import {
   type FunctionCallOutputItem,
   initialTurnStreamState,
@@ -217,7 +222,16 @@ describe("handleDemoResponses", () => {
     ).toBe(2);
   });
 
-  it("confirms a submitted reservation action with a confirmation card", async () => {
+  it("confirms a submitted reservation by updating the form surface in place", async () => {
+    /* Turn 1: the form arrives as an A2UI resource. */
+    const first = await streamAndReduce({
+      input: [userMessage("book a table")],
+    });
+    const formOutput = first.state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+
+    /* Turn 2: the user submits — the action routes back as an a2ui part. */
     const { state } = await streamAndReduce({
       input: [
         userMessage("book a table"),
@@ -274,23 +288,49 @@ describe("handleDemoResponses", () => {
     };
     expect(call.name).toBe("confirm_reservation");
 
-    const output = state.items.find(
+    /* The confirmation targets the existing form surface: no new surface,
+     * just update envelopes for demo_reservation_form. */
+    const confirmOutput = state.items.find(
       (i) => i.type === "function_call_output",
     ) as FunctionCallOutputItem;
-    const extraction = extractA2uiResources(output.output);
-    const surfaces = reduceA2uiMessages(
-      extraction.resources[0]?.messages ?? [],
+    const messages =
+      extractA2uiResources(confirmOutput.output).resources[0]?.messages ?? [];
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages.some((m) => m.createSurface)).toBe(false);
+    expect(
+      messages.every(
+        (m) =>
+          (m.updateComponents?.surfaceId ?? m.updateDataModel?.surfaceId) ===
+          "demo_reservation_form",
+      ),
+    ).toBe(true);
+
+    /* Reduced conversation-wide (as the thread does), the form surface —
+     * still anchored at find_table's call — morphs into the confirmation. */
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_form", output: formOutput.output },
+      { callId: "call_confirm", output: confirmOutput.output },
+    ]);
+    const formGroup = byCall.get("call_form");
+    expect(formGroup?.surfaces).toHaveLength(1);
+    const surface = formGroup?.surfaces[0];
+    expect(surface?.surfaceId).toBe("demo_reservation_form");
+    expect(surface?.components.root?.child).toBe("confirm_layout");
+    expect(surface?.components.confirm_title?.text).toBe(
+      "Reservation confirmed",
     );
-    expect(surfaces).toHaveLength(1);
-    const surface = surfaces[0] as (typeof surfaces)[number];
-    expect(surface.surfaceId).toBe("demo_reservation_confirmation");
-    const details = (
-      surface.dataModel as {
-        details: Array<{ label: string; value: string }>;
-      }
-    ).details;
+    const details = pointerGet(
+      surface?.dataModel,
+      "/confirmation/details",
+    ) as Array<{ label: string; value: string }>;
     expect(details.find((d) => d.label === "Name")?.value).toBe("Ada Lovelace");
     expect(details.find((d) => d.label === "Party")?.value).toBe("4 guests");
+
+    /* The confirming call renders nothing itself — no surface, no
+     * unsupported-fallback treatment. */
+    const confirmGroup = byCall.get("call_confirm");
+    expect(confirmGroup?.surfaces).toHaveLength(0);
+    expect(confirmGroup?.showFallback).toBe(false);
   });
 
   it("acknowledges unknown A2UI actions without a tool round-trip", async () => {

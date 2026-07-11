@@ -70,6 +70,13 @@ export interface A2uiMessage {
   [key: string]: unknown;
 }
 
+/** One server-issued data model write (`remove` unsets the path). */
+export interface A2uiDataOp {
+  path: string;
+  value?: unknown;
+  remove?: boolean;
+}
+
 /** Accumulated state of one surface after reducing a message list. */
 export interface A2uiSurface {
   surfaceId: string;
@@ -78,8 +85,26 @@ export interface A2uiSurface {
   /** Flat component map (adjacency list); the tree hangs off id "root". */
   components: Record<string, A2uiComponent>;
   dataModel: unknown;
+  /**
+   * Ordered server data-model operations since the surface was (re)created;
+   * `dataModel` equals replaying them onto `{}`. Renderers track how many
+   * they have applied so later ops merge into local edits instead of
+   * clobbering them.
+   */
+  dataOps: A2uiDataOp[];
   /** False when the catalog or protocol version is not supported. */
   supported: boolean;
+}
+
+/** Replays server data operations onto a model (see `A2uiSurface.dataOps`). */
+export function applyA2uiDataOps(model: unknown, ops: A2uiDataOp[]): unknown {
+  let next = model;
+  for (const op of ops) {
+    next = op.remove
+      ? pointerDelete(next, op.path)
+      : pointerSet(next, op.path, op.value);
+  }
+  return next;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -230,6 +255,7 @@ export function reduceA2uiMessages(messages: A2uiMessage[]): A2uiSurface[] {
         theme: asRecord(create.theme),
         components: {},
         dataModel: {},
+        dataOps: [],
         supported: versionOk && A2UI_SUPPORTED_CATALOG_IDS.includes(catalogId),
       });
       continue;
@@ -259,11 +285,13 @@ export function reduceA2uiMessages(messages: A2uiMessage[]): A2uiSurface[] {
       const surface = surfaces.get(data.surfaceId);
       if (!surface) continue;
       const path = typeof data.path === "string" ? data.path : "/";
-      const dataModel =
-        "value" in data
-          ? pointerSet(surface.dataModel, path, data.value)
-          : pointerDelete(surface.dataModel, path);
-      surfaces.set(data.surfaceId, { ...surface, dataModel });
+      const op: A2uiDataOp =
+        "value" in data ? { path, value: data.value } : { path, remove: true };
+      surfaces.set(data.surfaceId, {
+        ...surface,
+        dataModel: applyA2uiDataOps(surface.dataModel, [op]),
+        dataOps: [...surface.dataOps, op],
+      });
       continue;
     }
 
@@ -779,4 +807,101 @@ export function extractA2uiResources(
   if (single) return { resources: [single], fallbackText: null };
 
   return EMPTY_EXTRACTION;
+}
+
+/* ------------------------- conversation-level state ------------------------ */
+
+/** One tool output in conversation order, keyed by its `call_id`. */
+export interface A2uiOutputRef {
+  callId: string;
+  output: string | ContentPart[] | null | undefined;
+}
+
+/** The A2UI state a host should render at one tool call. */
+export interface A2uiCallSurfaces {
+  /** Surfaces whose latest `createSurface` arrived in this output. */
+  surfaces: A2uiSurface[];
+  /** Text fallback found alongside this output's resources, if any. */
+  fallbackText: string | null;
+  /**
+   * True when this output carried A2UI resources that applied to nothing —
+   * no surface created here and no reference to any surface created
+   * elsewhere — so the host should show the unsupported/fallback treatment.
+   */
+  showFallback: boolean;
+}
+
+/**
+ * Reduces A2UI resources across a whole conversation's tool outputs.
+ *
+ * Surfaces are shared state: a later output may `updateComponents` /
+ * `updateDataModel` / `deleteSurface` a surface created by an earlier tool
+ * call (that is how an agent morphs a form into its result in place). Each
+ * surviving surface is anchored to — and should be rendered at — the output
+ * containing its latest `createSurface`; outputs that merely update an
+ * existing surface render nothing themselves.
+ */
+export function reduceA2uiOutputs(
+  outputs: A2uiOutputRef[],
+): Map<string, A2uiCallSurfaces> {
+  interface CallScan {
+    callId: string;
+    hasResources: boolean;
+    fallbackText: string | null;
+    referencedIds: Set<string>;
+  }
+
+  const scans: CallScan[] = [];
+  const allMessages: A2uiMessage[] = [];
+  /** surfaceId -> callId of the latest createSurface (the render anchor). */
+  const anchors = new Map<string, string>();
+  /** Every surfaceId a createSurface was seen for, live or not. */
+  const createdIds = new Set<string>();
+
+  for (const { callId, output } of outputs) {
+    const extraction = extractA2uiResources(output);
+    const referencedIds = new Set<string>();
+    for (const resource of extraction.resources) {
+      for (const message of resource.messages) {
+        allMessages.push(message);
+        const record = asRecord(message);
+        if (!record) continue;
+        for (const key of MESSAGE_KEYS) {
+          const body = asRecord(record[key]);
+          if (body && typeof body.surfaceId === "string") {
+            referencedIds.add(body.surfaceId);
+            if (key === "createSurface") {
+              anchors.set(body.surfaceId, callId);
+              createdIds.add(body.surfaceId);
+            }
+          }
+        }
+      }
+    }
+    scans.push({
+      callId,
+      hasResources: extraction.resources.length > 0,
+      fallbackText: extraction.fallbackText,
+      referencedIds,
+    });
+  }
+
+  const reduced = reduceA2uiMessages(allMessages);
+  const result = new Map<string, A2uiCallSurfaces>();
+  for (const scan of scans) {
+    const surfaces = reduced.filter(
+      (surface) => anchors.get(surface.surfaceId) === scan.callId,
+    );
+    if (!scan.hasResources && surfaces.length === 0) continue;
+    const touchesKnownSurface = [...scan.referencedIds].some((id) =>
+      createdIds.has(id),
+    );
+    result.set(scan.callId, {
+      surfaces,
+      fallbackText: scan.fallbackText,
+      showFallback:
+        scan.hasResources && surfaces.length === 0 && !touchesKnownSurface,
+    });
+  }
+  return result;
 }

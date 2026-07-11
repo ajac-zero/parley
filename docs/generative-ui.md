@@ -71,12 +71,21 @@ How it works today:
   rendered with native components (`src/components/a2ui/`). Data binding is
   local and two-way; unsupported catalogs or protocol versions degrade to
   the tool's text fallback without executing anything.
+- Surface lifecycle: surfaces are conversation-wide state
+  (`reduceA2uiOutputs` in `src/lib/a2ui.ts`). Every tool output is reduced
+  in order, so a later tool result can update or delete a surface created
+  by an earlier call — this is how an agent reflects an action's outcome by
+  morphing the original UI in place rather than rendering a new surface.
+  Each surface renders anchored at the call whose `createSurface` produced
+  it; server data-model updates that arrive after the user has started
+  editing merge into the local model instead of clobbering it.
 - Actions: a user action becomes a new user turn whose text is a readable
   summary, plus an `a2ui` content part carrying the standard A2UI
   client -> server messages verbatim (the Open Responses analog of A2A's
   DataPart binding). The agent owns routing the action back to the tool
   that produced the surface; the built-in demo agent shows the loop
-  (ask it to "book a table").
+  (ask it to "book a table" — submitting the form updates it in place
+  into a confirmation).
 
 ### Level 2: Custom catalog plugins
 
