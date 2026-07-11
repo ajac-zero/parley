@@ -56,7 +56,6 @@ export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   duration?: number;
 };
 
-const AUTO_CLOSE_DELAY = 1000;
 const MS_IN_S = 1000;
 
 export const Reasoning = memo(
@@ -80,7 +79,6 @@ export const Reasoning = memo(
       defaultProp: undefined as number | undefined,
     });
 
-    const [hasAutoClosed, setHasAutoClosed] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
 
     // Track duration when streaming starts and ends
@@ -95,18 +93,13 @@ export const Reasoning = memo(
       }
     }, [isStreaming, startTime, setDuration]);
 
-    // Auto-open when streaming starts, auto-close when streaming ends (once only)
-    useEffect(() => {
-      if (defaultOpen && !isStreaming && isOpen && !hasAutoClosed) {
-        // Add a small delay before closing to allow user to see the content
-        const timer = setTimeout(() => {
-          setIsOpen(false);
-          setHasAutoClosed(true);
-        }, AUTO_CLOSE_DELAY);
-
-        return () => clearTimeout(timer);
-      }
-    }, [isStreaming, isOpen, defaultOpen, setIsOpen, hasAutoClosed]);
+    // No auto-close: whether a block starts open or collapsed (via
+    // `defaultOpen`) is its permanent state until the user manually
+    // toggles it — see ReasoningBlock, which derives `defaultOpen` from
+    // the "show reasoning" preference. Auto-closing after a fixed delay
+    // used to fight with long-running reasoning (delay too short to
+    // read) and fast ones (delay pointlessly outlives the rest of the
+    // turn) alike, so the default state now simply is the desired state.
 
     return (
       <ReasoningContext.Provider

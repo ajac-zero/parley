@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Copy, Pencil, RefreshCw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "~/components/chat/markdown";
+import { useShowReasoning } from "~/components/reasoning-preference";
 import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
 import {
@@ -253,14 +254,12 @@ export const ReasoningBlock = memo(function ReasoningBlock({
 }) {
   const summary = reasoningSummaryText(item);
   const hasContent = summary.trim().length > 0;
-  // Captured once at mount: whether this block was already streaming when
-  // it first appeared. Reasoning's auto-close-after-streaming behavior only
-  // makes sense for that case — a block for a persisted/historical item
-  // mounts with streaming=false and should just stay closed, never
-  // flash open. Passing a defaultOpen that keeps changing with the live
-  // `streaming` prop would defeat Reasoning's own "was open by default"
-  // check on every re-render.
-  const [wasStreamingOnMount] = useState(() => Boolean(streaming));
+  // The "show reasoning" preference (see settings) is the block's default
+  // open/closed state — on, it starts (and stays) expanded so it can be
+  // read at whatever pace the user wants, with no auto-collapse fighting
+  // long or short reasoning; off, it starts collapsed and only opens if
+  // the user clicks it.
+  const { showReasoning } = useShowReasoning();
 
   if (!hasContent) {
     return (
@@ -278,7 +277,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({
     <Reasoning
       className="w-full"
       isStreaming={streaming}
-      defaultOpen={wasStreamingOnMount}
+      defaultOpen={showReasoning}
     >
       <ReasoningTrigger />
       <ReasoningContent>{summary}</ReasoningContent>
