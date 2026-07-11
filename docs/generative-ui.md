@@ -79,6 +79,13 @@ How it works today:
   Each surface renders anchored at the call whose `createSurface` produced
   it; server data-model updates that arrive after the user has started
   editing merge into the local model instead of clobbering it.
+- Placement: where a surface renders is host policy, not protocol — A2UI
+  carries no placement hints and tools cannot request one. By default
+  surfaces render inline at their anchor; the user may pin a surface to a
+  side canvas to keep interacting with it while the conversation continues
+  (agent-driven updates keep landing on it there). Pinning is a client-side
+  preference, moves are lossless for local edits, and on viewports too
+  narrow for the canvas pins lie dormant and surfaces render inline.
 - Actions: a user action becomes a new user turn whose text is a readable
   summary, plus an `a2ui` content part carrying the standard A2UI
   client -> server messages verbatim (the Open Responses analog of A2A's

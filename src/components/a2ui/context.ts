@@ -38,3 +38,30 @@ export function useA2uiSurface(): A2uiSurfaceContextValue {
   }
   return value;
 }
+
+/**
+ * Host-level A2UI policy for one conversation: where surfaces may be
+ * placed and how their local state is scoped. Placement is deliberately a
+ * host/user concern — the A2UI protocol carries no placement hints, so
+ * pinning is a client-side gesture, never something a tool can request.
+ */
+export interface A2uiHostContextValue {
+  /**
+   * Scopes surface local-state keys (the conversation id), so identical
+   * surfaceIds in different conversations don't share state.
+   */
+  stateScope: string;
+  /** Surfaces currently pinned to the host's side canvas. */
+  pinnedSurfaceIds: ReadonlySet<string>;
+  /**
+   * Pins/unpins a surface. Null when the host can't place pinned surfaces
+   * right now (e.g. viewport too narrow for the canvas pane) — renderers
+   * hide the pin affordance entirely in that case.
+   */
+  togglePin: ((surfaceId: string) => void) | null;
+}
+
+export const A2uiHostContext = createContext<A2uiHostContextValue | null>(null);
+
+export const useA2uiHost = (): A2uiHostContextValue | null =>
+  useContext(A2uiHostContext);

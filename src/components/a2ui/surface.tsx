@@ -12,13 +12,14 @@
  * `surface.dataOps` / `surface.components` props.
  */
 
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Pin, PinOff } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { CatalogNode } from "~/components/a2ui/catalog";
 import {
   type A2uiActionHandler,
   A2uiSurfaceContext,
   type A2uiSurfaceContextValue,
+  useA2uiHost,
 } from "~/components/a2ui/context";
 import { Markdown } from "~/components/chat/markdown";
 import {
@@ -37,6 +38,20 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
+/**
+ * Session-scoped backing store for surface local state, keyed by
+ * `${stateScope}:${surfaceId}`. Placement is host policy — the same
+ * surface may move between containers (inline in the thread <-> pinned to
+ * the side canvas), which unmounts one view instance and mounts another.
+ * The mounting instance seeds from here and every update writes through,
+ * so the move is lossless for local edits (typed text, slider positions).
+ */
+interface SurfaceLocalState {
+  dataModel: unknown;
+  appliedOps: number;
+}
+const surfaceStateStore = new Map<string, SurfaceLocalState>();
+
 /** Renders one supported surface with live local state. */
 export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   surface,
@@ -47,34 +62,53 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   onAction?: A2uiActionHandler;
   disabled?: boolean;
 }) {
-  const [dataModel, setDataModel] = useState<unknown>(() => surface.dataModel);
+  const host = useA2uiHost();
+  const stateKey = `${host?.stateScope ?? ""}:${surface.surfaceId}`;
+  const [dataModel, setDataModel] = useState<unknown>(
+    () => surfaceStateStore.get(stateKey)?.dataModel ?? surface.dataModel,
+  );
   /* Merge server data-model updates that arrive after mount (a later tool
    * result patching this surface) into local state without clobbering the
    * user's edits: apply only the ops not yet applied. Render-phase state
    * adjustment, so the same commit that swaps components sees the new data.
    * If history was rewritten (ops shrank — e.g. an edited turn), reseed
    * from the server model and drop local edits. */
-  const [appliedOps, setAppliedOps] = useState(surface.dataOps.length);
+  const [appliedOps, setAppliedOps] = useState(
+    () => surfaceStateStore.get(stateKey)?.appliedOps ?? surface.dataOps.length,
+  );
   if (surface.dataOps.length !== appliedOps) {
-    setDataModel(
+    const next =
       surface.dataOps.length < appliedOps
         ? surface.dataModel
-        : applyA2uiDataOps(dataModel, surface.dataOps.slice(appliedOps)),
-    );
+        : applyA2uiDataOps(dataModel, surface.dataOps.slice(appliedOps));
+    surfaceStateStore.set(stateKey, {
+      dataModel: next,
+      appliedOps: surface.dataOps.length,
+    });
+    setDataModel(next);
     setAppliedOps(surface.dataOps.length);
   }
-  /* Mirror for reads inside event handlers (dispatch resolves bindings at
+  /* Mirrors for reads inside event handlers (dispatch resolves bindings at
    * interaction time, against the latest local edits). */
   const modelRef = useRef(dataModel);
   modelRef.current = dataModel;
+  const appliedRef = useRef(appliedOps);
+  appliedRef.current = appliedOps;
 
-  const setValue = useCallback((pointer: string, value: unknown) => {
-    setDataModel((previous: unknown) => {
-      const next = pointerSet(previous, pointer, value);
-      modelRef.current = next;
-      return next;
-    });
-  }, []);
+  const setValue = useCallback(
+    (pointer: string, value: unknown) => {
+      setDataModel((previous: unknown) => {
+        const next = pointerSet(previous, pointer, value);
+        modelRef.current = next;
+        surfaceStateStore.set(stateKey, {
+          dataModel: next,
+          appliedOps: appliedRef.current,
+        });
+        return next;
+      });
+    },
+    [stateKey],
+  );
 
   const dispatchEvent = useCallback(
     (
@@ -118,9 +152,28 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   /* Progressive rendering: nothing paints until "root" exists. */
   if (!surface.components.root) return null;
 
+  const pinned = host?.pinnedSurfaceIds.has(surface.surfaceId) ?? false;
+
   return (
     <A2uiSurfaceContext.Provider value={contextValue}>
-      <div className="w-full max-w-lg" data-a2ui-surface={surface.surfaceId}>
+      <div
+        className="group/surface relative w-full max-w-lg"
+        data-a2ui-surface={surface.surfaceId}
+      >
+        {host?.togglePin && (
+          <button
+            type="button"
+            onClick={() => host.togglePin?.(surface.surfaceId)}
+            title={pinned ? "Unpin" : "Pin to canvas"}
+            className="absolute -top-2 -right-2 z-10 rounded-full border bg-card p-1.5 text-muted-foreground opacity-0 shadow-xs transition-opacity focus-visible:opacity-100 group-hover/surface:opacity-100 hover:text-foreground"
+          >
+            {pinned ? (
+              <PinOff className="size-3.5" />
+            ) : (
+              <Pin className="size-3.5" />
+            )}
+          </button>
+        )}
         <CatalogNode id="root" base="" />
       </div>
     </A2uiSurfaceContext.Provider>
@@ -154,11 +207,28 @@ function UnsupportedSurface({
   );
 }
 
+/** Inline stand-in for a surface currently pinned to the side canvas. */
+function PinnedPlaceholder({ onUnpin }: { onUnpin?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onUnpin}
+      title="Unpin to show inline"
+      className="inline-flex w-fit items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent/50"
+    >
+      <Pin className="size-3 shrink-0" />
+      Pinned to canvas
+    </button>
+  );
+}
+
 /**
  * Renders the A2UI surfaces anchored at one tool call (see
  * `reduceA2uiOutputs`: surfaces render where they were created, and may
- * have been updated in place by later tool results). Returns null when
- * there is nothing to show, so callers can use it unconditionally.
+ * have been updated in place by later tool results). Surfaces the user
+ * pinned render in the host's side canvas instead; their anchor shows a
+ * small placeholder chip. Returns null when there is nothing to show, so
+ * callers can use it unconditionally.
  */
 export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
   group,
@@ -169,6 +239,8 @@ export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
   onAction?: A2uiActionHandler;
   disabled?: boolean;
 }) {
+  const host = useA2uiHost();
+
   if (group.surfaces.length === 0) {
     if (!group.showFallback) return null;
     /* Resources were tagged as A2UI but applied to nothing renderable. */
@@ -190,22 +262,37 @@ export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
 
   return (
     <div className="flex w-full flex-col gap-3">
-      {group.surfaces.map((surface) =>
-        surface.supported ? (
+      {group.surfaces.map((surface) => {
+        if (!surface.supported) {
+          return (
+            <UnsupportedSurface
+              key={surface.surfaceId}
+              surface={surface}
+              fallbackText={group.fallbackText}
+            />
+          );
+        }
+        if (host?.pinnedSurfaceIds.has(surface.surfaceId)) {
+          return (
+            <PinnedPlaceholder
+              key={surface.surfaceId}
+              onUnpin={
+                host.togglePin
+                  ? () => host.togglePin?.(surface.surfaceId)
+                  : undefined
+              }
+            />
+          );
+        }
+        return (
           <A2uiSurfaceView
             key={surface.surfaceId}
             surface={surface}
             onAction={onAction}
             disabled={disabled}
           />
-        ) : (
-          <UnsupportedSurface
-            key={surface.surfaceId}
-            surface={surface}
-            fallbackText={group.fallbackText}
-          />
-        ),
-      )}
+        );
+      })}
     </div>
   );
 });
