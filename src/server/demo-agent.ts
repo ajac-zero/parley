@@ -610,8 +610,257 @@ function revenueInsightMessages(
 
 const usd = (value: number): string =>
   `$${Math.round(value).toLocaleString("en-US")}`;
+const num = (value: number): string =>
+  Math.round(value).toLocaleString("en-US");
 const pct = (fraction: number): string =>
   `${fraction >= 0 ? "+" : ""}${(fraction * 100).toFixed(1)}%`;
+
+/* -------------------- A2UI charts showcase: range mode -------------------- */
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/**
+ * The fabricated daily-sessions series behind the demo traffic report:
+ * 45 days from May 1 with a gentle upward trend, a weekly cycle, and a
+ * slow swell. Deterministic (UTC math, no locale) so tests can rely on it.
+ */
+const TRAFFIC_DAYS = Array.from({ length: 45 }, (_, i) => {
+  const date = new Date(Date.UTC(2026, 4, 1) + i * 86_400_000);
+  return {
+    day: `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`,
+    sessions: Math.round(
+      3200 +
+        i * 28 +
+        Math.sin((2 * Math.PI * i) / 7) * 450 +
+        Math.sin(i / 9) * 260,
+    ),
+  };
+});
+
+type TrafficDay = (typeof TRAFFIC_DAYS)[number];
+
+const TRAFFIC_FIRST = TRAFFIC_DAYS[0] as TrafficDay;
+const TRAFFIC_LAST = TRAFFIC_DAYS[TRAFFIC_DAYS.length - 1] as TrafficDay;
+
+const trafficTotal = (days: readonly TrafficDay[]): number =>
+  days.reduce((total, d) => total + d.sessions, 0);
+
+/**
+ * The traffic report surface: an area chart with a `range` selection — the
+ * brush under the chart writes {startIndex, endIndex, from, to} into the
+ * surface's local data model, and the summarize Button sends it back as
+ * action context.
+ */
+function trafficReportMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_traffic_report";
+  const components = [
+    { id: "root", component: "Card", child: "traffic_layout" },
+    {
+      id: "traffic_layout",
+      component: "Column",
+      children: [
+        "traffic_title",
+        "traffic_subtitle",
+        "traffic_chart",
+        "traffic_hint",
+        "traffic_footer",
+      ],
+    },
+    {
+      id: "traffic_title",
+      component: "Text",
+      variant: "h3",
+      text: "Site traffic — last 45 days",
+    },
+    {
+      id: "traffic_subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Drag the brush handles under the chart to focus a date range; the selection binds into the surface's data model.",
+    },
+    {
+      id: "traffic_chart",
+      component: "Chart",
+      variant: "area",
+      title: "Daily sessions",
+      data: { path: "/traffic/daily" },
+      x: { key: "day", label: "Day" },
+      series: [{ key: "sessions", label: "Sessions", color: "chart-2" }],
+      selection: { path: "/range", mode: "range" },
+    },
+    {
+      id: "traffic_hint",
+      component: "Text",
+      variant: "caption",
+      text: {
+        call: "formatString",
+        args: {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+          value: "Selected range: ${/range/from} – ${/range/to}.",
+        },
+      },
+    },
+    {
+      id: "traffic_footer",
+      component: "Row",
+      justify: "end",
+      children: ["summarize"],
+    },
+    { id: "summarize_text", component: "Text", text: "Summarize range" },
+    {
+      id: "summarize",
+      component: "Button",
+      variant: "primary",
+      child: "summarize_text",
+      action: {
+        event: {
+          name: "summarize_range",
+          context: { range: { path: "/range" } },
+        },
+      },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/traffic",
+        value: { daily: TRAFFIC_DAYS.map((d) => ({ ...d })) },
+      },
+    },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/range",
+        value: {
+          mode: "range",
+          startIndex: 0,
+          endIndex: TRAFFIC_DAYS.length - 1,
+          from: TRAFFIC_FIRST.day,
+          to: TRAFFIC_LAST.day,
+        },
+      },
+    },
+  ];
+}
+
+/** The range summary, appended to the existing traffic surface in place. */
+function trafficSummaryMessages(
+  window: string,
+  summary: string,
+): Array<Record<string, unknown>> {
+  const surfaceId = "demo_traffic_report";
+  const components = [
+    {
+      id: "traffic_layout",
+      component: "Column",
+      children: [
+        "traffic_title",
+        "traffic_subtitle",
+        "traffic_chart",
+        "traffic_hint",
+        "traffic_footer",
+        "summary_rule",
+        "summary_title",
+        "summary_body",
+      ],
+    },
+    { id: "summary_rule", component: "Divider" },
+    {
+      id: "summary_title",
+      component: "Text",
+      variant: "h5",
+      text: {
+        call: "formatString",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+        args: { value: "Summary — ${/summary/window}" },
+      },
+    },
+    {
+      id: "summary_body",
+      component: "Text",
+      text: { path: "/summary/text" },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/summary",
+        value: { window, text: summary },
+      },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+  ];
+}
+
+/** Builds the summary turn for a `summarize_range` action. */
+function replyForTrafficSummary(action: DemoA2uiAction): BuiltReply {
+  const range =
+    typeof action.context.range === "object" && action.context.range !== null
+      ? (action.context.range as Record<string, unknown>)
+      : {};
+  /* The selection only names a window; every figure is recomputed from the
+   * server's own series, with the indices clamped to its bounds. */
+  const toIndex = (value: unknown, fallback: number): number =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(Math.max(Math.round(value), 0), TRAFFIC_DAYS.length - 1)
+      : fallback;
+  let start = toIndex(range.startIndex, 0);
+  let end = toIndex(range.endIndex, TRAFFIC_DAYS.length - 1);
+  if (end < start) [start, end] = [end, start];
+
+  const windowDays = TRAFFIC_DAYS.slice(start, end + 1);
+  const from = (TRAFFIC_DAYS[start] as TrafficDay).day;
+  const to = (TRAFFIC_DAYS[end] as TrafficDay).day;
+  const window = `${from} – ${to}`;
+  const total = trafficTotal(windowDays);
+  const average = total / windowDays.length;
+  const overallAverage = trafficTotal(TRAFFIC_DAYS) / TRAFFIC_DAYS.length;
+  const peak = windowDays.reduce((best, d) =>
+    d.sessions > best.sessions ? d : best,
+  );
+  const summary =
+    `**${window}** (${windowDays.length} ${windowDays.length === 1 ? "day" : "days"}): ` +
+    `**${num(total)}** sessions, averaging **${num(average)}/day** — ` +
+    `**${pct(average / overallAverage - 1)}** vs the 45-day average. ` +
+    `Peak day was **${peak.day}** with **${num(peak.sessions)}** sessions.`;
+
+  return {
+    reasoning: `The user brushed ${window} in the traffic chart and asked for a summary (an A2UI action carrying the chart's range binding). I'll run summarize_range over that window and append the result to the existing report surface in place.`,
+    reply: `I summarized **${window}**: ${num(total)} sessions across ${windowDays.length} days, averaging ${num(average)}/day.\n\nSame loop as the revenue demo, but with a **range** selection: the brush wrote \`{startIndex, endIndex, from, to}\` into the surface's data model, the button sent it back as action context, and \`summarize_range\` updated the *same* \`surfaceId\` in place. Brush a different window and summarize again — the section refreshes.`,
+    tool: {
+      name: "summarize_range",
+      args: JSON.stringify({ from, to, days: windowDays.length }),
+      output: a2uiToolOutput(
+        "a2ui://demo/traffic-summary",
+        `Traffic summary for ${window}: ${num(total)} sessions over ${windowDays.length} days (avg ${num(average)}/day), peaking on ${peak.day}.`,
+        trafficSummaryMessages(window, summary),
+      ),
+    },
+  };
+}
 
 /** Builds the analysis turn for an `analyze_revenue` action. */
 function replyForRevenueAnalysis(action: DemoA2uiAction): BuiltReply {
@@ -659,6 +908,9 @@ const str = (value: unknown, max = 120): string =>
 function replyForA2uiAction(action: DemoA2uiAction): BuiltReply {
   if (action.name === "analyze_revenue") {
     return replyForRevenueAnalysis(action);
+  }
+  if (action.name === "summarize_range") {
+    return replyForTrafficSummary(action);
   }
   if (action.name !== "submit_reservation") {
     return {
@@ -744,6 +996,24 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
         "The user wants to see markdown rendering. I'll produce a document exercising headings, tables, code blocks and lists.",
       reply: MARKDOWN_SAMPLE,
       tool: null,
+    };
+  }
+
+  if (/\b(traffic|trends?|sessions)\b/.test(lower)) {
+    const total = trafficTotal(TRAFFIC_DAYS);
+    return {
+      reasoning:
+        "The user wants to see trends. I'll call the demo get_traffic_report tool, which returns a charts-catalog surface with a range-selectable area chart, and explain the brush loop.",
+      reply: `I called \`get_traffic_report\` — another surface from **Parley's charts catalog**, this time an area chart with a **range selection**.\n\nDrag the brush handles under the chart to focus a window, then hit **Summarize range**: the brush writes \`{startIndex, endIndex, from, to}\` into the surface's data model through two-way binding, and the button carries it back to me as action context.`,
+      tool: {
+        name: "get_traffic_report",
+        args: JSON.stringify({ window_days: TRAFFIC_DAYS.length }),
+        output: a2uiToolOutput(
+          "a2ui://demo/traffic-report",
+          `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Brush a range in the chart to summarize it.`,
+          trafficReportMessages(),
+        ),
+      },
     };
   }
 
@@ -833,7 +1103,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to brush-select a range in a chart\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }

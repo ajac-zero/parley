@@ -131,9 +131,10 @@ How it works today:
 - Negotiation: A2A advertises supported catalogs via
   `metadata.a2uiClientCapabilities.supportedCatalogIds`; Open Responses has
   no equivalent yet, so catalog support is agreed out-of-band (this repo's
-  supported IDs are the contract). The built-in demo agent shows the loop:
-  ask it for a "revenue chart", click a data point, and analyze the
-  selection — the insight lands on the same surface in place.
+  supported IDs are the contract). The built-in demo agent shows both
+  selection loops: ask for a "revenue chart" and click a bar (point
+  selection), or a "traffic trend" and drag the brush (range selection) —
+  either way the analysis lands on the same surface in place.
 
 Installed third-party catalog plugins (contract + renderer distributed
 outside the Parley tree) remain future work. The official Basic Catalog
