@@ -42,6 +42,12 @@ export interface SendOptions {
   agentId?: string | null;
   text: string;
   fileIds?: string[];
+  /**
+   * A2UI client -> server messages (e.g. a user action from a rendered
+   * surface) carried alongside the text as a typed content part, so the
+   * agent can route them back to the tool that owns the surface.
+   */
+  a2ui?: Array<Record<string, unknown>>;
   regenerate?: boolean;
   editFromItemId?: string | null;
   suppressTurnIds?: string[];
@@ -157,22 +163,35 @@ class ChatStore {
     // from a previously migrated (or finished) entry so it doesn't leak in.
     this.#aliases.delete(key);
 
-    const optimistic: ORItem | null =
-      options.text.trim().length > 0 || (options.fileIds?.length ?? 0) > 0
-        ? {
-            type: "message",
-            role: "user",
-            content: [
-              ...(options.text.trim().length > 0
-                ? [{ type: "input_text" as const, text: options.text.trim() }]
-                : []),
-              ...(options.fileIds ?? []).map((id) => ({
-                type: "input_image" as const,
-                image_url: `parley-file:${id}`,
-              })),
-            ],
-          }
-        : null;
+    const hasMessage =
+      options.text.trim().length > 0 ||
+      (options.fileIds?.length ?? 0) > 0 ||
+      (options.a2ui?.length ?? 0) > 0;
+
+    const optimistic: ORItem | null = hasMessage
+      ? {
+          type: "message",
+          role: "user",
+          content: [
+            ...(options.text.trim().length > 0
+              ? [{ type: "input_text" as const, text: options.text.trim() }]
+              : []),
+            ...(options.fileIds ?? []).map((id) => ({
+              type: "input_image" as const,
+              image_url: `parley-file:${id}`,
+            })),
+            ...((options.a2ui?.length ?? 0) > 0
+              ? [
+                  {
+                    type: "a2ui" as const,
+                    mime_type: "application/a2ui+json" as const,
+                    data: options.a2ui as Array<Record<string, unknown>>,
+                  },
+                ]
+              : []),
+          ],
+        }
+      : null;
 
     this.#set(key, {
       ...emptyTurn(key),
@@ -214,8 +233,14 @@ class ChatStore {
           conversationId: options.conversationId ?? null,
           agentId: options.agentId ?? null,
           message:
-            options.text.trim().length > 0 || (options.fileIds?.length ?? 0) > 0
-              ? { text: options.text, fileIds: options.fileIds ?? [] }
+            options.text.trim().length > 0 ||
+            (options.fileIds?.length ?? 0) > 0 ||
+            (options.a2ui?.length ?? 0) > 0
+              ? {
+                  text: options.text,
+                  fileIds: options.fileIds ?? [],
+                  a2ui: options.a2ui ?? [],
+                }
               : null,
           regenerate: options.regenerate ?? false,
           editFromItemId: options.editFromItemId ?? null,

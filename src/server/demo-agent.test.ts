@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { extractA2uiResources, reduceA2uiMessages } from "~/lib/a2ui";
 import {
+  type FunctionCallOutputItem,
   initialTurnStreamState,
   isMessageItem,
   type MessageItem,
@@ -181,5 +183,148 @@ describe("handleDemoResponses", () => {
     const { state } = await streamAndReduce({ input: "plain string input" });
     const message = state.items.find(isMessageItem) as MessageItem;
     expect(messageText(message)).toContain("plain string input");
+  });
+
+  it("returns a typed A2UI form resource when asked to book a table", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("Can I book a table for tonight?")],
+    });
+
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("find_table");
+
+    const output = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const extraction = extractA2uiResources(output.output);
+    expect(extraction.resources).toHaveLength(1);
+    expect(extraction.resources[0]?.uri).toBe("a2ui://demo/reservation-form");
+    expect(extraction.fallbackText).toContain("Reservation form");
+
+    const surfaces = reduceA2uiMessages(
+      extraction.resources[0]?.messages ?? [],
+    );
+    expect(surfaces).toHaveLength(1);
+    const surface = surfaces[0] as (typeof surfaces)[number];
+    expect(surface.supported).toBe(true);
+    expect(surface.components.root?.component).toBe("Card");
+    expect(surface.components.submit?.component).toBe("Button");
+    expect(
+      (surface.dataModel as { reservation: { partySize: number } }).reservation
+        .partySize,
+    ).toBe(2);
+  });
+
+  it("confirms a submitted reservation action with a confirmation card", async () => {
+    const { state } = await streamAndReduce({
+      input: [
+        userMessage("book a table"),
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "form sent" }],
+        },
+        {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: 'UI action: submit_reservation {"reservation":{...}}',
+            },
+            {
+              type: "a2ui",
+              mime_type: "application/a2ui+json",
+              data: [
+                {
+                  version: "v0.9.1",
+                  action: {
+                    name: "submit_reservation",
+                    surfaceId: "demo_reservation_form",
+                    sourceComponentId: "submit",
+                    timestamp: "2026-07-10T18:00:00.000Z",
+                    context: {
+                      reservation: {
+                        name: "Ada Lovelace",
+                        when: "2026-07-11T19:30",
+                        partySize: 4,
+                        seating: ["patio"],
+                        notify: true,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const message = state.items.find(isMessageItem) as MessageItem;
+    const text = messageText(message);
+    expect(text).toContain("Ada Lovelace");
+    expect(text).toContain("**4**");
+    expect(text).toContain("patio");
+
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("confirm_reservation");
+
+    const output = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const extraction = extractA2uiResources(output.output);
+    const surfaces = reduceA2uiMessages(
+      extraction.resources[0]?.messages ?? [],
+    );
+    expect(surfaces).toHaveLength(1);
+    const surface = surfaces[0] as (typeof surfaces)[number];
+    expect(surface.surfaceId).toBe("demo_reservation_confirmation");
+    const details = (
+      surface.dataModel as {
+        details: Array<{ label: string; value: string }>;
+      }
+    ).details;
+    expect(details.find((d) => d.label === "Name")?.value).toBe("Ada Lovelace");
+    expect(details.find((d) => d.label === "Party")?.value).toBe("4 guests");
+  });
+
+  it("acknowledges unknown A2UI actions without a tool round-trip", async () => {
+    const { state } = await streamAndReduce({
+      input: [
+        {
+          type: "message",
+          role: "user",
+          content: [
+            { type: "input_text", text: "UI action: custom_action" },
+            {
+              type: "a2ui",
+              mime_type: "application/a2ui+json",
+              data: [
+                {
+                  version: "v0.9.1",
+                  action: {
+                    name: "custom_action",
+                    surfaceId: "s",
+                    sourceComponentId: "c",
+                    timestamp: "2026-07-10T18:00:00.000Z",
+                    context: { probe: 42 },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const types = state.items.map((i) => i.type);
+    expect(types).not.toContain("function_call");
+    const message = state.items.find(isMessageItem) as MessageItem;
+    expect(messageText(message)).toContain("custom_action");
+    expect(messageText(message)).toContain("42");
   });
 });

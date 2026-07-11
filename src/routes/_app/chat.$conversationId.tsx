@@ -76,6 +76,21 @@ function ConversationPage() {
     });
   };
 
+  /* Routes an A2UI action from a rendered tool surface back through the
+   * agent: the summary is the text fallback, the messages ride along as a
+   * typed content part. */
+  const sendA2uiAction = (payload: {
+    messages: Array<Record<string, unknown>>;
+    summary: string;
+  }) => {
+    if (busy) return;
+    chatStore.send({
+      conversationId,
+      text: payload.summary,
+      a2ui: payload.messages,
+    });
+  };
+
   const agent = detail?.agent ?? null;
 
   const { ref: composerOverlayRef, height: composerHeight } =
@@ -95,6 +110,7 @@ function ConversationPage() {
           onRegenerate={regenerate}
           onRetry={regenerate}
           onDismissError={() => chatStore.remove(conversationId)}
+          onA2uiAction={sendA2uiAction}
           disabled={busy}
           composerHeight={composerHeight}
           composerCardHeight={composerCardHeight}
