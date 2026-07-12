@@ -245,9 +245,11 @@ export function ChartView({ component, base }: ViewProps) {
     setDrag(null);
     if (!drag || disabled || !selection || selection.mode !== "range") return;
     const { start, current } = drag;
-    /* A click without a drag (or a drag that never crossed a point) leaves
-     * the existing selection alone. */
-    if (start === null || current === null || start === current) return;
+    if (start === null || current === null) return;
+    if (start === current) {
+      if (selected) setValue(selection.pointer, null);
+      return;
+    }
     const startIndex = Math.max(0, Math.min(start, current));
     const endIndex = Math.min(rows.length - 1, Math.max(start, current));
     if (endIndex <= startIndex) return;
