@@ -94,7 +94,7 @@ How it works today:
   (ask it to "book a table" — submitting the form updates it in place
   into a confirmation).
 
-### Level 2: Custom catalogs (first-party charts catalog implemented)
+### Built-in charts catalog (implemented)
 
 Custom catalogs are the A2UI-sanctioned path for domains that need more
 specialized native components than the Basic Catalog provides. A custom
@@ -136,10 +136,25 @@ How it works today:
   selection), or a "traffic trend" and drag across the chart (range
   selection) — either way the analysis lands on the same surface in place.
 
-Installed third-party catalog plugins (contract + renderer distributed
-outside the Parley tree) remain future work. The official Basic Catalog
-stays the preferred option whenever it is sufficient; custom catalogs trade
-some portability for richer native integration.
+This direct, built-in registration makes the catalog useful while the plugin
+system below is developed; it is not the Level 2 plugin architecture. The
+official Basic Catalog stays the preferred option whenever it is sufficient;
+custom catalogs trade some portability for richer native integration.
+
+### Level 2: Custom catalog plugins
+
+Parley may later support installed catalog plugins for domains that need more
+specialized native components, such as charts, diagrams, code review, or
+infrastructure visualizations.
+
+A plugin must provide both the catalog contract and trusted renderer
+implementations. Catalogs are explicitly installed and negotiated; receiving
+an unknown catalog must not cause Parley to download or execute arbitrary code.
+
+Built-in catalogs, including the official Basic Catalog and Parley's charts
+catalog, should use the same registration system as externally installed
+catalogs. They may be enabled by default, but deployment administrators should
+be able to disable them or enable other installed catalog plugins.
 
 ### Level 3: MCP Apps
 

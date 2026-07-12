@@ -37,10 +37,9 @@ export const A2UI_BASIC_CATALOG_IDS: readonly string[] = [
 ];
 
 /**
- * Parley's first-party charts catalog: the Basic Catalog plus `Chart` and
- * `Stat` leaf components (Level 2 of docs/generative-ui.md). The ID names
- * the published contract in catalogs/charts/v1/catalog.json — it is never
- * fetched at runtime.
+ * Parley's built-in charts catalog: the Basic Catalog plus `Chart` and `Stat`
+ * leaf components. The ID names the published contract in
+ * catalogs/charts/v1/catalog.json — it is never fetched at runtime.
  */
 export const A2UI_CHARTS_CATALOG_ID =
   "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
