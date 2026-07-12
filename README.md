@@ -26,7 +26,7 @@ APP_SECRET=$(openssl rand -base64 32) docker compose up -d
 ```
 
 Open <http://localhost:3000>, create your account (the first one is the
-admin), and chat with the built-in demo agent. Connect your own from the
+admin), and chat with the bundled standalone demo agent. Connect your own from the
 **Agents** page.
 
 ## Connecting an agent
@@ -52,7 +52,7 @@ implementation walkthrough.
 ```bash
 bun install
 docker compose -f docker-compose.dev.yml up -d   # Postgres :5433, Redis :6380
-bun run dev                                       # http://localhost:3000
+bun run dev                                       # app :3000 + demo agent :8080
 ```
 
 Useful scripts:

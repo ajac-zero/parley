@@ -15,7 +15,8 @@ APP_SECRET=$(openssl rand -base64 32) docker compose up -d
 
 Compose-level knobs (all via environment): `APP_URL`, `APP_SECRET`
 (required), `PORT` (host port, default 3000), `POSTGRES_PASSWORD`,
-`DEMO_AGENT`.
+`DEMO_AGENT`. Compose runs the demo agent as a separate service and configures
+Parley with its internal `DEMO_AGENT_URL`.
 
 For a real deployment, put a TLS-terminating proxy in front (see
 [Reverse proxies and SSE](#reverse-proxies-and-sse)) and set
@@ -36,6 +37,10 @@ docker run -d -p 3000:3000 \
 The image is multi-stage (`oven/bun` build → `bun:slim` runtime), runs as a
 non-root user, and starts via `bun run server.ts`.
 
+To seed the demo when running Parley outside Compose, start the reference
+server separately with `bun run demo-agent` and set `DEMO_AGENT_URL` to its
+reachable `/v1` base URL. Setting `DEMO_AGENT=false` skips the seed entirely.
+
 ## Kubernetes
 
 Reference manifests live in [`k8s/`](../k8s/):
@@ -44,7 +49,7 @@ Reference manifests live in [`k8s/`](../k8s/):
   `secret.yaml`, fill in `APP_SECRET` / `DATABASE_URL` / `REDIS_URL`
 - [`deployment.yaml`](../k8s/deployment.yaml) — namespace, Deployment
   (2 replicas, liveness/readiness probes on `/api/health`, non-root,
-  read-only rootfs), and Service
+  read-only rootfs), a standalone demo-agent sidecar, and Service
 - [`ingress.yaml`](../k8s/ingress.yaml) — nginx-class Ingress with
   SSE-friendly annotations and TLS
 

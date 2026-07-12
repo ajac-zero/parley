@@ -16,7 +16,7 @@ import {
   reduceORevent,
 } from "~/lib/openresponses";
 import { parseSseStream, SSE_DONE } from "~/lib/sse";
-import { handleDemoResponses } from "./demo-agent";
+import { handleDemoResponses } from "./agent";
 
 const request = (body: unknown) =>
   new Request("http://demo.local/v1/responses", {

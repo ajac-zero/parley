@@ -20,8 +20,12 @@ const envConfig = Config.all({
   appUrl: Config.string("APP_URL").pipe(
     Config.withDefault("http://localhost:3000"),
   ),
-  /** Expose the built-in demo agent and seed it on first boot. */
+  /** Seed the standalone demo agent on first boot. */
   demoAgent: Config.boolean("DEMO_AGENT").pipe(Config.withDefault(true)),
+  /** Open Responses base URL of the independently running demo agent. */
+  demoAgentUrl: Config.string("DEMO_AGENT_URL").pipe(
+    Config.withDefault("http://localhost:8080/v1"),
+  ),
   /** Max upload size for attachments, in megabytes. */
   fileMaxMb: Config.number("FILE_MAX_MB").pipe(Config.withDefault(10)),
   /** S3-compatible endpoint used to store uploaded attachments. */

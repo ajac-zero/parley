@@ -6,7 +6,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "bun --watch examples/demo-agent/server.ts & DEMO_PID=$!; trap 'kill $DEMO_PID' EXIT INT TERM; vite dev --port 3000",
+    "dev:app": "vite dev --port 3000",
+    "demo-agent": "bun run examples/demo-agent/server.ts",
     "build": "vite build",
     "start": "bun run server.ts",
     "typecheck": "tsc --noEmit",

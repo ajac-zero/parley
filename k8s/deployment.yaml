@@ -32,6 +32,8 @@ spec:
               value: "https://chat.example.com" # public URL of this deployment
             - name: DEMO_AGENT
               value: "true"
+            - name: DEMO_AGENT_URL
+              value: "http://localhost:8080/v1"
           envFrom:
             - secretRef:
                 name: parley
@@ -54,6 +56,30 @@ spec:
               memory: 256Mi
             limits:
               memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+        - name: demo-agent
+          image: ghcr.io/your-org/parley:latest
+          command: ["bun", "run", "examples/demo-agent/server.ts"]
+          ports:
+            - name: demo-http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: demo-http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: demo-http
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

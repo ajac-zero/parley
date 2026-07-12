@@ -90,7 +90,7 @@ How it works today:
   summary, plus an `a2ui` content part carrying the standard A2UI
   client -> server messages verbatim (the Open Responses analog of A2A's
   DataPart binding). The agent owns routing the action back to the tool
-  that produced the surface; the built-in demo agent shows the loop
+  that produced the surface; the standalone demo agent shows the loop
   (ask it to "book a table" — submitting the form updates it in place
   into a confirmation).
 
@@ -131,7 +131,7 @@ How it works today:
 - Negotiation: A2A advertises supported catalogs via
   `metadata.a2uiClientCapabilities.supportedCatalogIds`; Open Responses has
   no equivalent yet, so catalog support is agreed out-of-band (this repo's
-  supported IDs are the contract). The built-in demo agent shows both
+  supported IDs are the contract). The standalone demo agent shows both
   selection loops: ask for a "revenue chart" and click a bar (point
   selection), or a "traffic trend" and drag across the chart (range
   selection) — either way the analysis lands on the same surface in place.

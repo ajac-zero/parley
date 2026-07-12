@@ -1,21 +1,20 @@
-/**
- * The built-in demo agent: a tiny, self-contained Open Responses server used
- * for trying Parley without any external agent. It also doubles as a
- * reference implementation of the streaming protocol and is exercised by the
- * integration tests.
- */
+/** A standalone reference implementation of the Open Responses protocol. */
 
-import { A2UI_CHARTS_CATALOG_ID, A2UI_MIME_TYPE } from "~/lib/a2ui";
-import type { ContentPart, ORItem } from "~/lib/openresponses";
-import { newId } from "~/server/ids";
+const A2UI_MIME_TYPE = "application/a2ui+json";
+const A2UI_CHARTS_CATALOG_ID =
+  "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
 
-/**
- * Sentinel base URL identifying the built-in demo agent. Requests to it are
- * dispatched in-process (never over the network), so the demo works
- * regardless of APP_URL, port mappings, or proxy topology. It also remains
- * reachable externally at `{APP_URL}/api/demo/v1/responses` for curl testing.
- */
-export const DEMO_AGENT_BASE_URL = "parley://demo";
+type ContentPart = Record<string, unknown> & { type: string };
+type ORItem = Record<string, unknown> & { type: string };
+
+const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+function newId(prefix: string): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  let suffix = "";
+  for (const byte of bytes) suffix += ALPHABET[byte % ALPHABET.length];
+  return `${prefix}_${suffix}`;
+}
 
 interface DemoRequestBody {
   input?: unknown;
@@ -1060,7 +1059,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
       reasoning: `The user asked about ${
         lower.includes("weather") ? "the weather" : "tool calling"
       }. I'll call the demo get_weather tool for ${city}, then summarize the result.`,
-      reply: `I called the \`get_weather\` tool for **${city}**. It reports **18°C, partly cloudy** with a light breeze — a fabricated but beautifully formatted forecast, since I'm the built-in demo agent. Connect a real agent to get real answers!`,
+      reply: `I called the \`get_weather\` tool for **${city}**. It reports **18°C, partly cloudy** with a light breeze — a fabricated but beautifully formatted forecast, since I'm the demo agent. Connect a real agent to get real answers!`,
       tool: {
         name: "get_weather",
         args: JSON.stringify({ city, unit: "celsius" }),
@@ -1093,7 +1092,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   const intro =
     parsed.turns > 1
       ? `We're ${parsed.turns} turns into this conversation — the full transcript is replayed to me each time, exactly as the Open Responses spec prescribes.`
-      : "I'm **Parley's built-in demo agent**, a minimal reference implementation of the [Open Responses](https://openresponses.org) protocol.";
+      : "I'm **Parley's standalone demo agent**, a minimal reference implementation of the [Open Responses](https://openresponses.org) protocol.";
 
   const echo =
     text.length > 0
