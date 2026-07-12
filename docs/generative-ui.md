@@ -133,8 +133,8 @@ How it works today:
   no equivalent yet, so catalog support is agreed out-of-band (this repo's
   supported IDs are the contract). The built-in demo agent shows both
   selection loops: ask for a "revenue chart" and click a bar (point
-  selection), or a "traffic trend" and drag the brush (range selection) —
-  either way the analysis lands on the same surface in place.
+  selection), or a "traffic trend" and drag across the chart (range
+  selection) — either way the analysis lands on the same surface in place.
 
 Installed third-party catalog plugins (contract + renderer distributed
 outside the Parley tree) remain future work. The official Basic Catalog

@@ -91,7 +91,7 @@
             },
             "selection": {
               "type": "object",
-              "description": "Two-way binding for user selection. In 'point' mode, clicking a data point writes {mode, index, x, values} at 'path'; in 'range' mode, a brush control writes {mode, startIndex, endIndex, from, to}. The written value lives in the surface's local data model — reference it from action contexts to send it to the agent.",
+              "description": "Two-way binding for user selection. In 'point' mode, clicking a data point writes {mode, index, x, values} at 'path'; in 'range' mode, dragging across the plot writes {mode, startIndex, endIndex, from, to}. The written value lives in the surface's local data model — reference it from action contexts to send it to the agent.",
               "properties": {
                 "path": {
                   "type": "string",

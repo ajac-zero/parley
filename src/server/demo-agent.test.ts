@@ -511,7 +511,7 @@ describe("handleDemoResponses", () => {
     });
   });
 
-  it("summarizes a brushed range in place, clamping wild indices", async () => {
+  it("summarizes a dragged range in place, clamping wild indices", async () => {
     const summarize = (range: Record<string, unknown>) =>
       streamAndReduce({
         input: [
@@ -541,7 +541,7 @@ describe("handleDemoResponses", () => {
         ],
       });
 
-    /* A one-week brush window (May 8 – May 14). */
+    /* A one-week drag-selected window (May 8 – May 14). */
     const { state } = await summarize({
       mode: "range",
       startIndex: 7,

@@ -659,8 +659,8 @@ const trafficTotal = (days: readonly TrafficDay[]): number =>
   days.reduce((total, d) => total + d.sessions, 0);
 
 /**
- * The traffic report surface: an area chart with a `range` selection — the
- * brush under the chart writes {startIndex, endIndex, from, to} into the
+ * The traffic report surface: an area chart with a `range` selection —
+ * dragging across the plot writes {startIndex, endIndex, from, to} into the
  * surface's local data model, and the summarize Button sends it back as
  * action context.
  */
@@ -689,7 +689,7 @@ function trafficReportMessages(): Array<Record<string, unknown>> {
       id: "traffic_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Drag the brush handles under the chart to focus a date range; the selection binds into the surface's data model.",
+      text: "Drag across the chart to select a date range; the selection binds into the surface's data model.",
     },
     {
       id: "traffic_chart",
@@ -848,8 +848,8 @@ function replyForTrafficSummary(action: DemoA2uiAction): BuiltReply {
     `Peak day was **${peak.day}** with **${num(peak.sessions)}** sessions.`;
 
   return {
-    reasoning: `The user brushed ${window} in the traffic chart and asked for a summary (an A2UI action carrying the chart's range binding). I'll run summarize_range over that window and append the result to the existing report surface in place.`,
-    reply: `I summarized **${window}**: ${num(total)} sessions across ${windowDays.length} days, averaging ${num(average)}/day.\n\nSame loop as the revenue demo, but with a **range** selection: the brush wrote \`{startIndex, endIndex, from, to}\` into the surface's data model, the button sent it back as action context, and \`summarize_range\` updated the *same* \`surfaceId\` in place. Brush a different window and summarize again — the section refreshes.`,
+    reasoning: `The user dragged out ${window} in the traffic chart and asked for a summary (an A2UI action carrying the chart's range binding). I'll run summarize_range over that window and append the result to the existing report surface in place.`,
+    reply: `I summarized **${window}**: ${num(total)} sessions across ${windowDays.length} days, averaging ${num(average)}/day.\n\nSame loop as the revenue demo, but with a **range** selection: dragging across the chart wrote \`{startIndex, endIndex, from, to}\` into the surface's data model, the button sent it back as action context, and \`summarize_range\` updated the *same* \`surfaceId\` in place. Drag a different window and summarize again — the section refreshes.`,
     tool: {
       name: "summarize_range",
       args: JSON.stringify({ from, to, days: windowDays.length }),
@@ -1003,14 +1003,14 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     const total = trafficTotal(TRAFFIC_DAYS);
     return {
       reasoning:
-        "The user wants to see trends. I'll call the demo get_traffic_report tool, which returns a charts-catalog surface with a range-selectable area chart, and explain the brush loop.",
-      reply: `I called \`get_traffic_report\` — another surface from **Parley's charts catalog**, this time an area chart with a **range selection**.\n\nDrag the brush handles under the chart to focus a window, then hit **Summarize range**: the brush writes \`{startIndex, endIndex, from, to}\` into the surface's data model through two-way binding, and the button carries it back to me as action context.`,
+        "The user wants to see trends. I'll call the demo get_traffic_report tool, which returns a charts-catalog surface with a range-selectable area chart, and explain the drag-to-select loop.",
+      reply: `I called \`get_traffic_report\` — another surface from **Parley's charts catalog**, this time an area chart with a **range selection**.\n\nDrag across the chart to select a window, then hit **Summarize range**: the drag writes \`{startIndex, endIndex, from, to}\` into the surface's data model through two-way binding, and the button carries it back to me as action context.`,
       tool: {
         name: "get_traffic_report",
         args: JSON.stringify({ window_days: TRAFFIC_DAYS.length }),
         output: a2uiToolOutput(
           "a2ui://demo/traffic-report",
-          `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Brush a range in the chart to summarize it.`,
+          `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Drag a range in the chart to summarize it.`,
           trafficReportMessages(),
         ),
       },
@@ -1103,7 +1103,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to brush-select a range in a chart\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }

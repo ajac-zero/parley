@@ -18,17 +18,17 @@
  */
 
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
-  Brush,
   CartesianGrid,
   Cell,
   Line,
   LineChart,
+  ReferenceArea,
   XAxis,
 } from "recharts";
 import type { ViewProps } from "~/components/a2ui/catalog";
@@ -57,6 +57,19 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 const toNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
+
+/**
+ * recharts' mouse/tooltip state carries `activeTooltipIndex` as a numeric
+ * *string* (an internal quirk of its category-axis lookup), not a number —
+ * so callers reading it can't use the strict `toNumber` above.
+ */
+const activeTooltipIndexOf = (state: unknown): number | null => {
+  const raw = asRecord(state)?.activeTooltipIndex;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 /* ---------------------------------- Chart --------------------------------- */
 
@@ -169,13 +182,34 @@ export function ChartView({ component, base }: ViewProps) {
     return entries;
   }, [series]);
 
-  /* The currently selected point index (point mode), read back from the
-   * bound selection value so the chart can highlight it. */
-  const selected =
-    selection?.mode === "point"
-      ? asRecord(pointerGet(dataModel, selection.pointer))
-      : null;
-  const selectedIndex = toNumber(selected?.index);
+  /* The current selection, read back from the bound value so the chart can
+   * highlight it (a dimmed-bars index in point mode, a shaded region in
+   * range mode). */
+  const selected = selection
+    ? asRecord(pointerGet(dataModel, selection.pointer))
+    : null;
+  const selectedIndex =
+    selection?.mode === "point" ? toNumber(selected?.index) : null;
+
+  /* Range selection is a drag across the plot itself: mousedown anchors the
+   * start index, mousemove extends the highlight, mouseup commits through
+   * the binding. Indices may be null while recharts has no hover state yet
+   * (they fill in on the first mousemove of the drag). */
+  const [drag, setDrag] = useState<{
+    start: number | null;
+    current: number | null;
+  } | null>(null);
+  const dragging = drag !== null;
+
+  /* Releasing the mouse outside the chart must still commit the drag, so a
+   * window-level mouseup listener delegates to the latest commit closure. */
+  const commitDragRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!dragging) return;
+    const onUp = () => commitDragRef.current();
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, [dragging]);
 
   if (!xKey || series.length === 0 || rows.length === 0) {
     return <ChartPlaceholder />;
@@ -200,19 +234,23 @@ export function ChartView({ component, base }: ViewProps) {
    * exact index even without a preceding mousemove (touch, synthetic
    * clicks). */
   const selectPoint = (state: unknown) => {
-    selectPointAt(toNumber(asRecord(state)?.activeTooltipIndex));
+    selectPointAt(activeTooltipIndexOf(state));
   };
 
   const selectBar = (_entry: unknown, index: number) => {
     selectPointAt(Number.isInteger(index) ? index : null);
   };
 
-  const selectRange = (range: unknown) => {
-    if (disabled || !selection || selection.mode !== "range") return;
-    const record = asRecord(range);
-    const startIndex = toNumber(record?.startIndex);
-    const endIndex = toNumber(record?.endIndex);
-    if (startIndex === null || endIndex === null) return;
+  const commitDrag = () => {
+    setDrag(null);
+    if (!drag || disabled || !selection || selection.mode !== "range") return;
+    const { start, current } = drag;
+    /* A click without a drag (or a drag that never crossed a point) leaves
+     * the existing selection alone. */
+    if (start === null || current === null || start === current) return;
+    const startIndex = Math.max(0, Math.min(start, current));
+    const endIndex = Math.min(rows.length - 1, Math.max(start, current));
+    if (endIndex <= startIndex) return;
     setValue(selection.pointer, {
       mode: "range",
       startIndex,
@@ -221,11 +259,57 @@ export function ChartView({ component, base }: ViewProps) {
       to: rows[endIndex]?.[xKey],
     });
   };
+  commitDragRef.current = commitDrag;
+
+  const dragHandlers =
+    selection?.mode === "range" && !disabled
+      ? {
+          onMouseDown: (state: unknown) => {
+            const index = activeTooltipIndexOf(state);
+            setDrag({ start: index, current: index });
+          },
+          onMouseMove: (state: unknown) => {
+            const index = activeTooltipIndexOf(state);
+            if (index === null) return;
+            setDrag((d) =>
+              d ? { start: d.start ?? index, current: index } : d,
+            );
+          },
+          onMouseUp: () => commitDragRef.current(),
+        }
+      : null;
+
+  /* The shaded region: the live drag extent while dragging, otherwise the
+   * committed selection — hidden when it spans the whole series, so a
+   * freshly seeded "everything" selection doesn't tint the entire plot. */
+  let rangeExtent: [number, number] | null = null;
+  if (drag !== null && drag.start !== null && drag.current !== null) {
+    const lo = Math.min(drag.start, drag.current);
+    const hi = Math.max(drag.start, drag.current);
+    if (lo < hi) rangeExtent = [lo, hi];
+  } else if (selection?.mode === "range") {
+    const boundStart = toNumber(selected?.startIndex);
+    const boundEnd = toNumber(selected?.endIndex);
+    if (boundStart !== null && boundEnd !== null) {
+      const lo = Math.max(0, Math.min(boundStart, boundEnd));
+      const hi = Math.min(rows.length - 1, Math.max(boundStart, boundEnd));
+      if (lo < hi && !(lo === 0 && hi === rows.length - 1)) {
+        rangeExtent = [lo, hi];
+      }
+    }
+  }
+  const axisValue = (index: number): string | number | undefined => {
+    const value = rows[index]?.[xKey];
+    return typeof value === "string" || typeof value === "number"
+      ? value
+      : undefined;
+  };
 
   const shared = {
     accessibilityLayer: true,
     data: rows,
     onClick: selectPoint,
+    ...dragHandlers,
   } as const;
   const grid = <CartesianGrid vertical={false} />;
   const xAxis = (
@@ -236,17 +320,16 @@ export function ChartView({ component, base }: ViewProps) {
   );
   const legend =
     series.length > 1 ? <ChartLegend content={<ChartLegendContent />} /> : null;
-  const brush =
-    selection?.mode === "range" ? (
-      <Brush
-        dataKey={xKey}
-        height={20}
-        travellerWidth={8}
-        stroke="var(--muted-foreground)"
-        fill="transparent"
-        onChange={selectRange}
-      />
-    ) : null;
+  const rangeArea = rangeExtent ? (
+    <ReferenceArea
+      x1={axisValue(rangeExtent[0])}
+      x2={axisValue(rangeExtent[1])}
+      strokeOpacity={0}
+      fill="var(--muted-foreground)"
+      fillOpacity={0.15}
+      ifOverflow="visible"
+    />
+  ) : null;
   /* Non-selected points dim once a point is picked (bar charts only —
    * recharts Cells are per-bar). */
   const cells = (spec: SeriesSpec) =>
@@ -270,6 +353,9 @@ export function ChartView({ component, base }: ViewProps) {
         className={cn(
           "aspect-auto w-full",
           selection?.mode === "point" && !disabled && "cursor-pointer",
+          selection?.mode === "range" &&
+            !disabled &&
+            "cursor-crosshair select-none",
         )}
         aria-label={xLabel ? `${title || "Chart"} by ${xLabel}` : undefined}
       >
@@ -279,7 +365,7 @@ export function ChartView({ component, base }: ViewProps) {
             {xAxis}
             {tooltip}
             {legend}
-            {brush}
+            {rangeArea}
             {series.map((spec) => (
               <Bar
                 key={spec.key}
@@ -300,7 +386,7 @@ export function ChartView({ component, base }: ViewProps) {
             {xAxis}
             {tooltip}
             {legend}
-            {brush}
+            {rangeArea}
             {series.map((spec) => (
               <Area
                 key={spec.key}
@@ -321,7 +407,7 @@ export function ChartView({ component, base }: ViewProps) {
             {xAxis}
             {tooltip}
             {legend}
-            {brush}
+            {rangeArea}
             {series.map((spec) => (
               <Line
                 key={spec.key}
