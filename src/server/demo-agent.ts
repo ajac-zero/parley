@@ -5,7 +5,7 @@
  * integration tests.
  */
 
-import { A2UI_MIME_TYPE } from "~/lib/a2ui";
+import { A2UI_CHARTS_CATALOG_ID, A2UI_MIME_TYPE } from "~/lib/a2ui";
 import type { ContentPart, ORItem } from "~/lib/openresponses";
 import { newId } from "~/server/ids";
 
@@ -369,11 +369,549 @@ function confirmationUpdateMessages(
   ];
 }
 
+/* ------------------------- A2UI charts showcase --------------------------- */
+
+/** The fabricated monthly figures behind the demo revenue report. */
+const REVENUE_MONTHS = [
+  { month: "Jan", revenue: 186_000, expenses: 152_000 },
+  { month: "Feb", revenue: 198_500, expenses: 156_400 },
+  { month: "Mar", revenue: 224_300, expenses: 161_200 },
+  { month: "Apr", revenue: 209_800, expenses: 173_900 },
+  { month: "May", revenue: 241_600, expenses: 178_300 },
+  { month: "Jun", revenue: 253_100, expenses: 182_700 },
+  { month: "Jul", revenue: 275_400, expenses: 189_500 },
+  { month: "Aug", revenue: 291_200, expenses: 196_800 },
+] as const;
+
+type RevenueMonth = (typeof REVENUE_MONTHS)[number];
+
+const REVENUE_LAST = REVENUE_MONTHS[REVENUE_MONTHS.length - 1] as RevenueMonth;
+
+const sum = (pick: (m: RevenueMonth) => number): number =>
+  REVENUE_MONTHS.reduce((total, m) => total + pick(m), 0);
+
+const monthMargin = (m: RevenueMonth): number =>
+  (m.revenue - m.expenses) / m.revenue;
+
+/**
+ * The revenue report surface — Parley's first-party charts catalog (Basic
+ * Catalog + Chart/Stat). The Chart's point selection binds to /selection in
+ * the surface's local data model; the analyze Button sends it back as
+ * action context.
+ */
+function revenueReportMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_report";
+  const first = REVENUE_MONTHS[0] as RevenueMonth;
+  const totalRevenue = sum((m) => m.revenue);
+  const totalExpenses = sum((m) => m.expenses);
+  const components = [
+    { id: "root", component: "Card", child: "report_layout" },
+    {
+      id: "report_layout",
+      component: "Column",
+      children: [
+        "report_title",
+        "report_subtitle",
+        "report_stats",
+        "report_chart",
+        "report_hint",
+        "report_footer",
+      ],
+    },
+    {
+      id: "report_title",
+      component: "Text",
+      variant: "h3",
+      text: "Revenue report — FY26",
+    },
+    {
+      id: "report_subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Rendered from Parley's first-party charts catalog: the A2UI Basic Catalog extended with native Chart and Stat components.",
+    },
+    {
+      id: "report_stats",
+      component: "Row",
+      children: ["stat_revenue", "stat_expenses", "stat_margin"],
+    },
+    {
+      id: "stat_revenue",
+      component: "Stat",
+      label: "Revenue (8 mo)",
+      value: { path: "/report/stats/revenue" },
+      format: "currency",
+      delta: { path: "/report/stats/revenueDelta" },
+      weight: 1,
+    },
+    {
+      id: "stat_expenses",
+      component: "Stat",
+      label: "Expenses (8 mo)",
+      value: { path: "/report/stats/expenses" },
+      format: "currency",
+      delta: { path: "/report/stats/expensesDelta" },
+      weight: 1,
+    },
+    {
+      id: "stat_margin",
+      component: "Stat",
+      label: "Net margin",
+      value: { path: "/report/stats/margin" },
+      format: "percent",
+      delta: { path: "/report/stats/marginDelta" },
+      weight: 1,
+    },
+    {
+      id: "report_chart",
+      component: "Chart",
+      variant: "bar",
+      title: "Revenue vs expenses by month",
+      data: { path: "/report/monthly" },
+      x: { key: "month", label: "Month" },
+      series: [
+        { key: "revenue", label: "Revenue", color: "chart-1" },
+        { key: "expenses", label: "Expenses", color: "chart-5" },
+      ],
+      height: 260,
+      selection: { path: "/selection", mode: "point" },
+    },
+    {
+      id: "report_hint",
+      component: "Text",
+      variant: "caption",
+      text: {
+        call: "formatString",
+        args: {
+          value:
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+            "Selected month: ${/selection/x}. Click a bar to change the selection, then analyze it.",
+        },
+      },
+    },
+    {
+      id: "report_footer",
+      component: "Row",
+      justify: "end",
+      children: ["analyze"],
+    },
+    { id: "analyze_text", component: "Text", text: "Analyze selection" },
+    {
+      id: "analyze",
+      component: "Button",
+      variant: "primary",
+      child: "analyze_text",
+      action: {
+        event: {
+          name: "analyze_revenue",
+          context: { selection: { path: "/selection" } },
+        },
+      },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/report",
+        value: {
+          monthly: REVENUE_MONTHS.map((m) => ({ ...m })),
+          stats: {
+            revenue: totalRevenue,
+            expenses: totalExpenses,
+            margin: (totalRevenue - totalExpenses) / totalRevenue,
+            revenueDelta: REVENUE_LAST.revenue / first.revenue - 1,
+            expensesDelta: REVENUE_LAST.expenses / first.expenses - 1,
+            marginDelta: monthMargin(REVENUE_LAST) - monthMargin(first),
+          },
+        },
+      },
+    },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/selection",
+        value: {
+          mode: "point",
+          index: REVENUE_MONTHS.length - 1,
+          x: REVENUE_LAST.month,
+          values: {
+            revenue: REVENUE_LAST.revenue,
+            expenses: REVENUE_LAST.expenses,
+          },
+        },
+      },
+    },
+  ];
+}
+
+/**
+ * The analysis for one selected month: update envelopes targeting the
+ * existing `demo_revenue_report` surface — the insight section is appended
+ * to the report card in place, never a new surface.
+ */
+function revenueInsightMessages(
+  row: RevenueMonth,
+  summary: string,
+): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_report";
+  const components = [
+    {
+      id: "report_layout",
+      component: "Column",
+      children: [
+        "report_title",
+        "report_subtitle",
+        "report_stats",
+        "report_chart",
+        "report_hint",
+        "report_footer",
+        "insight_rule",
+        "insight_title",
+        "insight_body",
+      ],
+    },
+    { id: "insight_rule", component: "Divider" },
+    {
+      id: "insight_title",
+      component: "Text",
+      variant: "h5",
+      text: {
+        call: "formatString",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+        args: { value: "Analysis — ${/insight/month}" },
+      },
+    },
+    {
+      id: "insight_body",
+      component: "Text",
+      text: { path: "/insight/summary" },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/insight",
+        value: { month: row.month, summary },
+      },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+  ];
+}
+
+const usd = (value: number): string =>
+  `$${Math.round(value).toLocaleString("en-US")}`;
+const num = (value: number): string =>
+  Math.round(value).toLocaleString("en-US");
+const pct = (fraction: number): string =>
+  `${fraction >= 0 ? "+" : ""}${(fraction * 100).toFixed(1)}%`;
+
+/* -------------------- A2UI charts showcase: range mode -------------------- */
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/**
+ * The fabricated daily-sessions series behind the demo traffic report:
+ * 45 days from May 1 with a gentle upward trend, a weekly cycle, and a
+ * slow swell. Deterministic (UTC math, no locale) so tests can rely on it.
+ */
+const TRAFFIC_DAYS = Array.from({ length: 45 }, (_, i) => {
+  const date = new Date(Date.UTC(2026, 4, 1) + i * 86_400_000);
+  return {
+    day: `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`,
+    sessions: Math.round(
+      3200 +
+        i * 28 +
+        Math.sin((2 * Math.PI * i) / 7) * 450 +
+        Math.sin(i / 9) * 260,
+    ),
+  };
+});
+
+type TrafficDay = (typeof TRAFFIC_DAYS)[number];
+
+const TRAFFIC_FIRST = TRAFFIC_DAYS[0] as TrafficDay;
+const TRAFFIC_LAST = TRAFFIC_DAYS[TRAFFIC_DAYS.length - 1] as TrafficDay;
+
+const trafficTotal = (days: readonly TrafficDay[]): number =>
+  days.reduce((total, d) => total + d.sessions, 0);
+
+/**
+ * The traffic report surface: an area chart with a `range` selection —
+ * dragging across the plot writes {startIndex, endIndex, from, to} into the
+ * surface's local data model, and the summarize Button sends it back as
+ * action context.
+ */
+function trafficReportMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_traffic_report";
+  const components = [
+    { id: "root", component: "Card", child: "traffic_layout" },
+    {
+      id: "traffic_layout",
+      component: "Column",
+      children: [
+        "traffic_title",
+        "traffic_subtitle",
+        "traffic_chart",
+        "traffic_hint",
+        "traffic_footer",
+      ],
+    },
+    {
+      id: "traffic_title",
+      component: "Text",
+      variant: "h3",
+      text: "Site traffic — last 45 days",
+    },
+    {
+      id: "traffic_subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Drag across the chart to select a date range; the selection binds into the surface's data model.",
+    },
+    {
+      id: "traffic_chart",
+      component: "Chart",
+      variant: "area",
+      title: "Daily sessions",
+      data: { path: "/traffic/daily" },
+      x: { key: "day", label: "Day" },
+      series: [{ key: "sessions", label: "Sessions", color: "chart-2" }],
+      selection: { path: "/range", mode: "range" },
+    },
+    {
+      id: "traffic_hint",
+      component: "Text",
+      variant: "caption",
+      text: {
+        call: "formatString",
+        args: {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+          value: "Selected range: ${/range/from} – ${/range/to}.",
+        },
+      },
+    },
+    {
+      id: "traffic_footer",
+      component: "Row",
+      justify: "end",
+      children: ["summarize"],
+    },
+    { id: "summarize_text", component: "Text", text: "Summarize range" },
+    {
+      id: "summarize",
+      component: "Button",
+      variant: "primary",
+      child: "summarize_text",
+      action: {
+        event: {
+          name: "summarize_range",
+          context: { range: { path: "/range" } },
+        },
+      },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/traffic",
+        value: { daily: TRAFFIC_DAYS.map((d) => ({ ...d })) },
+      },
+    },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/range",
+        value: {
+          mode: "range",
+          startIndex: 0,
+          endIndex: TRAFFIC_DAYS.length - 1,
+          from: TRAFFIC_FIRST.day,
+          to: TRAFFIC_LAST.day,
+        },
+      },
+    },
+  ];
+}
+
+/** The range summary, appended to the existing traffic surface in place. */
+function trafficSummaryMessages(
+  window: string,
+  summary: string,
+): Array<Record<string, unknown>> {
+  const surfaceId = "demo_traffic_report";
+  const components = [
+    {
+      id: "traffic_layout",
+      component: "Column",
+      children: [
+        "traffic_title",
+        "traffic_subtitle",
+        "traffic_chart",
+        "traffic_hint",
+        "traffic_footer",
+        "summary_rule",
+        "summary_title",
+        "summary_body",
+      ],
+    },
+    { id: "summary_rule", component: "Divider" },
+    {
+      id: "summary_title",
+      component: "Text",
+      variant: "h5",
+      text: {
+        call: "formatString",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
+        args: { value: "Summary — ${/summary/window}" },
+      },
+    },
+    {
+      id: "summary_body",
+      component: "Text",
+      text: { path: "/summary/text" },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/summary",
+        value: { window, text: summary },
+      },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+  ];
+}
+
+/** Builds the summary turn for a `summarize_range` action. */
+function replyForTrafficSummary(action: DemoA2uiAction): BuiltReply {
+  const range =
+    typeof action.context.range === "object" && action.context.range !== null
+      ? (action.context.range as Record<string, unknown>)
+      : {};
+  /* The selection only names a window; every figure is recomputed from the
+   * server's own series, with the indices clamped to its bounds. */
+  const toIndex = (value: unknown, fallback: number): number =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(Math.max(Math.round(value), 0), TRAFFIC_DAYS.length - 1)
+      : fallback;
+  let start = toIndex(range.startIndex, 0);
+  let end = toIndex(range.endIndex, TRAFFIC_DAYS.length - 1);
+  if (end < start) [start, end] = [end, start];
+
+  const windowDays = TRAFFIC_DAYS.slice(start, end + 1);
+  const from = (TRAFFIC_DAYS[start] as TrafficDay).day;
+  const to = (TRAFFIC_DAYS[end] as TrafficDay).day;
+  const window = `${from} – ${to}`;
+  const total = trafficTotal(windowDays);
+  const average = total / windowDays.length;
+  const overallAverage = trafficTotal(TRAFFIC_DAYS) / TRAFFIC_DAYS.length;
+  const peak = windowDays.reduce((best, d) =>
+    d.sessions > best.sessions ? d : best,
+  );
+  const summary =
+    `**${window}** (${windowDays.length} ${windowDays.length === 1 ? "day" : "days"}): ` +
+    `**${num(total)}** sessions, averaging **${num(average)}/day** — ` +
+    `**${pct(average / overallAverage - 1)}** vs the 45-day average. ` +
+    `Peak day was **${peak.day}** with **${num(peak.sessions)}** sessions.`;
+
+  return {
+    reasoning: `The user dragged out ${window} in the traffic chart and asked for a summary (an A2UI action carrying the chart's range binding). I'll run summarize_range over that window and append the result to the existing report surface in place.`,
+    reply: `I summarized **${window}**: ${num(total)} sessions across ${windowDays.length} days, averaging ${num(average)}/day.\n\nSame loop as the revenue demo, but with a **range** selection: dragging across the chart wrote \`{startIndex, endIndex, from, to}\` into the surface's data model, the button sent it back as action context, and \`summarize_range\` updated the *same* \`surfaceId\` in place. Drag a different window and summarize again — the section refreshes.`,
+    tool: {
+      name: "summarize_range",
+      args: JSON.stringify({ from, to, days: windowDays.length }),
+      output: a2uiToolOutput(
+        "a2ui://demo/traffic-summary",
+        `Traffic summary for ${window}: ${num(total)} sessions over ${windowDays.length} days (avg ${num(average)}/day), peaking on ${peak.day}.`,
+        trafficSummaryMessages(window, summary),
+      ),
+    },
+  };
+}
+
+/** Builds the analysis turn for an `analyze_revenue` action. */
+function replyForRevenueAnalysis(action: DemoA2uiAction): BuiltReply {
+  const selection =
+    typeof action.context.selection === "object" &&
+    action.context.selection !== null
+      ? (action.context.selection as Record<string, unknown>)
+      : {};
+  /* The server owns the report data: the selection only names the month,
+   * and the figures are recomputed from the source of truth. */
+  const row =
+    REVENUE_MONTHS.find((m) => m.month === selection.x) ?? REVENUE_LAST;
+
+  const avgRevenue = sum((m) => m.revenue) / REVENUE_MONTHS.length;
+  const avgExpenses = sum((m) => m.expenses) / REVENUE_MONTHS.length;
+  const margin = monthMargin(row);
+  const avgMargin =
+    (sum((m) => m.revenue) - sum((m) => m.expenses)) / sum((m) => m.revenue);
+  const summary =
+    `**${row.month}** brought in **${usd(row.revenue)}** against ` +
+    `**${usd(row.expenses)}** in expenses — a **${(margin * 100).toFixed(1)}%** net margin. ` +
+    `Revenue ran **${pct(row.revenue / avgRevenue - 1)}** vs the eight-month average and ` +
+    `expenses **${pct(row.expenses / avgExpenses - 1)}**, leaving the margin ` +
+    `${margin >= avgMargin ? "ahead of" : "behind"} the period's ${(avgMargin * 100).toFixed(1)}% baseline.`;
+
+  return {
+    reasoning: `The user selected ${row.month} in the revenue chart and asked for an analysis (an A2UI action carrying the chart's selection binding). I'll run analyze_selection and append the insight to the existing report surface in place.`,
+    reply: `I analyzed **${row.month}**: revenue ${usd(row.revenue)}, expenses ${usd(row.expenses)}, a ${(margin * 100).toFixed(1)}% net margin.\n\nThe \`analyze_selection\` tool returned \`updateDataModel\`/\`updateComponents\` envelopes for the *same* \`surfaceId\`, so the analysis was appended to the report card above **in place**. Click a different bar and analyze again — the section refreshes instead of stacking up.`,
+    tool: {
+      name: "analyze_selection",
+      args: JSON.stringify({ month: row.month }),
+      output: a2uiToolOutput(
+        "a2ui://demo/revenue-insight",
+        `Analysis for ${row.month}: revenue ${usd(row.revenue)}, expenses ${usd(row.expenses)}, net margin ${(margin * 100).toFixed(1)}%.`,
+        revenueInsightMessages(row, summary),
+      ),
+    },
+  };
+}
+
 const str = (value: unknown, max = 120): string =>
   typeof value === "string" ? value.slice(0, max) : "";
 
 /** Builds the confirmation turn for a submitted reservation action. */
 function replyForA2uiAction(action: DemoA2uiAction): BuiltReply {
+  if (action.name === "analyze_revenue") {
+    return replyForRevenueAnalysis(action);
+  }
+  if (action.name === "summarize_range") {
+    return replyForTrafficSummary(action);
+  }
   if (action.name !== "submit_reservation") {
     return {
       reasoning: `The user triggered the A2UI action "${str(action.name, 60)}". I'll acknowledge it and echo the context so they can see the round-trip.`,
@@ -461,6 +999,43 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     };
   }
 
+  if (/\b(traffic|trends?|sessions)\b/.test(lower)) {
+    const total = trafficTotal(TRAFFIC_DAYS);
+    return {
+      reasoning:
+        "The user wants to see trends. I'll call the demo get_traffic_report tool, which returns a charts-catalog surface with a range-selectable area chart, and explain the drag-to-select loop.",
+      reply: `I called \`get_traffic_report\` — another surface from **Parley's charts catalog**, this time an area chart with a **range selection**.\n\nDrag across the chart to select a window, then hit **Summarize range**: the drag writes \`{startIndex, endIndex, from, to}\` into the surface's data model through two-way binding, and the button carries it back to me as action context.`,
+      tool: {
+        name: "get_traffic_report",
+        args: JSON.stringify({ window_days: TRAFFIC_DAYS.length }),
+        output: a2uiToolOutput(
+          "a2ui://demo/traffic-report",
+          `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Drag a range in the chart to summarize it.`,
+          trafficReportMessages(),
+        ),
+      },
+    };
+  }
+
+  if (/\b(charts?|revenue|graphs?|dashboard)\b/.test(lower)) {
+    const totalRevenue = sum((m) => m.revenue);
+    const totalExpenses = sum((m) => m.expenses);
+    return {
+      reasoning:
+        "The user wants to see charts. I'll call the demo get_revenue_report tool, which returns an A2UI surface using Parley's first-party charts catalog, and explain the selection loop.",
+      reply: `I called the \`get_revenue_report\` tool and it returned an A2UI surface using **Parley's charts catalog** — the official Basic Catalog extended with native \`Chart\` and \`Stat\` components (the catalog ID names a published JSON Schema contract; nothing is fetched or executed at runtime).\n\nClick a bar to select a month, then hit **Analyze selection**: the chart's selection binding rides along as action context, and my analysis lands on this same surface in place.`,
+      tool: {
+        name: "get_revenue_report",
+        args: JSON.stringify({ period: "Jan–Aug FY26", currency: "USD" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/revenue-report",
+          `Revenue report Jan–Aug FY26: revenue ${usd(totalRevenue)}, expenses ${usd(totalExpenses)}, net margin ${(((totalRevenue - totalExpenses) / totalRevenue) * 100).toFixed(1)}%.`,
+          revenueReportMessages(),
+        ),
+      },
+    };
+  }
+
   if (/\b(a2ui|book|reserve|reservation|table|form)\b/.test(lower)) {
     return {
       reasoning:
@@ -528,7 +1103,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }

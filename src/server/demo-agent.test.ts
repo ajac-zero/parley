@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  A2UI_CHARTS_CATALOG_ID,
   extractA2uiResources,
   pointerGet,
   reduceA2uiMessages,
@@ -331,6 +332,264 @@ describe("handleDemoResponses", () => {
     const confirmGroup = byCall.get("call_confirm");
     expect(confirmGroup?.surfaces).toHaveLength(0);
     expect(confirmGroup?.showFallback).toBe(false);
+  });
+
+  it("returns a charts-catalog surface for revenue asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show me a revenue chart")],
+    });
+
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_revenue_report");
+
+    const output = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const extraction = extractA2uiResources(output.output);
+    expect(extraction.resources[0]?.uri).toBe("a2ui://demo/revenue-report");
+    expect(extraction.fallbackText).toContain("net margin");
+
+    const surfaces = reduceA2uiMessages(
+      extraction.resources[0]?.messages ?? [],
+    );
+    expect(surfaces).toHaveLength(1);
+    const surface = surfaces[0] as (typeof surfaces)[number];
+    expect(surface.supported).toBe(true);
+    expect(surface.catalogId).toBe(A2UI_CHARTS_CATALOG_ID);
+
+    /* The extension components, wired for the selection loop. */
+    const chart = surface.components.report_chart;
+    expect(chart?.component).toBe("Chart");
+    expect(chart?.series).toHaveLength(2);
+    expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
+    expect(surface.components.stat_margin?.component).toBe("Stat");
+
+    /* Server-seeded data: rows plus a preselected latest month. */
+    const monthly = pointerGet(surface.dataModel, "/report/monthly");
+    expect(Array.isArray(monthly) && monthly.length).toBe(8);
+    expect(pointerGet(surface.dataModel, "/selection/x")).toBe("Aug");
+  });
+
+  it("appends the revenue analysis to the report surface in place", async () => {
+    /* Turn 1: the report arrives as a charts-catalog surface. */
+    const first = await streamAndReduce({
+      input: [userMessage("revenue chart please")],
+    });
+    const reportOutput = first.state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+
+    /* Turn 2: the user picked May in the chart and hit analyze. */
+    const { state } = await streamAndReduce({
+      input: [
+        userMessage("revenue chart please"),
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "report sent" }],
+        },
+        {
+          type: "message",
+          role: "user",
+          content: [
+            { type: "input_text", text: "UI action: analyze_revenue" },
+            {
+              type: "a2ui",
+              mime_type: "application/a2ui+json",
+              data: [
+                {
+                  version: "v0.9.1",
+                  action: {
+                    name: "analyze_revenue",
+                    surfaceId: "demo_revenue_report",
+                    sourceComponentId: "analyze",
+                    timestamp: "2026-07-11T18:00:00.000Z",
+                    context: {
+                      selection: {
+                        mode: "point",
+                        index: 4,
+                        x: "May",
+                        values: { revenue: 241_600, expenses: 178_300 },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const message = state.items.find(isMessageItem) as MessageItem;
+    expect(messageText(message)).toContain("May");
+
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+      arguments: string;
+    };
+    expect(call.name).toBe("analyze_selection");
+    expect(JSON.parse(call.arguments)).toEqual({ month: "May" });
+
+    /* The analysis targets the existing surface: update envelopes only. */
+    const insightOutput = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages =
+      extractA2uiResources(insightOutput.output).resources[0]?.messages ?? [];
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages.some((m) => m.createSurface)).toBe(false);
+    expect(
+      messages.every(
+        (m) =>
+          (m.updateComponents?.surfaceId ?? m.updateDataModel?.surfaceId) ===
+          "demo_revenue_report",
+      ),
+    ).toBe(true);
+
+    /* Reduced conversation-wide, the report — still anchored at
+     * get_revenue_report's call — gains the insight section. */
+    const byCall = reduceA2uiOutputs([
+      { callId: "call_report", output: reportOutput.output },
+      { callId: "call_insight", output: insightOutput.output },
+    ]);
+    const reportGroup = byCall.get("call_report");
+    expect(reportGroup?.surfaces).toHaveLength(1);
+    const surface = reportGroup?.surfaces[0];
+    expect(surface?.components.report_layout?.children).toContain(
+      "insight_body",
+    );
+    expect(pointerGet(surface?.dataModel, "/insight/month")).toBe("May");
+    expect(pointerGet(surface?.dataModel, "/insight/summary")).toContain(
+      "net margin",
+    );
+
+    const insightGroup = byCall.get("call_insight");
+    expect(insightGroup?.surfaces).toHaveLength(0);
+    expect(insightGroup?.showFallback).toBe(false);
+  });
+
+  it("returns a range-selectable traffic chart for trend asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("what's the traffic trend?")],
+    });
+
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_traffic_report");
+
+    const output = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const extraction = extractA2uiResources(output.output);
+    expect(extraction.resources[0]?.uri).toBe("a2ui://demo/traffic-report");
+
+    const surfaces = reduceA2uiMessages(
+      extraction.resources[0]?.messages ?? [],
+    );
+    const surface = surfaces[0] as (typeof surfaces)[number];
+    expect(surface.supported).toBe(true);
+    expect(surface.catalogId).toBe(A2UI_CHARTS_CATALOG_ID);
+
+    const chart = surface.components.traffic_chart;
+    expect(chart?.component).toBe("Chart");
+    expect(chart?.variant).toBe("area");
+    expect(chart?.selection).toEqual({ path: "/range", mode: "range" });
+
+    /* Server-seeded data: 45 daily rows plus a full-window selection. */
+    const daily = pointerGet(surface.dataModel, "/traffic/daily");
+    expect(Array.isArray(daily) && daily.length).toBe(45);
+    expect(pointerGet(surface.dataModel, "/range")).toEqual({
+      mode: "range",
+      startIndex: 0,
+      endIndex: 44,
+      from: "May 1",
+      to: "Jun 14",
+    });
+  });
+
+  it("summarizes a dragged range in place, clamping wild indices", async () => {
+    const summarize = (range: Record<string, unknown>) =>
+      streamAndReduce({
+        input: [
+          {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "input_text", text: "UI action: summarize_range" },
+              {
+                type: "a2ui",
+                mime_type: "application/a2ui+json",
+                data: [
+                  {
+                    version: "v0.9.1",
+                    action: {
+                      name: "summarize_range",
+                      surfaceId: "demo_traffic_report",
+                      sourceComponentId: "summarize",
+                      timestamp: "2026-07-11T18:00:00.000Z",
+                      context: { range },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+    /* A one-week drag-selected window (May 8 – May 14). */
+    const { state } = await summarize({
+      mode: "range",
+      startIndex: 7,
+      endIndex: 13,
+      from: "May 8",
+      to: "May 14",
+    });
+    const call = state.items.find((i) => i.type === "function_call") as {
+      name: string;
+      arguments: string;
+    };
+    expect(call.name).toBe("summarize_range");
+    expect(JSON.parse(call.arguments)).toEqual({
+      from: "May 8",
+      to: "May 14",
+      days: 7,
+    });
+
+    /* Update envelopes only, targeting the existing traffic surface. */
+    const output = state.items.find(
+      (i) => i.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages =
+      extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(messages.some((m) => m.createSurface)).toBe(false);
+    expect(
+      messages.every(
+        (m) =>
+          (m.updateComponents?.surfaceId ?? m.updateDataModel?.surfaceId) ===
+          "demo_traffic_report",
+      ),
+    ).toBe(true);
+
+    /* The figures are recomputed server-side from the source series. */
+    const message = state.items.find(isMessageItem) as MessageItem;
+    expect(messageText(message)).toContain("May 8 – May 14");
+    expect(messageText(message)).toContain("7 days");
+
+    /* Wild indices are clamped to the series bounds (and reordered). */
+    const clamped = await summarize({ startIndex: 999, endIndex: -3 });
+    const clampedCall = clamped.state.items.find(
+      (i) => i.type === "function_call",
+    ) as { arguments: string };
+    expect(JSON.parse(clampedCall.arguments)).toEqual({
+      from: "May 1",
+      to: "Jun 14",
+      days: 45,
+    });
   });
 
   it("acknowledges unknown A2UI actions without a tool round-trip", async () => {

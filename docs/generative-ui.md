@@ -94,6 +94,53 @@ How it works today:
   (ask it to "book a table" — submitting the form updates it in place
   into a confirmation).
 
+### Built-in charts catalog (implemented)
+
+Custom catalogs are the A2UI-sanctioned path for domains that need more
+specialized native components than the Basic Catalog provides. A custom
+catalog is a contract (a standalone JSON Schema) plus trusted renderer
+implementations on the host; receiving an unknown catalog must not cause
+Parley to download or execute anything.
+
+Parley ships one first-party custom catalog: the charts catalog
+(`catalogs/charts/v1/catalog.json`), which composes the official Basic
+Catalog v0.9.1 with two leaf components — `Chart` (line/bar/area series
+over data-model rows, with optional point/range selection written back
+through two-way binding) and `Stat` (a labeled headline number with an
+optional delta). Because both extensions are leaves, every Basic Catalog
+resource remains valid under the charts catalog unchanged; adding a new
+container component would be a breaking change and would require a new
+versioned catalog ID.
+
+How it works today:
+
+- Contract: the schema's `$id` is the catalog ID
+  (`A2UI_CHARTS_CATALOG_ID` in `src/lib/a2ui.ts`). Catalog IDs are opaque,
+  versioned identifiers agreed out-of-band — never fetched at runtime; the
+  published file documents the contract for tool authors, and a test keeps
+  it in lockstep with the advertised ID.
+- Rendering: a registry in `src/components/a2ui/catalog.tsx` maps each
+  supported `catalogId` to its component views. The charts views
+  (`src/components/a2ui/charts.tsx`) lazy-load so the charting library
+  stays out of the main bundle until a chart actually renders. Series
+  colors are restricted to the host theme's chart tokens and series keys
+  are validated, so resources cannot inject styles or colors. An unknown
+  component type within a supported catalog renders a labeled, inert
+  placeholder (per spec); unknown catalogs still degrade to the tool's
+  text fallback.
+- Negotiation: A2A advertises supported catalogs via
+  `metadata.a2uiClientCapabilities.supportedCatalogIds`; Open Responses has
+  no equivalent yet, so catalog support is agreed out-of-band (this repo's
+  supported IDs are the contract). The built-in demo agent shows both
+  selection loops: ask for a "revenue chart" and click a bar (point
+  selection), or a "traffic trend" and drag across the chart (range
+  selection) — either way the analysis lands on the same surface in place.
+
+This direct, built-in registration makes the catalog useful while the plugin
+system below is developed; it is not the Level 2 plugin architecture. The
+official Basic Catalog stays the preferred option whenever it is sufficient;
+custom catalogs trade some portability for richer native integration.
+
 ### Level 2: Custom catalog plugins
 
 Parley may later support installed catalog plugins for domains that need more
@@ -104,9 +151,10 @@ A plugin must provide both the catalog contract and trusted renderer
 implementations. Catalogs are explicitly installed and negotiated; receiving
 an unknown catalog must not cause Parley to download or execute arbitrary code.
 
-The official Basic Catalog remains the preferred option whenever it is
-sufficient. Custom catalogs trade some portability for richer native
-integration.
+Built-in catalogs, including the official Basic Catalog and Parley's charts
+catalog, should use the same registration system as externally installed
+catalogs. They may be enabled by default, but deployment administrators should
+be able to disable them or enable other installed catalog plugins.
 
 ### Level 3: MCP Apps
 
