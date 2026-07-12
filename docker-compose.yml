@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgres://parley:${POSTGRES_PASSWORD:-parley}@postgres:5432/parley
       REDIS_URL: redis://redis:6379
       DEMO_AGENT: ${DEMO_AGENT:-true}
+      DEMO_AGENT_URL: ${DEMO_AGENT_URL:-http://demo-agent:8080/v1}
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-parley}
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-parley}
@@ -42,6 +43,20 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      demo-agent:
+        condition: service_healthy
+    restart: unless-stopped
+
+  demo-agent:
+    build: .
+    command: ["bun", "run", "examples/demo-agent/server.ts"]
+    environment:
+      DEMO_AGENT_PORT: "8080"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   postgres:

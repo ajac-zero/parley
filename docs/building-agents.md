@@ -171,10 +171,10 @@ export default {
 Run it (`bun run agent.ts`), then in Parley add an agent with base URL
 `http://localhost:8080` — done.
 
-> Studying a fuller example? The built-in demo agent
-> (`src/server/demo-agent.ts`) implements streaming text, reasoning
-> summaries, tool calls, attachments, and the non-streaming fallback in one
-> file.
+> Studying a fuller example? The standalone demo agent
+> (`examples/demo-agent`) implements streaming text, reasoning summaries,
+> tool calls, attachments, generative UI, and the non-streaming fallback.
+> Parley connects to it over HTTP exactly like any other agent.
 
 ## Make your agent importable by URL (A2A agent card)
 

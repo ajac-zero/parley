@@ -3,7 +3,6 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { db, schema } from "~/server/db/client";
-import { DEMO_AGENT_BASE_URL } from "~/server/demo-agent";
 import { appEnv } from "~/server/env";
 
 const DEMO_AGENT_ID = "agent_demo";
@@ -32,7 +31,7 @@ async function runMigrations(): Promise<void> {
   }
 }
 
-/** Seed the built-in demo agent so fresh installs work out of the box. */
+/** Seed the standalone demo agent so fresh installs work out of the box. */
 async function seedDemoAgent(): Promise<void> {
   if (!appEnv.demoAgent) return;
   const existing = await db
@@ -40,12 +39,11 @@ async function seedDemoAgent(): Promise<void> {
     .from(schema.agents)
     .where(eq(schema.agents.id, DEMO_AGENT_ID));
   if (existing.length > 0) {
-    // Heal rows seeded by older versions, which dialed the demo agent over
-    // its public APP_URL (unreachable from inside containers/proxies).
-    if (existing[0]?.baseUrl.endsWith("/api/demo/v1")) {
+    // Keep the managed demo row aligned with the separately deployed server.
+    if (existing[0]?.baseUrl !== appEnv.demoAgentUrl) {
       await db
         .update(schema.agents)
-        .set({ baseUrl: DEMO_AGENT_BASE_URL })
+        .set({ baseUrl: appEnv.demoAgentUrl })
         .where(eq(schema.agents.id, DEMO_AGENT_ID));
     }
     return;
@@ -59,9 +57,9 @@ async function seedDemoAgent(): Promise<void> {
     ownerId: null,
     name: "Demo Agent",
     description:
-      "A built-in reference agent that showcases streaming, reasoning, and tool calls. No external services required.",
+      "A reference agent that showcases streaming, reasoning, tool calls, attachments, and generative UI.",
     avatar: "🤖",
-    baseUrl: DEMO_AGENT_BASE_URL,
+    baseUrl: appEnv.demoAgentUrl,
     continuation: "replay",
     supportsImages: true,
     supportsFiles: true,
@@ -69,7 +67,7 @@ async function seedDemoAgent(): Promise<void> {
   });
 
   if (isFirstAgent) {
-    console.log("[parley] Seeded the built-in demo agent.");
+    console.log("[parley] Seeded the standalone demo agent.");
   }
 }
 

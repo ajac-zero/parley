@@ -26,7 +26,8 @@ Parley splits configuration in two:
 | Variable                        | Default | Description                                                                                          |
 | ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
 | `PORT`                          | `3000`  | Port the server listens on.                                                                          |
-| `DEMO_AGENT`                    | `true`  | Serve the built-in demo agent and seed it on first boot. Disable in real deployments if undesired.    |
+| `DEMO_AGENT`                    | `true`  | Seed the standalone demo agent on first boot. Disable in real deployments if undesired.                |
+| `DEMO_AGENT_URL`                | `http://localhost:8080/v1` | Open Responses base URL of the independently running demo agent.                     |
 | `FILE_MAX_MB`                   | `10`    | Max attachment upload size in megabytes.                                                              |
 | `CHAT_RATE_LIMIT`               | `30`    | Chat messages per user per minute; `0` disables rate limiting.                                        |
 | `TURN_IDLE_TIMEOUT_SEC`         | `120`   | Abort a turn if the agent sends no events for this long.                                              |
@@ -35,7 +36,8 @@ Parley splits configuration in two:
 | `ALLOW_USER_AGENTS`             | `true`  | Let non-admin members register personal agents. When `false`, only admins manage agents.              |
 | `LOG_LEVEL`                     | `Info`  | Effect log level: `All`, `Trace`, `Debug`, `Info`, `Warning`, `Error`, `Fatal`, `None`.               |
 
-In development, `DATABASE_URL`/`REDIS_URL` default to the
+In development, `bun run dev` starts the demo agent alongside Parley.
+`DATABASE_URL`/`REDIS_URL` default to the
 `docker-compose.dev.yml` services (`localhost:5433` / `localhost:6380`) and
 `APP_SECRET` falls back to an insecure dev value.
 

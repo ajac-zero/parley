@@ -2,7 +2,6 @@ import { isIP } from "node:net";
 import { Data, Effect, Option, Stream } from "effect";
 import type { ORStreamEvent } from "~/lib/openresponses";
 import { parseSseStream, SSE_DONE } from "~/lib/sse";
-import { DEMO_AGENT_BASE_URL, handleDemoResponses } from "~/server/demo-agent";
 import { appEnv } from "~/server/env";
 
 export class AgentRequestError extends Data.TaggedError("AgentRequestError")<{
@@ -80,8 +79,6 @@ export const validateAgentUrl = (
   baseUrl: string,
 ): Effect.Effect<void, AgentRequestError> =>
   Effect.gen(function* () {
-    // The built-in demo agent is dispatched in-process; nothing to validate.
-    if (baseUrl === DEMO_AGENT_BASE_URL) return;
     const url = yield* Effect.try({
       try: () => new URL(baseUrl),
       catch: () =>
@@ -153,14 +150,6 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
       ): Stream.Stream<ORStreamEvent, AgentRequestError> =>
         Stream.unwrapScoped(
           Effect.gen(function* () {
-            const isDemo = endpoint.baseUrl === DEMO_AGENT_BASE_URL;
-            if (isDemo && !appEnv.demoAgent) {
-              return yield* Effect.fail(
-                new AgentRequestError({
-                  message: "The demo agent is disabled on this deployment.",
-                }),
-              );
-            }
             yield* validateAgentUrl(endpoint.baseUrl);
 
             const controller = new AbortController();
@@ -181,18 +170,8 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
               signal: controller.signal,
             };
 
-            // The demo agent is called in-process: it must work regardless
-            // of how (or whether) the public APP_URL routes back to us.
             const res = yield* Effect.tryPromise({
-              try: () =>
-                isDemo
-                  ? handleDemoResponses(
-                      new Request(
-                        "http://demo.parley.internal/v1/responses",
-                        requestInit,
-                      ),
-                    )
-                  : fetch(responsesUrl(endpoint.baseUrl), requestInit),
+              try: () => fetch(responsesUrl(endpoint.baseUrl), requestInit),
               catch: (error) =>
                 new AgentRequestError({
                   message: connectionErrorMessage(error),

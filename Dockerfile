@@ -21,6 +21,7 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle ./drizzle
+COPY --from=build /app/examples ./examples
 COPY --from=build /app/server.ts /app/package.json ./
 
 # Run as the unprivileged user provided by the base image.
