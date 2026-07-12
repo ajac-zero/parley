@@ -16,7 +16,13 @@
  * by the browser, the server, and tests.
  */
 
+import { A2UI_INSTALLED_CATALOG_IDS } from "~/lib/a2ui-catalog-plugins";
 import type { ContentPart, MessageItem } from "~/lib/openresponses";
+
+export {
+  A2UI_BASIC_CATALOG_IDS,
+  A2UI_CHARTS_CATALOG_ID,
+} from "~/lib/a2ui-catalog-plugins";
 
 /* ------------------------------- constants ------------------------------- */
 
@@ -27,28 +33,8 @@ const A2UI_LEGACY_MIME_TYPE = "application/json+a2ui";
 /** Protocol versions Parley fully supports (and advertises). */
 export const A2UI_SUPPORTED_VERSIONS: readonly string[] = ["v0.9", "v0.9.1"];
 
-/**
- * The official A2UI Basic Catalog (both spec revisions Parley renders).
- * Catalog IDs are opaque identifiers agreed out-of-band, not fetched URLs.
- */
-export const A2UI_BASIC_CATALOG_IDS: readonly string[] = [
-  "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
-  "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json",
-];
-
-/**
- * Parley's built-in charts catalog: the Basic Catalog plus `Chart` and `Stat`
- * leaf components. The ID names the published contract in
- * catalogs/charts/v1/catalog.json — it is never fetched at runtime.
- */
-export const A2UI_CHARTS_CATALOG_ID =
-  "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
-
-/** Catalog IDs Parley fully supports (and advertises). */
-export const A2UI_SUPPORTED_CATALOG_IDS: readonly string[] = [
-  ...A2UI_BASIC_CATALOG_IDS,
-  A2UI_CHARTS_CATALOG_ID,
-];
+/** Catalog IDs installed in this build, independent of admin enablement. */
+export const A2UI_SUPPORTED_CATALOG_IDS = A2UI_INSTALLED_CATALOG_IDS;
 
 /** Version Parley stamps on the client -> server messages it emits. */
 export const A2UI_CLIENT_VERSION = "v0.9.1";
@@ -251,8 +237,12 @@ const messageVersionSupported = (message: A2uiMessage): boolean =>
  * surfaces with unsupported catalogs/versions are kept but marked
  * unsupported so the renderer can degrade to the text fallback.
  */
-export function reduceA2uiMessages(messages: A2uiMessage[]): A2uiSurface[] {
+export function reduceA2uiMessages(
+  messages: A2uiMessage[],
+  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+): A2uiSurface[] {
   const surfaces = new Map<string, A2uiSurface>();
+  const enabledCatalogs = new Set(enabledCatalogIds);
 
   for (const raw of messages) {
     const message = asRecord(raw) as A2uiMessage | null;
@@ -270,7 +260,7 @@ export function reduceA2uiMessages(messages: A2uiMessage[]): A2uiSurface[] {
         components: {},
         dataModel: {},
         dataOps: [],
-        supported: versionOk && A2UI_SUPPORTED_CATALOG_IDS.includes(catalogId),
+        supported: versionOk && enabledCatalogs.has(catalogId),
       });
       continue;
     }
@@ -857,6 +847,7 @@ export interface A2uiCallSurfaces {
  */
 export function reduceA2uiOutputs(
   outputs: A2uiOutputRef[],
+  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
 ): Map<string, A2uiCallSurfaces> {
   interface CallScan {
     callId: string;
@@ -900,7 +891,7 @@ export function reduceA2uiOutputs(
     });
   }
 
-  const reduced = reduceA2uiMessages(allMessages);
+  const reduced = reduceA2uiMessages(allMessages, enabledCatalogIds);
   const result = new Map<string, A2uiCallSurfaces>();
   for (const scan of scans) {
     const surfaces = reduced.filter(

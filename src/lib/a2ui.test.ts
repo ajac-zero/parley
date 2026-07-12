@@ -23,6 +23,12 @@ import {
   resolvePath,
   summarizeA2uiAction,
 } from "~/lib/a2ui";
+import {
+  A2UI_CATALOG_PLUGINS,
+  A2UI_DEFAULT_ENABLED_PLUGIN_KEYS,
+  catalogIdsForPluginKeys,
+  normalizeA2uiCatalogPluginKeys,
+} from "~/lib/a2ui-catalog-plugins";
 import type { ContentPart, MessageItem } from "~/lib/openresponses";
 import chartsCatalog from "../../catalogs/charts/v1/catalog.json";
 
@@ -179,6 +185,23 @@ describe("reduceA2uiMessages", () => {
     expect(surface?.supported).toBe(true);
   });
 
+  it("marks installed catalogs unsupported when their plugin is disabled", () => {
+    const enabledCatalogIds = catalogIdsForPluginKeys(["basic"]);
+    const [surface] = reduceA2uiMessages(
+      [
+        {
+          version: "v0.9.1",
+          createSurface: {
+            surfaceId: "s1",
+            catalogId: A2UI_CHARTS_CATALOG_ID,
+          },
+        },
+      ],
+      enabledCatalogIds,
+    );
+    expect(surface?.supported).toBe(false);
+  });
+
   it("deleteSurface removes the surface; stray updates are ignored", () => {
     const surfaces = reduceA2uiMessages([
       createSurface(),
@@ -220,6 +243,25 @@ describe("reduceA2uiMessages", () => {
     ]);
     expect(surface?.dataOps).toHaveLength(0);
     expect(surface?.dataModel).toEqual({});
+  });
+});
+
+describe("A2UI catalog plugins", () => {
+  it("registers Basic and Charts through the same manifest", () => {
+    expect(A2UI_CATALOG_PLUGINS.map((plugin) => plugin.key)).toEqual([
+      "basic",
+      "charts",
+    ]);
+    expect(catalogIdsForPluginKeys(A2UI_DEFAULT_ENABLED_PLUGIN_KEYS)).toEqual(
+      A2UI_SUPPORTED_CATALOG_IDS,
+    );
+  });
+
+  it("normalizes enabled keys against installed plugins", () => {
+    expect(
+      normalizeA2uiCatalogPluginKeys(["charts", "missing", "charts"]),
+    ).toEqual(["charts"]);
+    expect(normalizeA2uiCatalogPluginKeys(undefined)).toEqual([]);
   });
 });
 

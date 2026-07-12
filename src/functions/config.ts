@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { Effect } from "effect";
 import { currentSession, runApp } from "~/functions/context";
+import { catalogIdsForPluginKeys } from "~/lib/a2ui-catalog-plugins";
 import { appEnv } from "~/server/env";
 import { Settings } from "~/server/services/settings";
 
@@ -21,6 +22,9 @@ export const getAppContext = createServerFn({ method: "GET" }).handler(
         registrationEnabled: settings.registrationEnabled,
         allowUserAgents: settings.allowUserAgents,
         defaultAgentId: settings.defaultAgentId,
+        enabledA2uiCatalogIds: catalogIdsForPluginKeys(
+          settings.enabledA2uiCatalogPluginKeys,
+        ),
         fileMaxMb: appEnv.fileMaxMb,
       },
       session,

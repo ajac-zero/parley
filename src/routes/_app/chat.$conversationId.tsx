@@ -72,8 +72,8 @@ function ConversationPage() {
         }
       }
     }
-    return reduceA2uiOutputs(outputs);
-  }, [entries]);
+    return reduceA2uiOutputs(outputs, config.enabledA2uiCatalogIds);
+  }, [entries, config.enabledA2uiCatalogIds]);
 
   /* Pinning: a client-side gesture persisted per conversation. The canvas
    * pane needs room, so on narrow viewports pins are dormant (surfaces

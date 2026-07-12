@@ -136,25 +136,38 @@ How it works today:
   selection), or a "traffic trend" and drag across the chart (range
   selection) — either way the analysis lands on the same surface in place.
 
-This direct, built-in registration makes the catalog useful while the plugin
-system below is developed; it is not the Level 2 plugin architecture. The
-official Basic Catalog stays the preferred option whenever it is sufficient;
-custom catalogs trade some portability for richer native integration.
+The charts catalog is built in and enabled by default, but participates in the
+same Level 2 registration and enablement system described below. The official
+Basic Catalog stays the preferred option whenever it is sufficient; custom
+catalogs trade some portability for richer native integration.
 
-### Level 2: Custom catalog plugins
+### Level 2: Custom catalog plugins (implemented)
 
-Parley may later support installed catalog plugins for domains that need more
-specialized native components, such as charts, diagrams, code review, or
-infrastructure visualizations.
+Parley supports installed catalog plugins for domains that need more specialized
+native components, such as charts, diagrams, code review, or infrastructure
+visualizations.
 
 A plugin must provide both the catalog contract and trusted renderer
 implementations. Catalogs are explicitly installed and negotiated; receiving
 an unknown catalog must not cause Parley to download or execute arbitrary code.
 
 Built-in catalogs, including the official Basic Catalog and Parley's charts
-catalog, should use the same registration system as externally installed
-catalogs. They may be enabled by default, but deployment administrators should
-be able to disable them or enable other installed catalog plugins.
+catalog, use the same registration system as externally installed catalogs.
+They are enabled by default, and deployment administrators can disable them or
+enable other installed catalog plugins.
+
+Installation and enablement are separate trust boundaries. Plugins are trusted
+code installed at build time through the static manifest and renderer registries;
+catalog IDs never cause Parley to fetch or execute code. Runtime settings store
+only the enabled plugin keys. The effective catalog IDs are the intersection of
+those settings and the plugins installed in the current build, and are supplied
+to both server-side and browser rendering through the root app configuration.
+
+The initial installed plugins are `basic` and `charts`. Self-hosters can add a
+trusted plugin module to the build-time registries, rebuild Parley, and then let
+an administrator enable it from the Catalogs tab. A future packaging API can
+make that installation seam more convenient without changing the runtime trust
+model.
 
 ### Level 3: MCP Apps
 

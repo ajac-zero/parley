@@ -57,6 +57,9 @@ Stored in the `settings` table and applied instantly:
 ## Users and roles
 
 - The **first account** created on a fresh install becomes the admin.
+- Admins can enable or disable trusted A2UI catalog plugins from the
+  **Catalogs** tab. Plugins must already be installed in the Parley build;
+  catalog IDs never download renderer code at runtime.
 - Admins can promote/demote members and ban/unban accounts from
   **Admin → Members**.
 - Banned users cannot sign in; their data is retained.

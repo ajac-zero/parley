@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import {
   setUserRole,
   updateSettings,
 } from "~/functions/admin";
+import { A2UI_CATALOG_PLUGINS } from "~/lib/a2ui-catalog-plugins";
 import { adminSettingsQuery, agentsQuery, usersQuery } from "~/lib/queries";
 import { cn } from "~/lib/utils";
 
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/_app/admin")({
   component: AdminPage,
 });
 
-type Tab = "branding" | "users";
+type Tab = "branding" | "catalogs" | "users";
 
 function AdminPage() {
   const [tab, setTab] = useState<Tab>("branding");
@@ -56,6 +57,7 @@ function AdminPage() {
           {(
             [
               ["branding", "Branding & access"],
+              ["catalogs", "Catalogs"],
               ["users", "Members"],
             ] as const
           ).map(([value, label]) => (
@@ -76,10 +78,100 @@ function AdminPage() {
         </div>
 
         <div className="pt-8">
-          {tab === "branding" ? <BrandingTab /> : <UsersTab />}
+          {tab === "branding" ? (
+            <BrandingTab />
+          ) : tab === "catalogs" ? (
+            <CatalogsTab />
+          ) : (
+            <UsersTab />
+          )}
         </div>
       </div>
     </main>
+  );
+}
+
+/* -------------------------------- catalogs ------------------------------- */
+
+function CatalogsTab() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery(adminSettingsQuery());
+  const [enabled, setEnabled] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (settings) setEnabled([...settings.enabledA2uiCatalogPluginKeys]);
+  }, [settings]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      updateSettings({ data: { enabledA2uiCatalogPluginKeys: enabled } }),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      await router.invalidate();
+      toast.success("Catalog settings saved.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-medium text-lg">Installed catalog plugins</h2>
+        <p className="mt-1 text-muted-foreground text-sm">
+          These trusted renderers are installed in this Parley build. Disabling
+          one falls back to the tool's text response instead of rendering its
+          UI.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {A2UI_CATALOG_PLUGINS.map((plugin) => {
+          const checked = enabled.includes(plugin.key);
+          return (
+            <label
+              key={plugin.key}
+              className="flex items-center justify-between gap-4 rounded-xl border p-4 text-sm"
+            >
+              <span>
+                <span className="flex items-center gap-2 font-medium">
+                  {plugin.name}
+                  {plugin.builtin && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground text-xs">
+                      Built in
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 block text-muted-foreground">
+                  {plugin.description}
+                </span>
+                <span className="mt-1 block break-all font-mono text-muted-foreground text-xs">
+                  {plugin.catalogIds.join(", ")}
+                </span>
+              </span>
+              <Switch
+                checked={checked}
+                onCheckedChange={(next) =>
+                  setEnabled((current) =>
+                    next
+                      ? [...new Set([...current, plugin.key])]
+                      : current.filter((key) => key !== plugin.key),
+                  )
+                }
+              />
+            </label>
+          );
+        })}
+      </div>
+
+      <Button
+        type="button"
+        disabled={!settings || mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? "Saving…" : "Save catalogs"}
+      </Button>
+    </div>
   );
 }
 
