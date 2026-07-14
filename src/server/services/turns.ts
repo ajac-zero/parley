@@ -61,6 +61,15 @@ export interface StartTurnResult {
   conversationId: string;
 }
 
+export const isMissingEstablishedContinuation = (
+  continuation: string,
+  lastResponseId: string | null,
+  hasCompletedResponse: boolean,
+): boolean =>
+  continuation === "previous_response_id" &&
+  lastResponseId === null &&
+  hasCompletedResponse;
+
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
 
@@ -397,9 +406,33 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           );
 
         const allItems = yield* conversations.listItems(ctx.conversation.id);
-        const usePrid =
-          ctx.agent.continuation === "previous_response_id" &&
-          ctx.conversation.lastResponseId !== null;
+        const stateful = ctx.agent.continuation === "previous_response_id";
+        const completedTurns = yield* Effect.promise(() =>
+          db
+            .select({ id: schema.turns.id })
+            .from(schema.turns)
+            .where(
+              and(
+                eq(schema.turns.conversationId, ctx.conversation.id),
+                eq(schema.turns.status, "completed"),
+              ),
+            )
+            .limit(1),
+        );
+        if (
+          isMissingEstablishedContinuation(
+            ctx.agent.continuation,
+            ctx.conversation.lastResponseId,
+            completedTurns.length > 0,
+          )
+        ) {
+          return yield* new AgentRequestError({
+            code: "previous_response_not_found",
+            message:
+              "Stateful continuation is unavailable. Start a new conversation or explicitly use replay mode.",
+          });
+        }
+        const usePrid = stateful && ctx.conversation.lastResponseId !== null;
 
         const replaySource = usePrid
           ? allItems.filter((row) =>
@@ -523,6 +556,13 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
         const finalState = yield* Ref.get(stateRef);
         yield* persistOutcome(ctx, status, finalState);
       }).pipe(
+        Effect.catchTag("AgentRequestError", (error) =>
+          persistOutcome(ctx, "failed", {
+            ...initialTurnStreamState,
+            status: "failed",
+            error: { code: error.code, message: error.message },
+          }),
+        ),
         Effect.catchAllCause((cause) =>
           Effect.gen(function* () {
             // Last-resort safety net: never leave a turn dangling.
