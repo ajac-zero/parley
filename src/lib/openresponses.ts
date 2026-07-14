@@ -155,6 +155,21 @@ export function reasoningSummaryText(item: ReasoningItem): string {
   return (item.content ?? []).map((p) => p.text ?? "").join("\n\n");
 }
 
+/** Removes known platform presentation parts from user-message replay. */
+export function portableInputItem(item: ORItem): ORItem | null {
+  if (
+    !isMessageItem(item) ||
+    item.role !== "user" ||
+    !Array.isArray(item.content)
+  ) {
+    return item;
+  }
+  return {
+    ...item,
+    content: item.content.filter((part) => part.type !== "a2ui"),
+  };
+}
+
 /* ------------------------------ stream events ---------------------------- */
 
 /** Any Open Responses streaming event (extensions included). */
@@ -333,6 +348,40 @@ export function reduceORevent(
       );
     }
 
+    case "response.output_text.annotation.added": {
+      const index = num(event.output_index);
+      const contentIndex = num(event.content_index);
+      const annotationIndex = event.annotation_index;
+      const annotation = event.annotation;
+      if (
+        !Number.isSafeInteger(annotationIndex) ||
+        (annotationIndex as number) < 0 ||
+        typeof annotation !== "object" ||
+        annotation === null
+      ) {
+        return state;
+      }
+      return withItem(state, index, (item) =>
+        updatePart(item, contentIndex, (part) => {
+          const annotations = Array.isArray(
+            (part as { annotations?: unknown }).annotations,
+          )
+            ? [
+                ...((part as OutputTextPart).annotations as Array<
+                  Record<string, unknown>
+                >),
+              ]
+            : [];
+          if ((annotationIndex as number) > annotations.length) return part;
+          annotations[annotationIndex as number] = annotation as Record<
+            string,
+            unknown
+          >;
+          return { ...part, annotations } as ContentPart;
+        }),
+      );
+    }
+
     case "response.refusal.done": {
       const index = num(event.output_index);
       const contentIndex = num(event.content_index);
@@ -419,6 +468,7 @@ export function reduceORevent(
       });
     }
 
+    case "response.reasoning.delta":
     case "response.reasoning_text.delta": {
       const index = num(event.output_index);
       const contentIndex = num(event.content_index);
@@ -436,6 +486,7 @@ export function reduceORevent(
       });
     }
 
+    case "response.reasoning.done":
     case "response.reasoning_text.done": {
       const index = num(event.output_index);
       const contentIndex = num(event.content_index);
@@ -482,6 +533,7 @@ export function reduceORevent(
         status: "failed",
         responseId: str(response.id) || state.responseId,
         items: Array.isArray(response.output) ? response.output : state.items,
+        usage: (response.usage as Record<string, unknown>) ?? state.usage,
         error,
       };
     }

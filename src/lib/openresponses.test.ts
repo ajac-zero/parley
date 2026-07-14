@@ -6,6 +6,7 @@ import {
   type MessageItem,
   messageText,
   type ORStreamEvent,
+  portableInputItem,
   type ReasoningItem,
   reasoningSummaryText,
   reduceORevent,
@@ -79,6 +80,78 @@ describe("reduceORevent", () => {
     expect(messageText(state.items[0] as MessageItem)).toBe("final text");
   });
 
+  it("adds streamed output text annotations", () => {
+    const state = run([
+      {
+        type: "response.output_item.added",
+        output_index: 0,
+        item: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Source", annotations: [] }],
+        },
+      },
+      {
+        type: "response.output_text.annotation.added",
+        output_index: 0,
+        content_index: 0,
+        annotation_index: 0,
+        annotation: {
+          type: "url_citation",
+          url: "https://openresponses.org/specification",
+          start_index: 0,
+          end_index: 6,
+          title: "Specification",
+        },
+      },
+    ]);
+    const item = state.items[0] as MessageItem;
+    expect(
+      (item.content[0] as { annotations?: unknown[] }).annotations,
+    ).toEqual([
+      {
+        type: "url_citation",
+        url: "https://openresponses.org/specification",
+        start_index: 0,
+        end_index: 6,
+        title: "Specification",
+      },
+    ]);
+  });
+
+  it("ignores annotation indexes that would create sparse arrays", () => {
+    const state = run([
+      {
+        type: "response.output_item.added",
+        output_index: 0,
+        item: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Source", annotations: [] }],
+        },
+      },
+      {
+        type: "response.output_text.annotation.added",
+        output_index: 0,
+        content_index: 0,
+        annotation_index: 2,
+        annotation: { type: "url_citation" },
+      },
+      {
+        type: "response.output_text.annotation.added",
+        output_index: 0,
+        content_index: 0,
+        annotation_index: -1,
+        annotation: { type: "url_citation" },
+      },
+    ]);
+
+    const item = state.items[0] as MessageItem;
+    expect(
+      (item.content[0] as { annotations?: unknown[] }).annotations,
+    ).toEqual([]);
+  });
+
   it("accumulates function_call argument deltas and finalizes them", () => {
     const state = run([
       {
@@ -147,7 +220,7 @@ describe("reduceORevent", () => {
     );
   });
 
-  it("reasoning_text deltas accumulate into reasoning content", () => {
+  it("reasoning deltas accumulate into reasoning content", () => {
     const state = run([
       {
         type: "response.output_item.added",
@@ -155,7 +228,7 @@ describe("reduceORevent", () => {
         item: { type: "reasoning", content: [] },
       },
       {
-        type: "response.reasoning_text.delta",
+        type: "response.reasoning.delta",
         output_index: 0,
         content_index: 0,
         delta: "step 1",
@@ -199,15 +272,20 @@ describe("reduceORevent", () => {
     expect(messageText(state.items[0] as MessageItem)).toBe("final");
   });
 
-  it("response.failed captures the error", () => {
+  it("response.failed captures the error and usage", () => {
     const state = run([
       {
         type: "response.failed",
-        response: { id: "r", error: { code: "server_error", message: "boom" } },
+        response: {
+          id: "r",
+          error: { code: "server_error", message: "boom" },
+          usage: { total_tokens: 7 },
+        },
       },
     ]);
     expect(state.status).toBe("failed");
     expect(state.error).toEqual({ code: "server_error", message: "boom" });
+    expect(state.usage).toEqual({ total_tokens: 7 });
   });
 
   it("error events capture message with fallbacks", () => {
@@ -313,5 +391,51 @@ describe("helpers", () => {
       isMessageItem({ type: "message", role: "user", content: "" } as never),
     ).toBe(true);
     expect(isMessageItem({ type: "reasoning" } as never)).toBe(false);
+  });
+
+  it("removes known presentation parts without changing assistant output", () => {
+    const user: MessageItem = {
+      type: "message",
+      role: "user",
+      content: [
+        { type: "input_text", text: "UI action fallback" },
+        { type: "a2ui", data: [{ action: "submit" }] },
+      ],
+    };
+    const assistant: MessageItem = {
+      type: "message",
+      role: "assistant",
+      content: [{ type: "output_text", text: "Keep me" }],
+    };
+
+    expect(portableInputItem(user)).toEqual({
+      ...user,
+      content: [{ type: "input_text", text: "UI action fallback" }],
+    });
+    expect(portableInputItem(assistant)).toBe(assistant);
+  });
+
+  it("preserves unknown user extension parts for replay", () => {
+    const user: MessageItem = {
+      type: "message",
+      role: "user",
+      content: [
+        { type: "input_text", text: "fallback" },
+        { type: "example:future_part", payload: { value: 42 } },
+      ],
+    };
+
+    expect(portableInputItem(user)).toEqual(user);
+  });
+
+  it("preserves unknown extension items for provider replay", () => {
+    const item = {
+      type: "example:future_item",
+      id: "future-1",
+      status: "completed",
+      payload: { value: 42 },
+    };
+
+    expect(portableInputItem(item)).toBe(item);
   });
 });
