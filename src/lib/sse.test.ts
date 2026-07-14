@@ -40,7 +40,16 @@ describe("SseParser", () => {
   it("handles CRLF and lone-CR line endings", () => {
     const parser = new SseParser();
     expect(parser.push("data: a\r\n\r\n")).toEqual([{ data: "a" }]);
-    expect(parser.push("data: b\r\r")).toEqual([{ data: "b" }]);
+    expect(parser.push("data: b\r\r")).toEqual([]);
+    expect(parser.finish()).toEqual([{ data: "b" }]);
+  });
+
+  it("does not dispatch early when CRLF is split across pushes", () => {
+    const parser = new SseParser();
+    expect(parser.push("event: update\r")).toEqual([]);
+    expect(parser.push("\ndata: value\r")).toEqual([]);
+    expect(parser.push("\n\r")).toEqual([]);
+    expect(parser.push("\n")).toEqual([{ event: "update", data: "value" }]);
   });
 
   it("ignores comment lines", () => {
