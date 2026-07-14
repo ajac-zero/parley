@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { Data, Effect, Option, Stream } from "effect";
+import { Data, Effect, Stream } from "effect";
 import type { ORStreamEvent } from "~/lib/openresponses";
 import { parseSseStream, SSE_DONE } from "~/lib/sse";
 import { appEnv } from "~/server/env";
@@ -27,8 +27,10 @@ export interface CreateResponseOptions {
 
 /** `https://host/v1` -> `https://host/v1/responses` (idempotent). */
 export function responsesUrl(baseUrl: string): string {
-  const trimmed = baseUrl.replace(/\/+$/, "");
-  return trimmed.endsWith("/responses") ? trimmed : `${trimmed}/responses`;
+  const url = new URL(baseUrl);
+  const path = url.pathname.replace(/\/+$/, "");
+  url.pathname = path.endsWith("/responses") ? path : `${path}/responses`;
+  return url.toString();
 }
 
 export function buildCreateResponseBody(
@@ -117,8 +119,12 @@ async function parseErrorResponse(res: Response): Promise<AgentRequestError> {
   try {
     const body = (await res.json()) as {
       error?: { message?: string; code?: string; type?: string };
+      message?: string;
+      detail?: string;
     };
     if (body?.error?.message) message = body.error.message;
+    else if (body?.message) message = body.message;
+    else if (body?.detail) message = body.detail;
     code = body?.error?.code ?? body?.error?.type;
   } catch {
     // non-JSON error body
@@ -185,9 +191,15 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
               return yield* Effect.fail(error);
             }
 
-            const contentType = res.headers.get("content-type") ?? "";
+            const contentType = (res.headers.get("content-type") ?? "")
+              .split(";", 1)[0]
+              ?.trim()
+              .toLowerCase();
 
-            if (contentType.includes("application/json")) {
+            if (
+              contentType === "application/json" ||
+              contentType?.endsWith("+json")
+            ) {
               // Non-streaming fallback: synthesize terminal events.
               const body = yield* Effect.tryPromise({
                 try: () => res.json() as Promise<Record<string, unknown>>,
@@ -196,8 +208,20 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
                     message: "Agent returned invalid JSON.",
                   }),
               });
-              const status =
-                typeof body.status === "string" ? body.status : "completed";
+              const status = body.status;
+              if (
+                status !== "completed" &&
+                status !== "failed" &&
+                status !== "incomplete"
+              ) {
+                return yield* Effect.fail(
+                  new AgentRequestError({
+                    message: `Agent returned a non-terminal JSON response${
+                      typeof status === "string" ? ` (${status})` : ""
+                    }.`,
+                  }),
+                );
+              }
               const terminal: ORStreamEvent = {
                 type:
                   status === "failed"
@@ -218,6 +242,16 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
               );
             }
 
+            if (contentType !== "text/event-stream") {
+              return yield* Effect.fail(
+                new AgentRequestError({
+                  message: `Agent returned unsupported content type: ${
+                    contentType || "missing"
+                  }.`,
+                }),
+              );
+            }
+
             return Stream.fromAsyncIterable(
               parseSseStream(res.body),
               (error) =>
@@ -228,16 +262,28 @@ export class OpenResponsesClient extends Effect.Service<OpenResponsesClient>()(
                 }),
             ).pipe(
               Stream.takeWhile((msg) => msg.data.trim() !== SSE_DONE),
-              Stream.filterMap((msg) => {
-                try {
-                  const parsed = JSON.parse(msg.data) as ORStreamEvent;
-                  return typeof parsed?.type === "string"
-                    ? Option.some(parsed)
-                    : Option.none();
-                } catch {
-                  return Option.none();
-                }
-              }),
+              Stream.mapEffect((msg) =>
+                Effect.try({
+                  try: () => {
+                    const parsed = JSON.parse(msg.data) as ORStreamEvent;
+                    if (typeof parsed?.type !== "string") {
+                      throw new Error("event data has no type");
+                    }
+                    if (msg.event && msg.event !== parsed.type) {
+                      throw new Error(
+                        `event name ${msg.event} does not match data type ${parsed.type}`,
+                      );
+                    }
+                    return parsed;
+                  },
+                  catch: (error) =>
+                    new AgentRequestError({
+                      message: `Agent returned an invalid SSE event: ${
+                        error instanceof Error ? error.message : String(error)
+                      }.`,
+                    }),
+                }),
+              ),
             );
           }),
         ),
