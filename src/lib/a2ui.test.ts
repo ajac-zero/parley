@@ -518,6 +518,109 @@ describe("extractA2uiResources", () => {
     ]);
     expect(extraction.resources).toHaveLength(0);
   });
+  it("renders a financial optimization dashboard contract", () => {
+    const surfaceId = "optimization_results_fixture";
+    const components = [
+      { id: "root", component: "Card", child: "layout" },
+      {
+        id: "layout",
+        component: "Column",
+        children: ["stats", "ventas", "margin", "uafirda"],
+      },
+      {
+        id: "stats",
+        component: "Row",
+        children: ["convergence", "cells", "residual", "iterations"],
+      },
+      ...["convergence", "cells", "residual", "iterations"].map((id) => ({
+        id,
+        component: "Stat",
+        label: id,
+        value: { path: `/report/stats/${id}` },
+      })),
+      ...[
+        ["ventas", "/report/ventas"],
+        ["margin", "/report/uafirdaMargin"],
+        ["uafirda", "/report/uafirdaAbsolute"],
+      ].map(([id, path]) => ({
+        id,
+        component: "Chart",
+        data: { path },
+        x: { key: "period" },
+        y: {
+          label: id === "margin" ? "Margin" : "Model units",
+          format: id === "margin" ? "percent" : "number",
+          maximumFractionDigits: 1,
+          includeZero: true,
+        },
+        series: [{ key: "after" }],
+      })),
+    ];
+    const dashboard = [
+      {
+        version: "v0.9.1",
+        createSurface: {
+          surfaceId,
+          catalogId: A2UI_CHARTS_CATALOG_ID,
+        },
+      },
+      {
+        version: "v0.9.1",
+        updateComponents: { surfaceId, components },
+      },
+      {
+        version: "v0.9.1",
+        updateDataModel: {
+          surfaceId,
+          path: "/",
+          value: {
+            report: {
+              stats: { convergence: 1, cells: 16, residual: 0, iterations: 3 },
+              ventas: [{ period: "2026", after: 100 }],
+              uafirdaMargin: [{ period: "2026", after: 20 }],
+              uafirdaAbsolute: [{ period: "2026", after: 50 }],
+            },
+          },
+        },
+      },
+    ];
+    const output = [
+      { type: "output_text", text: "Optimization completed." },
+      {
+        type: "resource",
+        resource: {
+          uri: "a2ui://example/optimization/results",
+          mimeType: A2UI_MIME_TYPE,
+          text: JSON.stringify(dashboard),
+        },
+      } as never,
+    ] as ContentPart[];
+
+    const result = reduceA2uiOutputs([{ callId: "call_results", output }]);
+    const group = result.get("call_results");
+    const surface = group?.surfaces[0];
+
+    expect(group?.fallbackText).toBe("Optimization completed.");
+    expect(surface?.supported).toBe(true);
+    expect(surface?.components.root?.component).toBe("Card");
+    expect(
+      Object.values(surface?.components ?? {}).filter(
+        (component) => component.component === "Chart",
+      ),
+    ).toHaveLength(3);
+    expect(
+      Object.values(surface?.components ?? {}).filter(
+        (component) => component.component === "Stat",
+      ),
+    ).toHaveLength(4);
+    expect(surface?.components.margin?.y).toEqual({
+      label: "Margin",
+      format: "percent",
+      maximumFractionDigits: 1,
+      includeZero: true,
+    });
+  });
+
 });
 
 /* --------------------------- charts catalog contract ----------------------- */

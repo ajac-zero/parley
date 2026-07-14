@@ -30,6 +30,7 @@ import {
   LineChart,
   ReferenceArea,
   XAxis,
+  YAxis,
 } from "recharts";
 import type { ViewProps } from "~/components/a2ui/catalog";
 import { useA2uiSurface } from "~/components/a2ui/context";
@@ -126,6 +127,51 @@ interface SelectionSpec {
   mode: "point" | "range";
 }
 
+interface YAxisSpec {
+  label: string;
+  format: "number" | "currency" | "percent";
+  currency: string;
+  maximumFractionDigits: number;
+  includeZero: boolean;
+}
+
+function parseYAxis(value: unknown): YAxisSpec | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const digits = toNumber(record.maximumFractionDigits);
+  return {
+    label: typeof record.label === "string" ? record.label : "",
+    format:
+      record.format === "currency" || record.format === "percent"
+        ? record.format
+        : "number",
+    currency:
+      typeof record.currency === "string" && record.currency.length > 0
+        ? record.currency
+        : "USD",
+    maximumFractionDigits:
+      digits !== null ? Math.min(6, Math.max(0, Math.floor(digits))) : 2,
+    includeZero: record.includeZero === true,
+  };
+}
+
+function formatChartValue(value: number, spec: YAxisSpec): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style:
+        spec.format === "currency"
+          ? "currency"
+          : spec.format === "percent"
+            ? "percent"
+            : "decimal",
+      currency: spec.format === "currency" ? spec.currency : undefined,
+      maximumFractionDigits: spec.maximumFractionDigits,
+    }).format(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function parseSelection(value: unknown, base: string): SelectionSpec | null {
   const record = asRecord(value);
   if (typeof record?.path !== "string") return null;
@@ -157,6 +203,7 @@ export function ChartView({ component, base }: ViewProps) {
   const xRecord = asRecord(component.x);
   const xKey = typeof xRecord?.key === "string" ? xRecord.key : null;
   const xLabel = typeof xRecord?.label === "string" ? xRecord.label : null;
+  const yAxisSpec = parseYAxis(component.y);
   const series = useMemo(
     () => parseSeries(component.series),
     [component.series],
@@ -317,8 +364,58 @@ export function ChartView({ component, base }: ViewProps) {
   const xAxis = (
     <XAxis dataKey={xKey} tickLine={false} axisLine={false} tickMargin={8} />
   );
+  const yAxis = yAxisSpec ? (
+    <YAxis
+      tickLine={false}
+      axisLine={false}
+      tickMargin={8}
+      width={64}
+      domain={
+        yAxisSpec.includeZero
+          ? [
+              (minimum: number) => Math.min(0, minimum),
+              (maximum: number) => Math.max(0, maximum),
+            ]
+          : undefined
+      }
+      tickFormatter={(value: number) => formatChartValue(value, yAxisSpec)}
+      label={
+        yAxisSpec.label
+          ? {
+              value: yAxisSpec.label,
+              angle: -90,
+              position: "insideLeft",
+              style: { fill: "var(--muted-foreground)", fontSize: 11 },
+            }
+          : undefined
+      }
+    />
+  ) : null;
   const tooltip = (
-    <ChartTooltip cursor content={<ChartTooltipContent indicator="dot" />} />
+    <ChartTooltip
+      cursor
+      content={
+        <ChartTooltipContent
+          indicator="dot"
+          formatter={
+            yAxisSpec
+              ? (value, name) => (
+                  <div className="flex flex-1 items-center justify-between gap-4">
+                    <span className="text-muted-foreground">
+                      {config[String(name)]?.label ?? String(name)}
+                    </span>
+                    <span className="font-mono font-medium text-foreground tabular-nums">
+                      {typeof value === "number"
+                        ? formatChartValue(value, yAxisSpec)
+                        : String(value)}
+                    </span>
+                  </div>
+                )
+              : undefined
+          }
+        />
+      }
+    />
   );
   const legend =
     series.length > 1 ? <ChartLegend content={<ChartLegendContent />} /> : null;
@@ -365,6 +462,7 @@ export function ChartView({ component, base }: ViewProps) {
           <BarChart {...shared}>
             {grid}
             {xAxis}
+            {yAxis}
             {tooltip}
             {legend}
             {rangeArea}
@@ -386,6 +484,7 @@ export function ChartView({ component, base }: ViewProps) {
           <AreaChart {...shared}>
             {grid}
             {xAxis}
+            {yAxis}
             {tooltip}
             {legend}
             {rangeArea}
@@ -407,6 +506,7 @@ export function ChartView({ component, base }: ViewProps) {
           <LineChart {...shared}>
             {grid}
             {xAxis}
+            {yAxis}
             {tooltip}
             {legend}
             {rangeArea}

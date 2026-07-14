@@ -51,6 +51,40 @@
               "required": ["key"],
               "additionalProperties": false
             },
+            "y": {
+              "type": "object",
+              "description": "Optional numeric y-axis display and formatting. When omitted, the chart retains the compact axis-free presentation used by earlier resources.",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "A short visible label for the y axis, such as 'Margin' or 'Model units'."
+                },
+                "format": {
+                  "type": "string",
+                  "description": "How y-axis ticks and tooltip values are formatted. 'percent' treats values as fractions (0.18 renders as 18%).",
+                  "enum": ["number", "currency", "percent"],
+                  "default": "number"
+                },
+                "currency": {
+                  "type": "string",
+                  "description": "The ISO 4217 currency code used when format is 'currency'.",
+                  "default": "USD"
+                },
+                "maximumFractionDigits": {
+                  "type": "integer",
+                  "description": "Maximum decimal places shown on ticks and in tooltips.",
+                  "minimum": 0,
+                  "maximum": 6,
+                  "default": 2
+                },
+                "includeZero": {
+                  "type": "boolean",
+                  "description": "Whether the numeric domain must include zero. Recommended for bar charts.",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
+            },
             "series": {
               "type": "array",
               "description": "The numeric series to plot, one per record field.",
