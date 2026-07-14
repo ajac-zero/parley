@@ -44,15 +44,7 @@ const envConfig = Config.all({
   s3ForcePathStyle: Config.boolean("S3_FORCE_PATH_STYLE").pipe(
     Config.withDefault(true),
   ),
-  /**
-   * Publicly reachable base URL for the S3 endpoint (e.g. a real S3/R2/B2
-   * endpoint, or a bundled MinIO exposed behind a public reverse proxy).
-   * When set, attachments are sent to agents as presigned URLs instead of
-   * inline base64 — cheaper and avoids re-encoding on every replayed turn.
-   * When unset (e.g. the default bundled MinIO, reachable only on the
-   * deployment's private network), attachments always fall back to base64,
-   * since an external agent could never fetch a private-network URL.
-   */
+  /** Public S3 origin used for direct image URLs when configured. */
   s3PublicUrl: Config.string("S3_PUBLIC_URL").pipe(
     Config.withDefault(""),
     Config.map((v) => (v.trim().length > 0 ? v.trim() : null)),
@@ -67,6 +59,10 @@ const envConfig = Config.all({
   turnMaxDurationSec: Config.number("TURN_MAX_DURATION_SEC").pipe(
     Config.withDefault(600),
   ),
+  /** Lifetime of file_url capabilities handed to agents. */
+  attachmentCapabilityTtlSec: Config.number(
+    "ATTACHMENT_CAPABILITY_TTL_SEC",
+  ).pipe(Config.withDefault(900)),
   /** Refuse to call agent endpoints resolving to private/loopback addresses. */
   blockPrivateAgentAddresses: Config.boolean(
     "BLOCK_PRIVATE_AGENT_ADDRESSES",
@@ -96,6 +92,14 @@ function loadEnv(): AppEnv {
   if (isProd && Redacted.value(env.s3SecretAccessKey) === "parleyparley") {
     throw new Error(
       "S3_SECRET_ACCESS_KEY must be set in production for attachment storage.",
+    );
+  }
+  if (
+    !Number.isSafeInteger(env.attachmentCapabilityTtlSec) ||
+    env.attachmentCapabilityTtlSec < env.turnMaxDurationSec + 60
+  ) {
+    throw new Error(
+      "ATTACHMENT_CAPABILITY_TTL_SEC must be an integer at least 60 seconds longer than TURN_MAX_DURATION_SEC.",
     );
   }
   return env;
