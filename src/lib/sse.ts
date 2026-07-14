@@ -23,6 +23,9 @@ export class SseParser {
     for (;;) {
       const match = this.#buffer.match(/\r\n|\n|\r/);
       if (!match || match.index === undefined) break;
+      // A CR at the end of a chunk may be the first half of CRLF. Defer it
+      // until the next chunk so the following LF is not treated as a blank line.
+      if (match[0] === "\r" && match.index === this.#buffer.length - 1) break;
       const line = this.#buffer.slice(0, match.index);
       this.#buffer = this.#buffer.slice(match.index + match[0].length);
       const message = this.#processLine(line);
@@ -30,6 +33,11 @@ export class SseParser {
     }
 
     return messages;
+  }
+
+  /** Flush a trailing lone CR when the byte stream reaches EOF. */
+  finish(): SseMessage[] {
+    return this.#buffer.endsWith("\r") ? this.push("\n") : [];
   }
 
   #processLine(line: string): SseMessage | undefined {
@@ -96,6 +104,9 @@ export async function* parseSseStream(
       }
     }
     for (const message of parser.push(decoder.decode())) {
+      yield message;
+    }
+    for (const message of parser.finish()) {
       yield message;
     }
   } finally {
