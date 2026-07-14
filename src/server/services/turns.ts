@@ -623,13 +623,33 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
               status: 400,
             });
           }
-          if (!params.message || params.message.text.trim().length === 0) {
+          if (
+            !params.message ||
+            (params.message.text.trim().length === 0 &&
+              params.message.fileIds.length === 0 &&
+              (params.message.a2ui?.length ?? 0) === 0)
+          ) {
             return yield* new TurnError({
               message: "A message is required to start a conversation.",
               status: 400,
             });
           }
-          const title = titleFromText(params.message.text);
+          const firstFile = params.message.fileIds[0]
+            ? yield* files
+                .getOwned(actor.userId, params.message.fileIds[0])
+                .pipe(
+                  Effect.mapError(
+                    () =>
+                      new TurnError({
+                        message: "Attachment not found.",
+                        status: 400,
+                      }),
+                  ),
+                )
+            : null;
+          const title = titleFromText(
+            params.message.text || firstFile?.name || "",
+          );
           conversation = yield* conversations.create(
             actor.userId,
             params.agentId,
@@ -728,6 +748,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
 
         if (
           params.message &&
+            params.message.fileIds.length > 0 ||
           (params.message.text.trim().length > 0 ||
             (params.message.a2ui?.length ?? 0) > 0)
         ) {
