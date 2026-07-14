@@ -17,6 +17,7 @@ import {
   type MessageItem,
   type ORItem,
   type ORStreamEvent,
+  portableInputItem,
   reduceORevent,
   type TurnStatus,
   type TurnStreamState,
@@ -446,7 +447,8 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             ctx.actor.userId,
             row.payload as unknown as ORItem,
           );
-          input.push(stripId(hydrated));
+          const portable = portableInputItem(stripId(hydrated));
+          if (portable) input.push(portable);
         }
 
         const stateRef = yield* Ref.make(initialTurnStreamState);
