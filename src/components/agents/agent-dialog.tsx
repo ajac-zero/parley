@@ -36,6 +36,7 @@ interface AgentFormState {
   model: string;
   instructions: string;
   continuation: "replay" | "previous_response_id";
+  fileDelivery: "url" | "inline";
   supportsImages: boolean;
   supportsFiles: boolean;
   paramsText: string;
@@ -54,6 +55,7 @@ const emptyForm = (): AgentFormState => ({
   model: "",
   instructions: "",
   continuation: "replay",
+  fileDelivery: "url",
   supportsImages: false,
   supportsFiles: false,
   paramsText: "",
@@ -72,6 +74,7 @@ const formFromAgent = (agent: PublicAgent): AgentFormState => ({
   model: agent.model ?? "",
   instructions: agent.instructions ?? "",
   continuation: agent.continuation as "replay" | "previous_response_id",
+  fileDelivery: agent.fileDelivery,
   supportsImages: agent.supportsImages,
   supportsFiles: agent.supportsFiles,
   paramsText: agent.params ? JSON.stringify(agent.params, null, 2) : "",
@@ -176,6 +179,7 @@ export function AgentDialog({
         model: form.model.trim() || null,
         instructions: form.instructions.trim() || null,
         continuation: form.continuation,
+        fileDelivery: form.fileDelivery,
         supportsImages: form.supportsImages,
         supportsFiles: form.supportsFiles,
         params,
@@ -349,7 +353,7 @@ export function AgentDialog({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="agent-model">Model</Label>
               <Input
@@ -379,6 +383,27 @@ export function AgentDialog({
                   </SelectItem>
                   <SelectItem value="previous_response_id">
                     previous_response_id (agent stores state)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>File delivery</Label>
+              <Select
+                value={form.fileDelivery}
+                onValueChange={(value) =>
+                  set("fileDelivery", value as "url" | "inline")
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="url">
+                    Capability URL (agent fetches from Parley)
+                  </SelectItem>
+                  <SelectItem value="inline">
+                    Inline base64 (agent cannot reach Parley)
                   </SelectItem>
                 </SelectContent>
               </Select>

@@ -32,4 +32,36 @@ describe("attachment capabilities", () => {
       ),
     ).toBe(false);
   });
+
+  it("rejects malformed expiration and signature values", () => {
+    const now = 1_700_000_000_000;
+    const url = new URL(createAttachmentCapabilityUrl("file-1", "user-1", now));
+    const expires = Number(url.searchParams.get("expires"));
+    const signature = url.searchParams.get("signature") ?? "";
+
+    expect(
+      verifyAttachmentCapability(
+        "file-1",
+        "user-1",
+        expires + 1,
+        signature,
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      verifyAttachmentCapability("file-1", "user-1", expires, "invalid", now),
+    ).toBe(false);
+    expect(
+      verifyAttachmentCapability(
+        "file-1",
+        "user-1",
+        Number.NaN,
+        signature,
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      verifyAttachmentCapability("file-1", "user-1", 1.5, signature, now),
+    ).toBe(false);
+  });
 });

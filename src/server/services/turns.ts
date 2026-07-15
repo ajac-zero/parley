@@ -23,6 +23,7 @@ import {
   type TurnStreamState,
 } from "~/lib/openresponses";
 import type { SseMessage } from "~/lib/sse";
+import { createAttachmentCapabilityUrl } from "~/server/attachment-capability";
 import { Db, schema } from "~/server/db/client";
 import { appEnv } from "~/server/env";
 import { turnId as newTurnId } from "~/server/ids";
@@ -198,13 +199,14 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
       });
 
     /**
-     * Replaces parley-file references with either a presigned URL (cheap,
-     * used when a publicly-reachable S3 endpoint is configured via
-     * S3_PUBLIC_URL) or an inline base64 payload (safe default — works even
-     * when the agent can't reach the object store's network, e.g. the
-     * default bundled MinIO).
+     * Replaces local image references with a reachable URL or inline data.
+     * Other files use the agent's explicit delivery mode without fallback.
      */
-    const hydrateItem = (userId: string, item: ORItem) =>
+    const hydrateItem = (
+      userId: string,
+      item: ORItem,
+      fileDelivery: "url" | "inline",
+    ) =>
       Effect.gen(function* () {
         const record = item as unknown as Record<string, unknown>;
         if (record.type !== "message" || !Array.isArray(record.content)) {
@@ -253,27 +255,28 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             partRecord.file_url.startsWith(FILE_REF_PREFIX)
           ) {
             const id = partRecord.file_url.slice(FILE_REF_PREFIX.length);
-            const { file, url } = yield* files
-              .getUrl(userId, id)
-              .pipe(Effect.orElseSucceed(() => ({ file: null, url: null })));
-            if (file && url) {
-              content.push({
-                ...partRecord,
-                filename: file.name,
-                file_url: url,
-              } as ContentPart);
-              continue;
-            }
-            if (file) {
-              const { data } = yield* files
+            if (fileDelivery === "inline") {
+              const loaded = yield* files
                 .getBytes(userId, id)
-                .pipe(Effect.orElseSucceed(() => ({ data: null })));
-              if (data) {
+                .pipe(Effect.orElseSucceed(() => null));
+              if (loaded) {
                 const { file_url: _drop, ...rest } = partRecord;
                 content.push({
                   ...rest,
+                  filename: loaded.name,
+                  file_data: Buffer.from(loaded.data).toString("base64"),
+                } as ContentPart);
+                continue;
+              }
+            } else {
+              const file = yield* files
+                .getOwned(userId, id)
+                .pipe(Effect.orElseSucceed(() => null));
+              if (file) {
+                content.push({
+                  ...partRecord,
                   filename: file.name,
-                  file_data: Buffer.from(data).toString("base64"),
+                  file_url: createAttachmentCapabilityUrl(file.id, userId),
                 } as ContentPart);
                 continue;
               }
@@ -446,6 +449,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           const hydrated = yield* hydrateItem(
             ctx.actor.userId,
             row.payload as unknown as ORItem,
+            ctx.agent.fileDelivery,
           );
           const portable = portableInputItem(stripId(hydrated));
           if (portable) input.push(portable);
@@ -603,6 +607,22 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             ),
           );
 
+        const ownedFiles = params.message
+          ? yield* Effect.forEach(
+              params.message.fileIds.slice(0, 10),
+              (fileId) =>
+                files.getOwned(actor.userId, fileId).pipe(
+                  Effect.mapError(
+                    () =>
+                      new TurnError({
+                        message: "Attachment not found.",
+                        status: 400,
+                      }),
+                  ),
+                ),
+            )
+          : [];
+
         /* Resolve conversation + agent */
         let conversation: typeof schema.conversations.$inferSelect;
         let announceTitle: string | null = null;
@@ -626,29 +646,15 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           if (
             !params.message ||
             (params.message.text.trim().length === 0 &&
-              params.message.fileIds.length === 0 &&
-              (params.message.a2ui?.length ?? 0) === 0)
+              params.message.fileIds.length === 0)
           ) {
             return yield* new TurnError({
               message: "A message is required to start a conversation.",
               status: 400,
             });
           }
-          const firstFile = params.message.fileIds[0]
-            ? yield* files
-                .getOwned(actor.userId, params.message.fileIds[0])
-                .pipe(
-                  Effect.mapError(
-                    () =>
-                      new TurnError({
-                        message: "Attachment not found.",
-                        status: 400,
-                      }),
-                  ),
-                )
-            : null;
           const title = titleFromText(
-            params.message.text || firstFile?.name || "",
+            params.message.text || ownedFiles[0]?.name || "",
           );
           conversation = yield* conversations.create(
             actor.userId,
@@ -748,8 +754,8 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
 
         if (
           params.message &&
-            params.message.fileIds.length > 0 ||
           (params.message.text.trim().length > 0 ||
+            params.message.fileIds.length > 0 ||
             (params.message.a2ui?.length ?? 0) > 0)
         ) {
           if (params.message.text.length > 64_000) {

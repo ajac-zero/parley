@@ -34,11 +34,23 @@ export const Route = createFileRoute("/api/attachments/$fileId")({
         if (!result.ok) return jsonError(404, "File not found.");
 
         const { file, stream } = result.value;
+        const asciiFilename =
+          [...file.name]
+            .map((character) => {
+              const code = character.charCodeAt(0);
+              return code < 32 ||
+                code > 126 ||
+                character === '"' ||
+                character === "\\"
+                ? "_"
+                : character;
+            })
+            .join("") || "file";
         return new Response(stream, {
           headers: {
             "content-type": file.mimeType,
             "content-length": String(file.size),
-            "content-disposition": `attachment; filename="${encodeURIComponent(file.name)}"`,
+            "content-disposition": `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
             "cache-control": "private, no-store",
             "x-content-type-options": "nosniff",
           },
