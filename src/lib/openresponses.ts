@@ -9,6 +9,7 @@
 export type ItemStatus = "in_progress" | "completed" | "incomplete";
 
 export const A2UI_ITEM_TYPE = "ajac-zero:a2ui";
+export const ARTIFACT_ITEM_TYPE = "ajac-zero:artifact";
 
 /* ----------------------------- content parts ----------------------------- */
 
@@ -111,6 +112,17 @@ export interface CompactionItem {
   encrypted_content: string;
 }
 
+export interface ParleyAttachmentItem {
+  type: "parley:attachment";
+  id: string;
+  status: "completed";
+  filename: string;
+  mime_type: string;
+  size: number;
+  file_url: string;
+  provider_artifact?: { id: string };
+}
+
 export interface A2uiPresentationItem {
   type: typeof A2UI_ITEM_TYPE;
   id: string;
@@ -120,6 +132,17 @@ export interface A2uiPresentationItem {
   uri: string;
   fallback_text?: string;
   messages: Array<Record<string, unknown>>;
+}
+
+export interface DownloadableArtifactItem {
+  type: typeof ARTIFACT_ITEM_TYPE;
+  id: string;
+  status: "completed";
+  call_id?: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  content_url: string;
 }
 
 export interface UnknownItem {
@@ -135,7 +158,9 @@ export type ORItem =
   | FunctionCallOutputItem
   | ReasoningItem
   | CompactionItem
+  | ParleyAttachmentItem
   | A2uiPresentationItem
+  | DownloadableArtifactItem
   | UnknownItem;
 
 export const isMessageItem = (item: ORItem): item is MessageItem =>
@@ -169,9 +194,15 @@ export function reasoningSummaryText(item: ReasoningItem): string {
   return (item.content ?? []).map((p) => p.text ?? "").join("\n\n");
 }
 
-/** Removes known platform presentation items and parts from provider replay. */
+/** Removes platform presentation items and parts from provider replay. */
 export function portableInputItem(item: ORItem): ORItem | null {
-  if (item.type === A2UI_ITEM_TYPE) return null;
+  if (
+    item.type === "parley:attachment" ||
+    item.type === A2UI_ITEM_TYPE ||
+    item.type === ARTIFACT_ITEM_TYPE
+  ) {
+    return null;
+  }
   if (
     !isMessageItem(item) ||
     item.role !== "user" ||

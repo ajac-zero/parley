@@ -440,7 +440,21 @@ describe("helpers", () => {
     expect(portableInputItem(item)).toBe(item);
   });
 
-  it("omits A2UI presentation sidecars from provider replay", () => {
+  it("omits Parley attachments from provider replay", () => {
+    expect(
+      portableInputItem({
+        type: "parley:attachment",
+        id: "artifact-1",
+        status: "completed",
+        filename: "report.pdf",
+        mime_type: "application/pdf",
+        size: 12,
+        file_url: "parley-file:file-1",
+      }),
+    ).toBeNull();
+  });
+
+  it("omits A2UI presentation items from provider replay", () => {
     expect(
       portableInputItem({
         type: A2UI_ITEM_TYPE,
@@ -450,6 +464,21 @@ describe("helpers", () => {
         mime_type: "application/a2ui+json",
         uri: "a2ui://results/1",
         messages: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("omits downloadable artifacts from provider replay", () => {
+    expect(
+      portableInputItem({
+        type: "ajac-zero:artifact",
+        id: "artifact-1",
+        status: "completed",
+        call_id: "call-1",
+        filename: "report.pdf",
+        mime_type: "application/pdf",
+        size: 3,
+        content_url: "/v1/artifacts/artifact-1/content",
       }),
     ).toBeNull();
   });

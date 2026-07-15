@@ -1,6 +1,11 @@
 import { isIP } from "node:net";
 import { Data, Effect, Stream } from "effect";
-import type { ORStreamEvent } from "~/lib/openresponses";
+import {
+  ARTIFACT_ITEM_TYPE,
+  type DownloadableArtifactItem,
+  type ORStreamEvent,
+  type ParleyAttachmentItem,
+} from "~/lib/openresponses";
 import { parseSseStream, SSE_DONE } from "~/lib/sse";
 import { appEnv } from "~/server/env";
 
@@ -23,6 +28,179 @@ export interface CreateResponseOptions {
   store: boolean;
   /** Extra provider params (temperature, reasoning, ...). Core fields win. */
   params?: Record<string, unknown> | null;
+}
+
+type ArtifactFetcher = (url: URL, init?: RequestInit) => Promise<Response>;
+
+const MIME_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
+
+const validArtifactFilename = (filename: string): boolean =>
+  ![...filename].some((character) => {
+    const code = character.charCodeAt(0);
+    return character === "/" || character === "\\" || code < 32 || code === 127;
+  });
+
+export function resolveArtifactUrl(baseUrl: string, downloadUrl: string): URL {
+  const base = new URL(baseUrl);
+  const resolved = new URL(downloadUrl, base);
+  if (
+    !["http:", "https:"].includes(resolved.protocol) ||
+    resolved.origin !== base.origin ||
+    resolved.username !== "" ||
+    resolved.password !== ""
+  ) {
+    throw new AgentRequestError({
+      message: "Artifact download URL must use the agent origin.",
+    });
+  }
+  return resolved;
+}
+
+export function validateDownloadableArtifact(
+  value: unknown,
+): DownloadableArtifactItem {
+  const artifact = value as Partial<DownloadableArtifactItem>;
+  if (
+    artifact?.type !== ARTIFACT_ITEM_TYPE ||
+    artifact.status !== "completed" ||
+    typeof artifact.id !== "string" ||
+    artifact.id.length === 0 ||
+    typeof artifact.size !== "number" ||
+    !Number.isSafeInteger(artifact.size) ||
+    artifact.size < 0 ||
+    typeof artifact.content_url !== "string" ||
+    artifact.content_url.length === 0 ||
+    typeof artifact.filename !== "string" ||
+    artifact.filename.length === 0 ||
+    artifact.filename.length > 300 ||
+    artifact.filename !== artifact.filename.trim() ||
+    !validArtifactFilename(artifact.filename) ||
+    typeof artifact.mime_type !== "string" ||
+    artifact.mime_type.length > 200 ||
+    !MIME_TYPE.test(artifact.mime_type)
+  ) {
+    throw new AgentRequestError({
+      message: "Agent returned an invalid artifact.",
+    });
+  }
+  return artifact as DownloadableArtifactItem;
+}
+
+export function artifactAttachmentItem(
+  artifact: DownloadableArtifactItem,
+  file: { id: string; size: number },
+): ParleyAttachmentItem {
+  return {
+    type: "parley:attachment",
+    id: artifact.id,
+    status: "completed",
+    filename: artifact.filename,
+    mime_type: artifact.mime_type,
+    size: file.size,
+    file_url: `parley-file:${file.id}`,
+    provider_artifact: { id: artifact.id },
+  };
+}
+
+export async function downloadArtifact(
+  endpoint: AgentEndpoint,
+  value: unknown,
+  maxBytes: number,
+  fetcher: ArtifactFetcher = fetch,
+): Promise<{ artifact: DownloadableArtifactItem; data: Uint8Array }> {
+  const artifact = validateDownloadableArtifact(value);
+  const url = resolveArtifactUrl(endpoint.baseUrl, artifact.content_url);
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      headers: {
+        accept: artifact.mime_type,
+        ...(endpoint.apiKey
+          ? { authorization: `Bearer ${endpoint.apiKey}` }
+          : {}),
+      },
+      redirect: "manual",
+    });
+  } catch (error) {
+    throw new AgentRequestError({ message: connectionErrorMessage(error) });
+  }
+  if (
+    !response.ok ||
+    !response.body ||
+    response.status < 200 ||
+    response.status >= 300
+  ) {
+    throw new AgentRequestError({
+      status: response.status,
+      message: `Agent artifact download returned HTTP ${response.status}.`,
+    });
+  }
+  const responseType = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim();
+  if (
+    responseType &&
+    (!MIME_TYPE.test(responseType) || responseType !== artifact.mime_type)
+  ) {
+    throw new AgentRequestError({
+      message: "Agent artifact response has an unexpected Content-Type.",
+    });
+  }
+  const lengthHeader = response.headers.get("content-length");
+  if (lengthHeader !== null) {
+    const length = Number(lengthHeader);
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new AgentRequestError({
+        message: "Agent artifact has an invalid Content-Length.",
+      });
+    }
+    if (length > maxBytes) {
+      throw new AgentRequestError({
+        message: "Agent artifact exceeds the file size limit.",
+      });
+    }
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value: chunk } = await reader.read();
+      if (done) break;
+      size += chunk.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        throw new AgentRequestError({
+          message: "Agent artifact exceeds the file size limit.",
+        });
+      }
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    if (error instanceof AgentRequestError) throw error;
+    throw new AgentRequestError({
+      message: "Agent artifact download failed while reading data.",
+    });
+  }
+  if (lengthHeader !== null && size !== Number(lengthHeader)) {
+    throw new AgentRequestError({
+      message: "Agent artifact response was truncated.",
+    });
+  }
+  const data = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  if (size !== artifact.size) {
+    throw new AgentRequestError({
+      message: "Agent artifact size does not match the downloaded content.",
+    });
+  }
+  return { artifact, data };
 }
 
 /** `https://host/v1` -> `https://host/v1/responses` (idempotent). */
