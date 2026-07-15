@@ -12,6 +12,7 @@ import {
   applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
+  collectA2uiOutputs,
   extractA2uiResources,
   failedChecks,
   interpolate,
@@ -35,7 +36,9 @@ import {
 import type {
   A2uiPresentationItem,
   ContentPart,
+  FunctionCallOutputItem,
   MessageItem,
+  ORItem,
 } from "~/lib/openresponses";
 
 const BASIC_CATALOG =
@@ -724,6 +727,137 @@ describe("extractA2uiResources", () => {
     };
 
     expect(a2uiPresentationOutput(item)).toBeNull();
+  });
+});
+
+/* ------------------------ conversation trajectory order --------------------- */
+
+describe("collectA2uiOutputs", () => {
+  const functionCallOutput = (
+    callId: string,
+    messages: A2uiMessage[],
+  ): ORItem =>
+    ({
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(messages),
+    }) as FunctionCallOutputItem;
+
+  const presentationSidecar = (
+    callId: string,
+    messages: A2uiMessage[],
+  ): ORItem =>
+    ({
+      type: "ajac-zero:a2ui",
+      id: `a2ui_${callId}`,
+      status: "completed",
+      call_id: callId,
+      mime_type: A2UI_MIME_TYPE,
+      uri: `a2ui://example/${callId}`,
+      messages,
+    }) as A2uiPresentationItem;
+
+  it("keeps trajectory order so a later call's update wins over an earlier sidecar's create", () => {
+    // Trajectory: call1's sidecar creates s1 first; call2's canonical output
+    // updates s1 afterwards. A grouped (all-outputs-then-all-sidecars)
+    // reduction would apply call2's update before call1's createSurface,
+    // discarding it.
+    const items: ORItem[] = [
+      presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call2", [
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "from call2" }],
+          },
+        },
+      ]),
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    const reduced = reduceA2uiOutputs(outputs);
+    const surface = reduced.get("call1")?.surfaces[0];
+    expect(surface?.components.root?.text).toBe("from call2");
+  });
+
+  it("preserves order regardless of whether the sidecar or canonical output comes first", () => {
+    const items: ORItem[] = [
+      functionCallOutput("call2", [
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "stale" }],
+          },
+        },
+      ]),
+      presentationSidecar("call1", [createSurface("s1")]),
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    const reduced = reduceA2uiOutputs(outputs);
+    const surface = reduced.get("call1")?.surfaces[0];
+    // call2's update now precedes call1's createSurface in the trajectory,
+    // so it's the create that wins and the surface has no components yet.
+    expect(surface?.components.root).toBeUndefined();
+  });
+
+  it("prefers a linked presentation sidecar over the canonical embedded-resource form", () => {
+    const canonicalResource: ContentPart = {
+      type: "resource",
+      resource: {
+        uri: "a2ui://example/call1",
+        mimeType: A2UI_MIME_TYPE,
+        text: JSON.stringify([
+          createSurface("s1"),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [
+                { id: "root", component: "Text", text: "canonical" },
+              ],
+            },
+          },
+        ]),
+      },
+    } as ContentPart;
+
+    const items: ORItem[] = [
+      {
+        type: "function_call_output",
+        call_id: "call1",
+        output: [canonicalResource],
+      } as FunctionCallOutputItem,
+      {
+        type: "ajac-zero:a2ui",
+        id: "a2ui_call1",
+        status: "completed",
+        call_id: "call1",
+        mime_type: A2UI_MIME_TYPE,
+        uri: "a2ui://example/call1",
+        fallback_text: "sidecar wins",
+        messages: [
+          createSurface("s1"),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "sidecar" }],
+            },
+          },
+        ],
+      } as A2uiPresentationItem,
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    // Only the sidecar's ref should survive — the canonical embedded
+    // resource for the same call is suppressed, not merged alongside it.
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]?.callId).toBe("call1");
+
+    const reduced = reduceA2uiOutputs(outputs);
+    expect(reduced.get("call1")?.surfaces[0]?.components.root?.text).toBe(
+      "sidecar",
+    );
+    expect(reduced.get("call1")?.fallbackText).toBe("sidecar wins");
   });
 });
 

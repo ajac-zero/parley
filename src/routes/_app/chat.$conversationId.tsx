@@ -14,18 +14,9 @@ import { useActiveTurn } from "~/hooks/use-active-turn";
 import { useElementHeight } from "~/hooks/use-element-size";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import { usePinnedSurfaces } from "~/hooks/use-pinned-surfaces";
-import {
-  type A2uiOutputRef,
-  a2uiPresentationOutput,
-  reduceA2uiOutputs,
-} from "~/lib/a2ui";
+import { collectA2uiOutputs, reduceA2uiOutputs } from "~/lib/a2ui";
 import { chatStore } from "~/lib/chat-store";
-import type {
-  A2uiPresentationItem,
-  FunctionCallItem,
-  FunctionCallOutputItem,
-} from "~/lib/openresponses";
-import { A2UI_ITEM_TYPE } from "~/lib/openresponses";
+import type { FunctionCallItem } from "~/lib/openresponses";
 import { conversationQuery } from "~/lib/queries";
 
 export const Route = createFileRoute("/_app/chat/$conversationId")({
@@ -63,31 +54,15 @@ function ConversationPage() {
 
   const busy = active !== undefined && active.phase !== "finished";
 
-  /* A2UI surfaces are conversation-wide state: reduce every tool output in
-   * order so a later result can update or delete a surface created by an
-   * earlier call. Computed here (not in Thread) because placement is host
-   * policy — the same map drives both inline anchors and the pinned
-   * side canvas. */
+  /* A2UI surfaces are conversation-wide state: reduce every tool output (and
+   * any linked presentation sidecar taking precedence over it) in
+   * trajectory order, so a later result can update or delete a surface
+   * created by an earlier call. Computed here (not in Thread) because
+   * placement is host policy — the same map drives both inline anchors and
+   * the pinned side canvas. */
   const a2uiByCall = useMemo(() => {
-    const outputs: A2uiOutputRef[] = [];
-    const presentations: A2uiOutputRef[] = [];
-    for (const entry of entries) {
-      if (entry.item.type === "function_call_output") {
-        const output = entry.item as FunctionCallOutputItem;
-        if (output.call_id) {
-          outputs.push({ callId: output.call_id, output: output.output });
-        }
-      } else if (entry.item.type === A2UI_ITEM_TYPE) {
-        const output = a2uiPresentationOutput(
-          entry.item as A2uiPresentationItem,
-        );
-        if (output) presentations.push(output);
-      }
-    }
-    return reduceA2uiOutputs(
-      [...outputs, ...presentations],
-      config.enabledA2uiCatalogIds,
-    );
+    const outputs = collectA2uiOutputs(entries.map((entry) => entry.item));
+    return reduceA2uiOutputs(outputs, config.enabledA2uiCatalogIds);
   }, [entries, config.enabledA2uiCatalogIds]);
 
   /* Pinning: a client-side gesture persisted per conversation. The canvas

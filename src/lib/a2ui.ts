@@ -16,10 +16,13 @@
  * by the browser, the server, and tests.
  */
 
-import type {
-  A2uiPresentationItem,
-  ContentPart,
-  MessageItem,
+import {
+  A2UI_ITEM_TYPE,
+  type A2uiPresentationItem,
+  type ContentPart,
+  type FunctionCallOutputItem,
+  type MessageItem,
+  type ORItem,
 } from "~/lib/openresponses";
 
 export {
@@ -854,6 +857,48 @@ export function a2uiPresentationOutput(
     },
   } as ContentPart);
   return { callId: item.call_id, output };
+}
+
+/**
+ * Builds the trajectory-ordered reducer input for a whole conversation from
+ * its raw items (canonical `function_call_output`s and, where present,
+ * their linked `ajac-zero:a2ui` presentation sidecars).
+ *
+ * Two rules, both required for correct A2UI state:
+ *
+ *  1. Order must match the conversation's actual trajectory. Surfaces are
+ *     shared, order-sensitive state (a later call can update a surface an
+ *     earlier one created), so grouping items by kind before reducing —
+ *     e.g. all canonical outputs, then all sidecars — silently reorders
+ *     them relative to each other and can discard newer writes.
+ *  2. When a call has *both* a canonical embedded-resource form and a
+ *     linked presentation sidecar describing the same surface, the sidecar
+ *     is authoritative: the canonical form is dropped instead of being fed
+ *     to the reducer alongside it, which would double up (or conflict on)
+ *     the surface's state.
+ */
+export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
+  const sidecarCallIds = new Set<string>();
+  for (const item of items) {
+    if (item.type === A2UI_ITEM_TYPE) {
+      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
+      if (output) sidecarCallIds.add(output.callId);
+    }
+  }
+
+  const outputs: A2uiOutputRef[] = [];
+  for (const item of items) {
+    if (item.type === "function_call_output") {
+      const call = item as FunctionCallOutputItem;
+      if (call.call_id && !sidecarCallIds.has(call.call_id)) {
+        outputs.push({ callId: call.call_id, output: call.output });
+      }
+    } else if (item.type === A2UI_ITEM_TYPE) {
+      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
+      if (output) outputs.push(output);
+    }
+  }
+  return outputs;
 }
 
 /** The A2UI state a host should render at one tool call. */
