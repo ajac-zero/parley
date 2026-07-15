@@ -16,12 +16,13 @@
  * by the browser, the server, and tests.
  */
 
-import { A2UI_INSTALLED_CATALOG_IDS } from "~/lib/a2ui-catalog-plugins";
 import type { ContentPart, MessageItem } from "~/lib/openresponses";
 
 export {
   A2UI_BASIC_CATALOG_IDS,
   A2UI_CHARTS_CATALOG_ID,
+  /** Catalog IDs installed in this build, independent of admin enablement. */
+  A2UI_INSTALLED_CATALOG_IDS,
 } from "~/lib/a2ui-catalog-plugins";
 
 /* ------------------------------- constants ------------------------------- */
@@ -32,9 +33,6 @@ const A2UI_LEGACY_MIME_TYPE = "application/json+a2ui";
 
 /** Protocol versions Parley fully supports (and advertises). */
 export const A2UI_SUPPORTED_VERSIONS: readonly string[] = ["v0.9", "v0.9.1"];
-
-/** Catalog IDs installed in this build, independent of admin enablement. */
-export const A2UI_SUPPORTED_CATALOG_IDS = A2UI_INSTALLED_CATALOG_IDS;
 
 /** Version Parley stamps on the client -> server messages it emits. */
 export const A2UI_CLIENT_VERSION = "v0.9.1";
@@ -239,7 +237,7 @@ const messageVersionSupported = (message: A2uiMessage): boolean =>
  *
  * `enabledCatalogIds` is deliberately required: it is the deployment's
  * *enabled* set (admin settings), not the build's *installed* set. A default
- * of `A2UI_SUPPORTED_CATALOG_IDS` would silently bypass admin enablement for
+ * of `A2UI_INSTALLED_CATALOG_IDS` would silently bypass admin enablement for
  * any caller that forgets the argument.
  */
 export function reduceA2uiMessages(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
-  A2UI_SUPPORTED_CATALOG_IDS,
+  A2UI_INSTALLED_CATALOG_IDS,
   type A2uiMessage,
   type A2uiOutputRef,
   extractA2uiResources,
@@ -25,10 +25,10 @@ import { handleDemoResponses } from "./agent";
  * explicitly (the parameter is required so admin enablement can't be
  * bypassed by omission). The demo agent exercises every installed catalog. */
 const reduceA2uiMessages = (messages: A2uiMessage[]) =>
-  reduceA2uiMessagesStrict(messages, A2UI_SUPPORTED_CATALOG_IDS);
+  reduceA2uiMessagesStrict(messages, A2UI_INSTALLED_CATALOG_IDS);
 
 const reduceA2uiOutputs = (outputs: A2uiOutputRef[]) =>
-  reduceA2uiOutputsStrict(outputs, A2UI_SUPPORTED_CATALOG_IDS);
+  reduceA2uiOutputsStrict(outputs, A2UI_INSTALLED_CATALOG_IDS);
 
 const request = (body: unknown) =>
   new Request("http://demo.local/v1/responses", {

@@ -52,11 +52,11 @@ lists, media, and actions using a shared catalog without depending on
 Parley-specific components. Different hosts may render the same resource in
 their own visual language while preserving its structure and behavior.
 
-Parley advertises only the A2UI protocol versions and catalog IDs that it
-fully supports (see `A2UI_SUPPORTED_VERSIONS` and
-`A2UI_SUPPORTED_CATALOG_IDS` in `src/lib/a2ui.ts`). Tool providers should
-include a useful textual fallback for clients that cannot render the
-resource.
+Parley advertises only the A2UI protocol versions it fully supports
+(`A2UI_SUPPORTED_VERSIONS` in `src/lib/a2ui.ts`) and renders only catalog
+IDs that are both installed in the build (`A2UI_INSTALLED_CATALOG_IDS`) and
+enabled by a deployment administrator. Tool providers should include a
+useful textual fallback for clients that cannot render the resource.
 
 How it works today:
 

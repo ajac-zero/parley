@@ -4,8 +4,8 @@
 import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
+  A2UI_INSTALLED_CATALOG_IDS,
   A2UI_MIME_TYPE,
-  A2UI_SUPPORTED_CATALOG_IDS,
   type A2uiMessage,
   type A2uiOutputRef,
   applyA2uiDataOps,
@@ -42,12 +42,12 @@ const BASIC_CATALOG =
  * the case under test says otherwise. */
 const reduceA2uiMessages = (
   messages: A2uiMessage[],
-  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+  enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
 ) => reduceA2uiMessagesStrict(messages, enabledCatalogIds);
 
 const reduceA2uiOutputs = (
   outputs: A2uiOutputRef[],
-  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+  enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
 ) => reduceA2uiOutputsStrict(outputs, enabledCatalogIds);
 
 /* ------------------------------ JSON Pointer ------------------------------ */
@@ -268,7 +268,7 @@ describe("A2UI catalog plugins", () => {
       "charts",
     ]);
     expect(catalogIdsForPluginKeys(A2UI_DEFAULT_ENABLED_PLUGIN_KEYS)).toEqual(
-      A2UI_SUPPORTED_CATALOG_IDS,
+      A2UI_INSTALLED_CATALOG_IDS,
     );
   });
 
@@ -584,6 +584,6 @@ describe("charts catalog contract", () => {
     expect(A2UI_CHARTS_CATALOG_ID).toBe(
       "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json",
     );
-    expect(A2UI_SUPPORTED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
+    expect(A2UI_INSTALLED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
   });
 });
