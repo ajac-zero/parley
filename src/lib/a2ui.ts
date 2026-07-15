@@ -16,7 +16,14 @@
  * by the browser, the server, and tests.
  */
 
-import type { ContentPart, MessageItem } from "~/lib/openresponses";
+import {
+  A2UI_ITEM_TYPE,
+  type A2uiPresentationItem,
+  type ContentPart,
+  type FunctionCallOutputItem,
+  type MessageItem,
+  type ORItem,
+} from "~/lib/openresponses";
 
 export {
   A2UI_BASIC_CATALOG_IDS,
@@ -822,6 +829,158 @@ export function extractA2uiResources(
 export interface A2uiOutputRef {
   callId: string;
   output: string | ContentPart[] | null | undefined;
+}
+
+/** Converts a valid presentation sidecar into ordinary reducer input. */
+export function a2uiPresentationOutput(
+  item: A2uiPresentationItem,
+): A2uiOutputRef | null {
+  if (
+    item.status !== "completed" ||
+    item.mime_type !== A2UI_MIME_TYPE ||
+    !item.call_id ||
+    !item.uri ||
+    !isA2uiMessageArray(item.messages)
+  ) {
+    return null;
+  }
+  const output: ContentPart[] = [];
+  if (item.fallback_text) {
+    output.push({ type: "output_text", text: item.fallback_text });
+  }
+  output.push({
+    type: "resource",
+    resource: {
+      uri: item.uri,
+      mimeType: item.mime_type,
+      text: JSON.stringify(item.messages),
+    },
+  } as ContentPart);
+  return { callId: item.call_id, output };
+}
+
+/** Every `surfaceId` referenced (created, updated, or deleted) by a message. */
+function surfaceIdsInMessage(message: A2uiMessage): Set<string> {
+  const ids = new Set<string>();
+  const record = asRecord(message);
+  if (!record) return ids;
+  for (const key of MESSAGE_KEYS) {
+    const body = asRecord(record[key]);
+    if (body && typeof body.surfaceId === "string") ids.add(body.surfaceId);
+  }
+  return ids;
+}
+
+/** The `surfaceId` a message's `createSurface` (re)establishes, if any. */
+function createdSurfaceIdInMessage(message: A2uiMessage): string | null {
+  const record = asRecord(message);
+  const body = record && asRecord(record.createSurface);
+  return body && typeof body.surfaceId === "string" ? body.surfaceId : null;
+}
+
+/**
+ * Rebuilds a canonical `function_call_output`'s A2UI content, dropping only
+ * the messages that touch a surface a linked sidecar recreates outright.
+ * Messages for any other surface — and any non-A2UI content — pass through.
+ * Handles all three encodings `extractA2uiResources` accepts (embedded
+ * resource parts, a CallToolResult JSON string, or a bare message array).
+ */
+function canonicalPartsExcludingSurfaces(
+  output: string | ContentPart[] | null | undefined,
+  excludeSurfaceIds: ReadonlySet<string>,
+): ContentPart[] {
+  const extraction = extractA2uiResources(output);
+  const parts: ContentPart[] = [];
+  if (extraction.fallbackText) {
+    parts.push({ type: "output_text", text: extraction.fallbackText });
+  }
+  for (const resource of extraction.resources) {
+    const remaining = resource.messages.filter((message) => {
+      const ids = surfaceIdsInMessage(message);
+      return (
+        ids.size === 0 || ![...ids].some((id) => excludeSurfaceIds.has(id))
+      );
+    });
+    if (remaining.length === 0) continue;
+    parts.push({
+      type: "resource",
+      resource: {
+        uri: resource.uri ?? "",
+        mimeType: A2UI_MIME_TYPE,
+        text: JSON.stringify(remaining),
+      },
+    } as ContentPart);
+  }
+  return parts;
+}
+
+/**
+ * Builds the trajectory-ordered reducer input for a whole conversation from
+ * its raw items (canonical `function_call_output`s and, where present,
+ * their linked `ajac-zero:a2ui` presentation sidecars).
+ *
+ * Two rules, both required for correct A2UI state:
+ *
+ *  1. Order must match the conversation's actual trajectory. Surfaces are
+ *     shared, order-sensitive state (a later call can update a surface an
+ *     earlier one created), so grouping items by kind before reducing —
+ *     e.g. all canonical outputs, then all sidecars — silently reorders
+ *     them relative to each other and can discard newer writes. Each
+ *     sidecar is therefore kept as its own entry at its own trajectory
+ *     position — never relocated to, or merged into, its linked call's
+ *     position — and never deduplicated: a call can have more than one
+ *     sidecar over time, and the extension contract requires all of them
+ *     to be reduced in trajectory order, same as any other message source.
+ *  2. When a call has *both* a canonical embedded-resource form and a
+ *     linked presentation sidecar that *recreates* a surface (its own
+ *     `createSurface`), the sidecar is authoritative for that surface: the
+ *     canonical form's messages for it are dropped instead of being fed to
+ *     the reducer alongside them, which would conflict on the surface's
+ *     state. An update-only sidecar (no `createSurface` of its own) is
+ *     incremental, not a replacement — it depends on the canonical output's
+ *     own `createSurface` still having run, so that setup (and everything
+ *     else about the canonical output, including other surfaces entirely)
+ *     is preserved and simply reduced before the sidecar's update, in
+ *     trajectory order like any other pair of writes to a shared surface.
+ */
+export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
+  // Union, per call_id, of every surface a valid sidecar linked to that
+  // call *recreates* (carries its own createSurface for) — regardless of
+  // where in the trajectory the sidecar(s) fall. Only these surfaces are
+  // ones the sidecar fully replaces; a sidecar that merely references a
+  // surface incrementally must not suppress the canonical setup it relies
+  // on.
+  const recreatedSurfaceIdsByCall = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (item.type !== A2UI_ITEM_TYPE) continue;
+    const presentation = item as A2uiPresentationItem;
+    if (!a2uiPresentationOutput(presentation)) continue;
+    const ids =
+      recreatedSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
+    for (const message of presentation.messages as A2uiMessage[]) {
+      const created = createdSurfaceIdInMessage(message);
+      if (created) ids.add(created);
+    }
+    recreatedSurfaceIdsByCall.set(presentation.call_id, ids);
+  }
+
+  const outputs: A2uiOutputRef[] = [];
+  for (const item of items) {
+    if (item.type === "function_call_output") {
+      const call = item as FunctionCallOutputItem;
+      if (!call.call_id) continue;
+      const overlap = recreatedSurfaceIdsByCall.get(call.call_id);
+      const output =
+        overlap && overlap.size > 0
+          ? canonicalPartsExcludingSurfaces(call.output, overlap)
+          : call.output;
+      outputs.push({ callId: call.call_id, output });
+    } else if (item.type === A2UI_ITEM_TYPE) {
+      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
+      if (output) outputs.push(output);
+    }
+  }
+  return outputs;
 }
 
 /** The A2UI state a host should render at one tool call. */

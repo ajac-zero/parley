@@ -8,6 +8,8 @@
 
 export type ItemStatus = "in_progress" | "completed" | "incomplete";
 
+export const A2UI_ITEM_TYPE = "ajac-zero:a2ui";
+
 /* ----------------------------- content parts ----------------------------- */
 
 export interface InputTextPart {
@@ -109,6 +111,17 @@ export interface CompactionItem {
   encrypted_content: string;
 }
 
+export interface A2uiPresentationItem {
+  type: typeof A2UI_ITEM_TYPE;
+  id: string;
+  status: "completed";
+  call_id: string;
+  mime_type: "application/a2ui+json";
+  uri: string;
+  fallback_text?: string;
+  messages: Array<Record<string, unknown>>;
+}
+
 export interface UnknownItem {
   type: string;
   id?: string;
@@ -122,6 +135,7 @@ export type ORItem =
   | FunctionCallOutputItem
   | ReasoningItem
   | CompactionItem
+  | A2uiPresentationItem
   | UnknownItem;
 
 export const isMessageItem = (item: ORItem): item is MessageItem =>
@@ -155,8 +169,9 @@ export function reasoningSummaryText(item: ReasoningItem): string {
   return (item.content ?? []).map((p) => p.text ?? "").join("\n\n");
 }
 
-/** Removes known platform presentation parts from user-message replay. */
+/** Removes known platform presentation items and parts from provider replay. */
 export function portableInputItem(item: ORItem): ORItem | null {
+  if (item.type === A2UI_ITEM_TYPE) return null;
   if (
     !isMessageItem(item) ||
     item.role !== "user" ||

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  A2UI_ITEM_TYPE,
   finalizePartialItems,
   initialTurnStreamState,
   isMessageItem,
@@ -437,5 +438,19 @@ describe("helpers", () => {
     };
 
     expect(portableInputItem(item)).toBe(item);
+  });
+
+  it("omits A2UI presentation sidecars from provider replay", () => {
+    expect(
+      portableInputItem({
+        type: A2UI_ITEM_TYPE,
+        id: "a2ui-1",
+        status: "completed",
+        call_id: "call-1",
+        mime_type: "application/a2ui+json",
+        uri: "a2ui://results/1",
+        messages: [],
+      }),
+    ).toBeNull();
   });
 });

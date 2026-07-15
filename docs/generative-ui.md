@@ -66,6 +66,14 @@ How it works today:
   text}}`) among the output content parts, or a JSON string of an MCP
   `CallToolResult`. A bare A2UI message array is also accepted. Nothing
   else is sniffed (`extractA2uiResources` in `src/lib/a2ui.ts`).
+- Presentation sidecars: providers may alternatively emit an
+  [`ajac-zero:a2ui`](https://github.com/ajac-zero/openresponses-extensions)
+  output item linked to the canonical `function_call` / `function_call_output`
+  pair by `call_id`. The sidecar is optional presentation metadata: Parley
+  keeps the canonical tool result unchanged, excludes the sidecar from
+  provider replay, and reduces its A2UI messages at the linked call. If both
+  forms describe the same surface, the explicit presentation sidecar takes
+  precedence.
 - Rendering: surfaces are reduced from the standard `createSurface` /
   `updateComponents` / `updateDataModel` / `deleteSurface` messages and
   rendered with native components (`src/components/a2ui/`). Data binding is
