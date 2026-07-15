@@ -859,6 +859,54 @@ export function a2uiPresentationOutput(
   return { callId: item.call_id, output };
 }
 
+/** Every `surfaceId` referenced (created, updated, or deleted) by a message. */
+function surfaceIdsInMessage(message: A2uiMessage): Set<string> {
+  const ids = new Set<string>();
+  const record = asRecord(message);
+  if (!record) return ids;
+  for (const key of MESSAGE_KEYS) {
+    const body = asRecord(record[key]);
+    if (body && typeof body.surfaceId === "string") ids.add(body.surfaceId);
+  }
+  return ids;
+}
+
+/**
+ * Rebuilds a canonical `function_call_output`'s A2UI content, dropping only
+ * the messages that touch a surface covered by its linked sidecar.
+ * Messages for any other surface — and any non-A2UI content — pass through.
+ * Handles all three encodings `extractA2uiResources` accepts (embedded
+ * resource parts, a CallToolResult JSON string, or a bare message array).
+ */
+function canonicalPartsExcludingSurfaces(
+  output: string | ContentPart[] | null | undefined,
+  excludeSurfaceIds: ReadonlySet<string>,
+): ContentPart[] {
+  const extraction = extractA2uiResources(output);
+  const parts: ContentPart[] = [];
+  if (extraction.fallbackText) {
+    parts.push({ type: "output_text", text: extraction.fallbackText });
+  }
+  for (const resource of extraction.resources) {
+    const remaining = resource.messages.filter((message) => {
+      const ids = surfaceIdsInMessage(message);
+      return (
+        ids.size === 0 || ![...ids].some((id) => excludeSurfaceIds.has(id))
+      );
+    });
+    if (remaining.length === 0) continue;
+    parts.push({
+      type: "resource",
+      resource: {
+        uri: resource.uri ?? "",
+        mimeType: A2UI_MIME_TYPE,
+        text: JSON.stringify(remaining),
+      },
+    } as ContentPart);
+  }
+  return parts;
+}
+
 /**
  * Builds the trajectory-ordered reducer input for a whole conversation from
  * its raw items (canonical `function_call_output`s and, where present,
@@ -872,17 +920,24 @@ export function a2uiPresentationOutput(
  *     e.g. all canonical outputs, then all sidecars — silently reorders
  *     them relative to each other and can discard newer writes.
  *  2. When a call has *both* a canonical embedded-resource form and a
- *     linked presentation sidecar describing the same surface, the sidecar
- *     is authoritative: the canonical form is dropped instead of being fed
- *     to the reducer alongside it, which would double up (or conflict on)
- *     the surface's state.
+ *     linked presentation sidecar, the sidecar is authoritative only for
+ *     the surfaces it actually describes. Canonical messages/resources for
+ *     any other surface on that same call — including surfaces the
+ *     canonical output creates or updates that the sidecar never mentions —
+ *     are preserved, not dropped wholesale.
  */
 export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
-  const sidecarCallIds = new Set<string>();
+  const sidecarsByCall = new Map<string, A2uiPresentationItem>();
+  const canonicalCallIds = new Set<string>();
   for (const item of items) {
     if (item.type === A2UI_ITEM_TYPE) {
-      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
-      if (output) sidecarCallIds.add(output.callId);
+      const presentation = item as A2uiPresentationItem;
+      if (a2uiPresentationOutput(presentation)) {
+        sidecarsByCall.set(presentation.call_id, presentation);
+      }
+    } else if (item.type === "function_call_output") {
+      const call = item as FunctionCallOutputItem;
+      if (call.call_id) canonicalCallIds.add(call.call_id);
     }
   }
 
@@ -890,11 +945,36 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
   for (const item of items) {
     if (item.type === "function_call_output") {
       const call = item as FunctionCallOutputItem;
-      if (call.call_id && !sidecarCallIds.has(call.call_id)) {
+      if (!call.call_id) continue;
+      const sidecar = sidecarsByCall.get(call.call_id);
+      if (!sidecar) {
         outputs.push({ callId: call.call_id, output: call.output });
+        continue;
       }
+      const sidecarOutput = a2uiPresentationOutput(sidecar);
+      if (!sidecarOutput) {
+        outputs.push({ callId: call.call_id, output: call.output });
+        continue;
+      }
+      const sidecarSurfaceIds = new Set<string>();
+      for (const message of sidecar.messages as A2uiMessage[]) {
+        for (const id of surfaceIdsInMessage(message))
+          sidecarSurfaceIds.add(id);
+      }
+      const remainder = canonicalPartsExcludingSurfaces(
+        call.output,
+        sidecarSurfaceIds,
+      );
+      outputs.push({
+        callId: call.call_id,
+        output: [...remainder, ...(sidecarOutput.output as ContentPart[])],
+      });
     } else if (item.type === A2UI_ITEM_TYPE) {
-      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
+      const presentation = item as A2uiPresentationItem;
+      if (!sidecarsByCall.has(presentation.call_id)) continue;
+      // Merged into the canonical entry above when one exists for this call.
+      if (canonicalCallIds.has(presentation.call_id)) continue;
+      const output = a2uiPresentationOutput(presentation);
       if (output) outputs.push(output);
     }
   }
