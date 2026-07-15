@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import {
+  A2UI_DEFAULT_ENABLED_PLUGIN_KEYS,
+  normalizeA2uiCatalogPluginKeys,
+} from "~/lib/a2ui-catalog-plugins";
+import {
   type RuntimeSettings,
   RuntimeSettingsSchema,
 } from "~/lib/settings-schema";
@@ -18,6 +22,20 @@ export const defaultSettings = (): RuntimeSettings => ({
   defaultAgentId: null,
   customCss: null,
   chatDisclaimer: null,
+  enabledA2uiCatalogPluginKeys: [...A2UI_DEFAULT_ENABLED_PLUGIN_KEYS],
+});
+
+/**
+ * Note: applying this on the write path is destructive by design — persisting
+ * a save while a plugin is uninstalled from the build drops its key from the
+ * DB, so reinstalling won't restore prior enablement (the admin re-enables
+ * it). We accept that over keeping unrecognized keys around indefinitely.
+ */
+const normalizeSettings = (settings: RuntimeSettings): RuntimeSettings => ({
+  ...settings,
+  enabledA2uiCatalogPluginKeys: normalizeA2uiCatalogPluginKeys(
+    settings.enabledA2uiCatalogPluginKeys,
+  ),
 });
 
 interface CacheEntry {
@@ -40,7 +58,17 @@ export class Settings extends Effect.Service<Settings>()("Settings", {
           .where(eq(schema.settings.id, "default")),
       );
       const stored = (rows[0]?.data ?? {}) as Partial<RuntimeSettings>;
-      const merged: RuntimeSettings = { ...defaultSettings(), ...stored };
+      const enabledA2uiCatalogPluginKeys = Object.hasOwn(
+        stored,
+        "enabledA2uiCatalogPluginKeys",
+      )
+        ? normalizeA2uiCatalogPluginKeys(stored.enabledA2uiCatalogPluginKeys)
+        : [...A2UI_DEFAULT_ENABLED_PLUGIN_KEYS];
+      const merged = normalizeSettings({
+        ...defaultSettings(),
+        ...stored,
+        enabledA2uiCatalogPluginKeys,
+      });
       cacheBox.current = {
         value: merged,
         expiresAt: Date.now() + CACHE_TTL_MS,
@@ -58,10 +86,12 @@ export class Settings extends Effect.Service<Settings>()("Settings", {
     const update = (patch: Partial<RuntimeSettings>) =>
       Effect.gen(function* () {
         const current = yield* load;
-        const next = yield* Schema.decodeUnknown(RuntimeSettingsSchema)({
-          ...current,
-          ...patch,
-        });
+        const next = normalizeSettings(
+          yield* Schema.decodeUnknown(RuntimeSettingsSchema)({
+            ...current,
+            ...patch,
+          }),
+        );
         yield* Effect.promise(() =>
           db
             .insert(schema.settings)

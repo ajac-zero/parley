@@ -4,8 +4,10 @@
 import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
+  A2UI_INSTALLED_CATALOG_IDS,
   A2UI_MIME_TYPE,
-  A2UI_SUPPORTED_CATALOG_IDS,
+  type A2uiMessage,
+  type A2uiOutputRef,
   applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
@@ -17,16 +19,36 @@ import {
   pointerDelete,
   pointerGet,
   pointerSet,
-  reduceA2uiMessages,
-  reduceA2uiOutputs,
+  reduceA2uiMessages as reduceA2uiMessagesStrict,
+  reduceA2uiOutputs as reduceA2uiOutputsStrict,
   resolveDynamic,
   resolvePath,
   summarizeA2uiAction,
 } from "~/lib/a2ui";
+import {
+  A2UI_CATALOG_PLUGINS,
+  A2UI_DEFAULT_ENABLED_PLUGIN_KEYS,
+  catalogIdsForPluginKeys,
+  normalizeA2uiCatalogPluginKeys,
+} from "~/lib/a2ui-catalog-plugins";
 import type { ContentPart, MessageItem } from "~/lib/openresponses";
 
 const BASIC_CATALOG =
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json";
+
+/* Production callers must pass the deployment's *enabled* catalog set
+ * explicitly (the parameter is required so admin enablement can't be
+ * bypassed by omission). Tests default to every installed catalog unless
+ * the case under test says otherwise. */
+const reduceA2uiMessages = (
+  messages: A2uiMessage[],
+  enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
+) => reduceA2uiMessagesStrict(messages, enabledCatalogIds);
+
+const reduceA2uiOutputs = (
+  outputs: A2uiOutputRef[],
+  enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
+) => reduceA2uiOutputsStrict(outputs, enabledCatalogIds);
 
 /* ------------------------------ JSON Pointer ------------------------------ */
 
@@ -178,6 +200,23 @@ describe("reduceA2uiMessages", () => {
     expect(surface?.supported).toBe(true);
   });
 
+  it("marks installed catalogs unsupported when their plugin is disabled", () => {
+    const enabledCatalogIds = catalogIdsForPluginKeys(["basic"]);
+    const [surface] = reduceA2uiMessages(
+      [
+        {
+          version: "v0.9.1",
+          createSurface: {
+            surfaceId: "s1",
+            catalogId: A2UI_CHARTS_CATALOG_ID,
+          },
+        },
+      ],
+      enabledCatalogIds,
+    );
+    expect(surface?.supported).toBe(false);
+  });
+
   it("deleteSurface removes the surface; stray updates are ignored", () => {
     const surfaces = reduceA2uiMessages([
       createSurface(),
@@ -219,6 +258,25 @@ describe("reduceA2uiMessages", () => {
     ]);
     expect(surface?.dataOps).toHaveLength(0);
     expect(surface?.dataModel).toEqual({});
+  });
+});
+
+describe("A2UI catalog plugins", () => {
+  it("registers Basic and Charts through the same manifest", () => {
+    expect(A2UI_CATALOG_PLUGINS.map((plugin) => plugin.key)).toEqual([
+      "basic",
+      "charts",
+    ]);
+    expect(catalogIdsForPluginKeys(A2UI_DEFAULT_ENABLED_PLUGIN_KEYS)).toEqual(
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+  });
+
+  it("normalizes enabled keys against installed plugins", () => {
+    expect(
+      normalizeA2uiCatalogPluginKeys(["charts", "missing", "charts"]),
+    ).toEqual(["charts"]);
+    expect(normalizeA2uiCatalogPluginKeys(undefined)).toEqual([]);
   });
 });
 
@@ -628,6 +686,6 @@ describe("charts catalog contract", () => {
     expect(A2UI_CHARTS_CATALOG_ID).toBe(
       "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json",
     );
-    expect(A2UI_SUPPORTED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
+    expect(A2UI_INSTALLED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
   });
 });

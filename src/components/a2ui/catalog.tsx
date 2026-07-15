@@ -100,8 +100,6 @@ import { Slider } from "~/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import {
-  A2UI_BASIC_CATALOG_IDS,
-  A2UI_CHARTS_CATALOG_ID,
   type A2uiComponent,
   failedChecks,
   pointerGet,
@@ -110,6 +108,7 @@ import {
   resolveString,
   toDisplayString,
 } from "~/lib/a2ui";
+import { A2UI_CATALOG_PLUGINS } from "~/lib/a2ui-catalog-plugins";
 import { cn } from "~/lib/utils";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -144,7 +143,7 @@ export function CatalogNode({ id, base }: { id: string; base: string }) {
   // until the component arrives.
   if (!component) return null;
 
-  const View = catalogComponentViews(surface.catalogId)[component.component];
+  const View = catalogComponentViews(surface.catalogId)?.[component.component];
   if (!View) {
     /* Unknown component within a supported catalog: a safe, labeled
      * placeholder — never guessed rendering, never executed content. */
@@ -1045,20 +1044,28 @@ const chartsComponentViews: A2uiComponentViews = {
 };
 
 /**
- * The renderer registry: catalogId -> component views. Built directly from
- * the supported-catalog constants in ~/lib/a2ui so the advertised IDs and
- * the renderers cannot drift apart.
+ * Trusted renderer plugins installed in this build. Plugin manifests and
+ * renderers use the same keys so built-in and external plugins share one path.
  */
-const catalogViews: Record<string, A2uiComponentViews> = Object.fromEntries([
-  ...A2UI_BASIC_CATALOG_IDS.map((id) => [id, basicComponentViews] as const),
-  [A2UI_CHARTS_CATALOG_ID, chartsComponentViews] as const,
-]);
+const pluginViews: Record<string, A2uiComponentViews> = {
+  basic: basicComponentViews,
+  charts: chartsComponentViews,
+};
+
+const catalogViews: Record<string, A2uiComponentViews> = Object.fromEntries(
+  A2UI_CATALOG_PLUGINS.flatMap((plugin) => {
+    const views = pluginViews[plugin.key];
+    if (!views) throw new Error(`Missing A2UI renderer plugin: ${plugin.key}`);
+    return plugin.catalogIds.map((catalogId) => [catalogId, views] as const);
+  }),
+);
 
 /**
- * Resolves the component views for a catalog. Unknown catalogs fall back to
- * the Basic Catalog views: surfaces with unsupported catalogs never reach
- * `CatalogNode` (they degrade to the text fallback), so this is defensive.
+ * Resolves the component views for an installed catalog. Unknown catalogs
+ * fail closed even if a stale surface is accidentally passed to CatalogNode.
  */
-export function catalogComponentViews(catalogId: string): A2uiComponentViews {
-  return catalogViews[catalogId] ?? basicComponentViews;
+export function catalogComponentViews(
+  catalogId: string,
+): A2uiComponentViews | undefined {
+  return catalogViews[catalogId];
 }
