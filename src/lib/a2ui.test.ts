@@ -32,7 +32,6 @@ import {
   normalizeA2uiCatalogPluginKeys,
 } from "~/lib/a2ui-catalog-plugins";
 import type { ContentPart, MessageItem } from "~/lib/openresponses";
-import chartsCatalog from "../../catalogs/charts/v1/catalog.json";
 
 const BASIC_CATALOG =
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json";
@@ -581,18 +580,10 @@ describe("extractA2uiResources", () => {
 /* --------------------------- charts catalog contract ----------------------- */
 
 describe("charts catalog contract", () => {
-  it("publishes the contract under the advertised catalog ID", () => {
-    expect(chartsCatalog.$id).toBe(A2UI_CHARTS_CATALOG_ID);
-    expect(chartsCatalog.catalogId).toBe(A2UI_CHARTS_CATALOG_ID);
+  it("advertises the independently owned catalog ID", () => {
+    expect(A2UI_CHARTS_CATALOG_ID).toBe(
+      "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json",
+    );
     expect(A2UI_SUPPORTED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
-  });
-
-  it("extends the Basic Catalog with exactly Chart and Stat (leaf components)", () => {
-    expect(Object.keys(chartsCatalog.components)).toEqual(["Chart", "Stat"]);
-    /* Leaves only: adding container components would be a breaking change
-     * for existing renderers, so the contract must not grow any. */
-    const componentJson = JSON.stringify(chartsCatalog.components);
-    expect(componentJson).not.toContain('"children"');
-    expect(componentJson).not.toContain('"child"');
   });
 });
