@@ -16,7 +16,11 @@
  * by the browser, the server, and tests.
  */
 
-import type { ContentPart, MessageItem } from "~/lib/openresponses";
+import type {
+  A2uiPresentationItem,
+  ContentPart,
+  MessageItem,
+} from "~/lib/openresponses";
 
 export {
   A2UI_BASIC_CATALOG_IDS,
@@ -822,6 +826,34 @@ export function extractA2uiResources(
 export interface A2uiOutputRef {
   callId: string;
   output: string | ContentPart[] | null | undefined;
+}
+
+/** Converts a valid presentation sidecar into ordinary reducer input. */
+export function a2uiPresentationOutput(
+  item: A2uiPresentationItem,
+): A2uiOutputRef | null {
+  if (
+    item.status !== "completed" ||
+    item.mime_type !== A2UI_MIME_TYPE ||
+    !item.call_id ||
+    !item.uri ||
+    !isA2uiMessageArray(item.messages)
+  ) {
+    return null;
+  }
+  const output: ContentPart[] = [];
+  if (item.fallback_text) {
+    output.push({ type: "output_text", text: item.fallback_text });
+  }
+  output.push({
+    type: "resource",
+    resource: {
+      uri: item.uri,
+      mimeType: item.mime_type,
+      text: JSON.stringify(item.messages),
+    },
+  } as ContentPart);
+  return { callId: item.call_id, output };
 }
 
 /** The A2UI state a host should render at one tool call. */

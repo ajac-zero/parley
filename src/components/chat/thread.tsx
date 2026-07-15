@@ -18,12 +18,13 @@ import {
 import type { ConversationDetail } from "~/functions/conversations";
 import type { A2uiCallSurfaces } from "~/lib/a2ui";
 import type { ActiveTurn } from "~/lib/chat-store";
-import type {
-  FunctionCallItem,
-  FunctionCallOutputItem,
-  MessageItem,
-  ORItem,
-  ReasoningItem,
+import {
+  A2UI_ITEM_TYPE,
+  type FunctionCallItem,
+  type FunctionCallOutputItem,
+  type MessageItem,
+  type ORItem,
+  type ReasoningItem,
 } from "~/lib/openresponses";
 
 export interface ThreadEntry {
@@ -322,6 +323,11 @@ export const Thread = memo(function Thread({
 
           if (item.type === "function_call_output") {
             // Rendered inline with its call.
+            return <Fragment key={entry.key} />;
+          }
+
+          if (item.type === A2UI_ITEM_TYPE) {
+            // Derived presentation rendered inline with its linked call.
             return <Fragment key={entry.key} />;
           }
 

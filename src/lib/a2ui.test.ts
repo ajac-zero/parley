@@ -8,6 +8,7 @@ import {
   A2UI_MIME_TYPE,
   type A2uiMessage,
   type A2uiOutputRef,
+  a2uiPresentationOutput,
   applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
@@ -31,7 +32,11 @@ import {
   catalogIdsForPluginKeys,
   normalizeA2uiCatalogPluginKeys,
 } from "~/lib/a2ui-catalog-plugins";
-import type { ContentPart, MessageItem } from "~/lib/openresponses";
+import type {
+  A2uiPresentationItem,
+  ContentPart,
+  MessageItem,
+} from "~/lib/openresponses";
 
 const BASIC_CATALOG =
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json";
@@ -676,6 +681,49 @@ describe("extractA2uiResources", () => {
       maximumFractionDigits: 1,
       includeZero: true,
     });
+  });
+
+  it("reduces a linked A2UI presentation sidecar", () => {
+    const item: A2uiPresentationItem = {
+      type: "ajac-zero:a2ui",
+      id: "a2ui_fixture",
+      status: "completed",
+      call_id: "call_solve",
+      mime_type: A2UI_MIME_TYPE,
+      uri: "a2ui://example/results",
+      fallback_text: "Calculation completed.",
+      messages: [
+        createSurface("results"),
+        {
+          updateComponents: {
+            surfaceId: "results",
+            components: [{ id: "root", component: "Text", text: "Results" }],
+          },
+        },
+      ],
+    };
+
+    const output = a2uiPresentationOutput(item);
+    expect(output?.callId).toBe("call_solve");
+    const reduced = reduceA2uiOutputs(output ? [output] : []);
+    expect(reduced.get("call_solve")?.fallbackText).toBe(
+      "Calculation completed.",
+    );
+    expect(reduced.get("call_solve")?.surfaces[0]?.surfaceId).toBe("results");
+  });
+
+  it("ignores invalid A2UI presentation sidecars", () => {
+    const item: A2uiPresentationItem = {
+      type: "ajac-zero:a2ui",
+      id: "a2ui_invalid",
+      status: "completed",
+      call_id: "call_solve",
+      mime_type: A2UI_MIME_TYPE,
+      uri: "a2ui://example/results",
+      messages: [],
+    };
+
+    expect(a2uiPresentationOutput(item)).toBeNull();
   });
 });
 
