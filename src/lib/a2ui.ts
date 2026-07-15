@@ -871,9 +871,16 @@ function surfaceIdsInMessage(message: A2uiMessage): Set<string> {
   return ids;
 }
 
+/** The `surfaceId` a message's `createSurface` (re)establishes, if any. */
+function createdSurfaceIdInMessage(message: A2uiMessage): string | null {
+  const record = asRecord(message);
+  const body = record && asRecord(record.createSurface);
+  return body && typeof body.surfaceId === "string" ? body.surfaceId : null;
+}
+
 /**
  * Rebuilds a canonical `function_call_output`'s A2UI content, dropping only
- * the messages that touch a surface covered by its linked sidecar.
+ * the messages that touch a surface a linked sidecar recreates outright.
  * Messages for any other surface — and any non-A2UI content — pass through.
  * Handles all three encodings `extractA2uiResources` accepts (embedded
  * resource parts, a CallToolResult JSON string, or a bare message array).
@@ -925,29 +932,36 @@ function canonicalPartsExcludingSurfaces(
  *     sidecar over time, and the extension contract requires all of them
  *     to be reduced in trajectory order, same as any other message source.
  *  2. When a call has *both* a canonical embedded-resource form and a
- *     linked presentation sidecar, the sidecar is authoritative only for
- *     the surfaces it actually describes. Canonical messages/resources for
- *     any other surface on that same call — including surfaces the
- *     canonical output creates or updates that no sidecar mentions — are
- *     preserved, not dropped wholesale.
+ *     linked presentation sidecar that *recreates* a surface (its own
+ *     `createSurface`), the sidecar is authoritative for that surface: the
+ *     canonical form's messages for it are dropped instead of being fed to
+ *     the reducer alongside them, which would conflict on the surface's
+ *     state. An update-only sidecar (no `createSurface` of its own) is
+ *     incremental, not a replacement — it depends on the canonical output's
+ *     own `createSurface` still having run, so that setup (and everything
+ *     else about the canonical output, including other surfaces entirely)
+ *     is preserved and simply reduced before the sidecar's update, in
+ *     trajectory order like any other pair of writes to a shared surface.
  */
 export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
-  // Union, per call_id, of every surface described by *any* valid sidecar
-  // linked to that call — regardless of where in the trajectory the
-  // sidecar(s) fall. The canonical form never competes with its own
-  // sidecars for a surface; it's the canonical form's messages for surfaces
-  // no sidecar describes that must survive.
-  const sidecarSurfaceIdsByCall = new Map<string, Set<string>>();
+  // Union, per call_id, of every surface a valid sidecar linked to that
+  // call *recreates* (carries its own createSurface for) — regardless of
+  // where in the trajectory the sidecar(s) fall. Only these surfaces are
+  // ones the sidecar fully replaces; a sidecar that merely references a
+  // surface incrementally must not suppress the canonical setup it relies
+  // on.
+  const recreatedSurfaceIdsByCall = new Map<string, Set<string>>();
   for (const item of items) {
     if (item.type !== A2UI_ITEM_TYPE) continue;
     const presentation = item as A2uiPresentationItem;
     if (!a2uiPresentationOutput(presentation)) continue;
     const ids =
-      sidecarSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
+      recreatedSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
     for (const message of presentation.messages as A2uiMessage[]) {
-      for (const id of surfaceIdsInMessage(message)) ids.add(id);
+      const created = createdSurfaceIdInMessage(message);
+      if (created) ids.add(created);
     }
-    sidecarSurfaceIdsByCall.set(presentation.call_id, ids);
+    recreatedSurfaceIdsByCall.set(presentation.call_id, ids);
   }
 
   const outputs: A2uiOutputRef[] = [];
@@ -955,7 +969,7 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
     if (item.type === "function_call_output") {
       const call = item as FunctionCallOutputItem;
       if (!call.call_id) continue;
-      const overlap = sidecarSurfaceIdsByCall.get(call.call_id);
+      const overlap = recreatedSurfaceIdsByCall.get(call.call_id);
       const output =
         overlap && overlap.size > 0
           ? canonicalPartsExcludingSurfaces(call.output, overlap)

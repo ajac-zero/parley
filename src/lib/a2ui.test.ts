@@ -1060,6 +1060,44 @@ describe("collectA2uiOutputs", () => {
     // The second sidecar is genuinely last in the trajectory, so it wins.
     expect(surface?.components.root?.text).toBe("second");
   });
+
+  it("preserves a canonical createSurface an update-only sidecar depends on", () => {
+    // The sidecar has no createSurface of its own — it's an incremental
+    // update to the surface the canonical output created. Dropping the
+    // canonical createSurface (because the surface is "covered" by a
+    // sidecar) would leave the update with no surface to apply to.
+    const items: ORItem[] = [
+      {
+        type: "function_call_output",
+        call_id: "call1",
+        output: JSON.stringify([createSurface("s1")]),
+      } as FunctionCallOutputItem,
+      {
+        type: "ajac-zero:a2ui",
+        id: "a2ui_call1",
+        status: "completed",
+        call_id: "call1",
+        mime_type: A2UI_MIME_TYPE,
+        uri: "a2ui://example/call1/s1",
+        messages: [
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "note" }],
+            },
+          },
+        ],
+      } as A2uiPresentationItem,
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    const reduced = reduceA2uiOutputs(outputs);
+    const surface = reduced.get("call1")?.surfaces[0];
+    // Surface must exist at all (canonical createSurface preserved) and
+    // carry the sidecar's incremental update.
+    expect(surface?.surfaceId).toBe("s1");
+    expect(surface?.components.root?.text).toBe("note");
+  });
 });
 
 /* --------------------------- charts catalog contract ----------------------- */
