@@ -576,7 +576,7 @@ describe("extractA2uiResources", () => {
             report: {
               stats: { convergence: 1, cells: 16, residual: 0, iterations: 3 },
               ventas: [{ period: "2026", after: 100 }],
-              uafirdaMargin: [{ period: "2026", after: 20 }],
+              uafirdaMargin: [{ period: "2026", after: 0.2 }],
               uafirdaAbsolute: [{ period: "2026", after: 50 }],
             },
           },

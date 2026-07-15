@@ -18,6 +18,7 @@
  */
 
 import { TrendingDown, TrendingUp } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
@@ -135,7 +136,7 @@ interface YAxisSpec {
   includeZero: boolean;
 }
 
-function parseYAxis(value: unknown): YAxisSpec | null {
+export function parseYAxis(value: unknown): YAxisSpec | null {
   const record = asRecord(value);
   if (!record) return null;
   const digits = toNumber(record.maximumFractionDigits);
@@ -155,7 +156,7 @@ function parseYAxis(value: unknown): YAxisSpec | null {
   };
 }
 
-function formatChartValue(value: number, spec: YAxisSpec): string {
+export function formatChartValue(value: number, spec: YAxisSpec): string {
   try {
     return new Intl.NumberFormat(undefined, {
       style:
@@ -369,7 +370,7 @@ export function ChartView({ component, base }: ViewProps) {
       tickLine={false}
       axisLine={false}
       tickMargin={8}
-      width={64}
+      width={yAxisSpec.format === "currency" ? 88 : 64}
       domain={
         yAxisSpec.includeZero
           ? [
@@ -399,18 +400,33 @@ export function ChartView({ component, base }: ViewProps) {
           indicator="dot"
           formatter={
             yAxisSpec
-              ? (value, name) => (
-                  <div className="flex flex-1 items-center justify-between gap-4">
-                    <span className="text-muted-foreground">
-                      {config[String(name)]?.label ?? String(name)}
-                    </span>
-                    <span className="font-mono font-medium text-foreground tabular-nums">
-                      {typeof value === "number"
-                        ? formatChartValue(value, yAxisSpec)
-                        : String(value)}
-                    </span>
-                  </div>
-                )
+              ? (value, name) => {
+                  const key = String(name);
+                  const indicatorColor = config[key]?.color;
+                  return (
+                    <>
+                      <div
+                        className="h-2.5 w-2.5 shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)"
+                        style={
+                          {
+                            "--color-bg": indicatorColor,
+                            "--color-border": indicatorColor,
+                          } as CSSProperties
+                        }
+                      />
+                      <div className="flex flex-1 items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          {config[key]?.label ?? key}
+                        </span>
+                        <span className="font-mono font-medium text-foreground tabular-nums">
+                          {typeof value === "number"
+                            ? formatChartValue(value, yAxisSpec)
+                            : String(value)}
+                        </span>
+                      </div>
+                    </>
+                  );
+                }
               : undefined
           }
         />
