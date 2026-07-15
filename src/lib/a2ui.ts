@@ -918,27 +918,36 @@ function canonicalPartsExcludingSurfaces(
  *     shared, order-sensitive state (a later call can update a surface an
  *     earlier one created), so grouping items by kind before reducing —
  *     e.g. all canonical outputs, then all sidecars — silently reorders
- *     them relative to each other and can discard newer writes.
+ *     them relative to each other and can discard newer writes. Each
+ *     sidecar is therefore kept as its own entry at its own trajectory
+ *     position — never relocated to, or merged into, its linked call's
+ *     position — and never deduplicated: a call can have more than one
+ *     sidecar over time, and the extension contract requires all of them
+ *     to be reduced in trajectory order, same as any other message source.
  *  2. When a call has *both* a canonical embedded-resource form and a
  *     linked presentation sidecar, the sidecar is authoritative only for
  *     the surfaces it actually describes. Canonical messages/resources for
  *     any other surface on that same call — including surfaces the
- *     canonical output creates or updates that the sidecar never mentions —
- *     are preserved, not dropped wholesale.
+ *     canonical output creates or updates that no sidecar mentions — are
+ *     preserved, not dropped wholesale.
  */
 export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
-  const sidecarsByCall = new Map<string, A2uiPresentationItem>();
-  const canonicalCallIds = new Set<string>();
+  // Union, per call_id, of every surface described by *any* valid sidecar
+  // linked to that call — regardless of where in the trajectory the
+  // sidecar(s) fall. The canonical form never competes with its own
+  // sidecars for a surface; it's the canonical form's messages for surfaces
+  // no sidecar describes that must survive.
+  const sidecarSurfaceIdsByCall = new Map<string, Set<string>>();
   for (const item of items) {
-    if (item.type === A2UI_ITEM_TYPE) {
-      const presentation = item as A2uiPresentationItem;
-      if (a2uiPresentationOutput(presentation)) {
-        sidecarsByCall.set(presentation.call_id, presentation);
-      }
-    } else if (item.type === "function_call_output") {
-      const call = item as FunctionCallOutputItem;
-      if (call.call_id) canonicalCallIds.add(call.call_id);
+    if (item.type !== A2UI_ITEM_TYPE) continue;
+    const presentation = item as A2uiPresentationItem;
+    if (!a2uiPresentationOutput(presentation)) continue;
+    const ids =
+      sidecarSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
+    for (const message of presentation.messages as A2uiMessage[]) {
+      for (const id of surfaceIdsInMessage(message)) ids.add(id);
     }
+    sidecarSurfaceIdsByCall.set(presentation.call_id, ids);
   }
 
   const outputs: A2uiOutputRef[] = [];
@@ -946,35 +955,14 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
     if (item.type === "function_call_output") {
       const call = item as FunctionCallOutputItem;
       if (!call.call_id) continue;
-      const sidecar = sidecarsByCall.get(call.call_id);
-      if (!sidecar) {
-        outputs.push({ callId: call.call_id, output: call.output });
-        continue;
-      }
-      const sidecarOutput = a2uiPresentationOutput(sidecar);
-      if (!sidecarOutput) {
-        outputs.push({ callId: call.call_id, output: call.output });
-        continue;
-      }
-      const sidecarSurfaceIds = new Set<string>();
-      for (const message of sidecar.messages as A2uiMessage[]) {
-        for (const id of surfaceIdsInMessage(message))
-          sidecarSurfaceIds.add(id);
-      }
-      const remainder = canonicalPartsExcludingSurfaces(
-        call.output,
-        sidecarSurfaceIds,
-      );
-      outputs.push({
-        callId: call.call_id,
-        output: [...remainder, ...(sidecarOutput.output as ContentPart[])],
-      });
+      const overlap = sidecarSurfaceIdsByCall.get(call.call_id);
+      const output =
+        overlap && overlap.size > 0
+          ? canonicalPartsExcludingSurfaces(call.output, overlap)
+          : call.output;
+      outputs.push({ callId: call.call_id, output });
     } else if (item.type === A2UI_ITEM_TYPE) {
-      const presentation = item as A2uiPresentationItem;
-      if (!sidecarsByCall.has(presentation.call_id)) continue;
-      // Merged into the canonical entry above when one exists for this call.
-      if (canonicalCallIds.has(presentation.call_id)) continue;
-      const output = a2uiPresentationOutput(presentation);
+      const output = a2uiPresentationOutput(item as A2uiPresentationItem);
       if (output) outputs.push(output);
     }
   }

@@ -848,11 +848,12 @@ describe("collectA2uiOutputs", () => {
     ];
 
     const outputs = collectA2uiOutputs(items);
-    // One merged ref for the call — the canonical embedded resource's
-    // messages for `s1` are dropped in favor of the sidecar's, not merged
-    // alongside them.
-    expect(outputs).toHaveLength(1);
-    expect(outputs[0]?.callId).toBe("call1");
+    // Both entries stay at their own trajectory position, keyed by the same
+    // call_id — but the canonical entry's messages for `s1` are dropped
+    // since the sidecar describes that surface too, so only the sidecar's
+    // version survives the reduction.
+    expect(outputs).toHaveLength(2);
+    expect(outputs.every((output) => output.callId === "call1")).toBe(true);
 
     const reduced = reduceA2uiOutputs(outputs);
     expect(reduced.get("call1")?.surfaces[0]?.components.root?.text).toBe(
@@ -958,6 +959,106 @@ describe("collectA2uiOutputs", () => {
     const reduced = reduceA2uiOutputs(outputs);
     const s0 = reduced.get("call0")?.surfaces[0];
     expect(s0?.components.root?.text).toBe("s0 updated");
+  });
+
+  it("keeps a sidecar at its true trajectory position, even after an intervening call", () => {
+    // Real trajectory: call1 creates s1, call2 updates s1, then call1's
+    // sidecar (emitted later) recreates s1. Since the sidecar is genuinely
+    // last, it must win — relocating it to call1's position (right after
+    // call1's own canonical output) would let call2's update win instead.
+    const items: ORItem[] = [
+      {
+        type: "function_call_output",
+        call_id: "call1",
+        output: JSON.stringify([createSurface("s1")]),
+      } as FunctionCallOutputItem,
+      {
+        type: "function_call_output",
+        call_id: "call2",
+        output: JSON.stringify([
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [
+                { id: "root", component: "Text", text: "from call2" },
+              ],
+            },
+          },
+        ]),
+      } as FunctionCallOutputItem,
+      {
+        type: "ajac-zero:a2ui",
+        id: "a2ui_call1_late",
+        status: "completed",
+        call_id: "call1",
+        mime_type: A2UI_MIME_TYPE,
+        uri: "a2ui://example/call1/s1",
+        messages: [createSurface("s1")],
+      } as A2uiPresentationItem,
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    const reduced = reduceA2uiOutputs(outputs);
+    const surface = reduced.get("call1")?.surfaces[0];
+    // The late sidecar's createSurface really was last, so it wins and the
+    // component from call2's update is gone (matching the true trajectory,
+    // not a repositioned one).
+    expect(surface?.components.root).toBeUndefined();
+  });
+
+  it("preserves multiple sidecars for one call, each reduced in its own trajectory position", () => {
+    const items: ORItem[] = [
+      {
+        type: "function_call_output",
+        call_id: "call1",
+        output: JSON.stringify([createSurface("s1")]),
+      } as FunctionCallOutputItem,
+      {
+        type: "ajac-zero:a2ui",
+        id: "a2ui_call1_first",
+        status: "completed",
+        call_id: "call1",
+        mime_type: A2UI_MIME_TYPE,
+        uri: "a2ui://example/call1/s1",
+        messages: [
+          createSurface("s1"),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "first" }],
+            },
+          },
+        ],
+      } as A2uiPresentationItem,
+      {
+        type: "ajac-zero:a2ui",
+        id: "a2ui_call1_second",
+        status: "completed",
+        call_id: "call1",
+        mime_type: A2UI_MIME_TYPE,
+        uri: "a2ui://example/call1/s1",
+        messages: [
+          createSurface("s1"),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "second" }],
+            },
+          },
+        ],
+      } as A2uiPresentationItem,
+    ];
+
+    const outputs = collectA2uiOutputs(items);
+    // Neither sidecar is dropped or deduplicated — both contribute.
+    expect(outputs.filter((output) => output.callId === "call1")).toHaveLength(
+      3,
+    );
+
+    const reduced = reduceA2uiOutputs(outputs);
+    const surface = reduced.get("call1")?.surfaces[0];
+    // The second sidecar is genuinely last in the trajectory, so it wins.
+    expect(surface?.components.root?.text).toBe("second");
   });
 });
 
