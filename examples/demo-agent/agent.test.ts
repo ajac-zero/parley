@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
+  A2UI_SUPPORTED_CATALOG_IDS,
+  type A2uiMessage,
+  type A2uiOutputRef,
   extractA2uiResources,
   pointerGet,
-  reduceA2uiMessages,
-  reduceA2uiOutputs,
+  reduceA2uiMessages as reduceA2uiMessagesStrict,
+  reduceA2uiOutputs as reduceA2uiOutputsStrict,
 } from "~/lib/a2ui";
 import {
   type FunctionCallOutputItem,
@@ -17,6 +20,15 @@ import {
 } from "~/lib/openresponses";
 import { parseSseStream, SSE_DONE } from "~/lib/sse";
 import { handleDemoResponses } from "./agent";
+
+/* Production callers must pass the deployment's *enabled* catalog set
+ * explicitly (the parameter is required so admin enablement can't be
+ * bypassed by omission). The demo agent exercises every installed catalog. */
+const reduceA2uiMessages = (messages: A2uiMessage[]) =>
+  reduceA2uiMessagesStrict(messages, A2UI_SUPPORTED_CATALOG_IDS);
+
+const reduceA2uiOutputs = (outputs: A2uiOutputRef[]) =>
+  reduceA2uiOutputsStrict(outputs, A2UI_SUPPORTED_CATALOG_IDS);
 
 const request = (body: unknown) =>
   new Request("http://demo.local/v1/responses", {

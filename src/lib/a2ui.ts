@@ -236,10 +236,15 @@ const messageVersionSupported = (message: A2uiMessage): boolean =>
  * design: malformed messages are skipped (log-and-continue per spec), and
  * surfaces with unsupported catalogs/versions are kept but marked
  * unsupported so the renderer can degrade to the text fallback.
+ *
+ * `enabledCatalogIds` is deliberately required: it is the deployment's
+ * *enabled* set (admin settings), not the build's *installed* set. A default
+ * of `A2UI_SUPPORTED_CATALOG_IDS` would silently bypass admin enablement for
+ * any caller that forgets the argument.
  */
 export function reduceA2uiMessages(
   messages: A2uiMessage[],
-  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+  enabledCatalogIds: readonly string[],
 ): A2uiSurface[] {
   const surfaces = new Map<string, A2uiSurface>();
   const enabledCatalogs = new Set(enabledCatalogIds);
@@ -844,10 +849,14 @@ export interface A2uiCallSurfaces {
  * surviving surface is anchored to — and should be rendered at — the output
  * containing its latest `createSurface`; outputs that merely update an
  * existing surface render nothing themselves.
+ *
+ * `enabledCatalogIds` is required for the same reason as in
+ * `reduceA2uiMessages`: enabled (admin settings) must never silently default
+ * to installed (build manifest).
  */
 export function reduceA2uiOutputs(
   outputs: A2uiOutputRef[],
-  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+  enabledCatalogIds: readonly string[],
 ): Map<string, A2uiCallSurfaces> {
   interface CallScan {
     callId: string;

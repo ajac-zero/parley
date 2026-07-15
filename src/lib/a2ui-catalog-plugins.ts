@@ -10,6 +10,11 @@ export interface A2uiCatalogPluginManifest {
   name: string;
   description: string;
   catalogIds: readonly string[];
+  /**
+   * Enabled on fresh installs only. Once a deployment has persisted its
+   * enabled keys, a later build shipping a new `defaultEnabled: true` plugin
+   * stays disabled there until an admin turns it on (fail closed).
+   */
   defaultEnabled: boolean;
   builtin: boolean;
 }

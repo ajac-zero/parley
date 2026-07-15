@@ -211,6 +211,19 @@ function CatalogsTab() {
   );
 }
 
+/**
+ * Catalog IDs are opaque identifiers agreed out-of-band; they merely tend to
+ * look like URLs. Only offer "open" when one is actually navigable.
+ */
+function isNavigableUrl(catalogId: string): boolean {
+  try {
+    const url = new URL(catalogId);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function CatalogIdRow({ catalogId }: { catalogId: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -229,17 +242,19 @@ function CatalogIdRow({ catalogId }: { catalogId: string }) {
       <span className="min-w-0 flex-1 select-all break-all px-1 py-0.5 font-mono text-xs">
         {catalogId}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Open catalog ID"
-        asChild
-      >
-        <a href={catalogId} target="_blank" rel="noreferrer noopener">
-          <ExternalLink />
-        </a>
-      </Button>
+      {isNavigableUrl(catalogId) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Open catalog ID"
+          asChild
+        >
+          <a href={catalogId} target="_blank" rel="noreferrer noopener">
+            <ExternalLink />
+          </a>
+        </Button>
+      )}
       <Button
         type="button"
         variant="ghost"

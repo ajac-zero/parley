@@ -25,6 +25,12 @@ export const defaultSettings = (): RuntimeSettings => ({
   enabledA2uiCatalogPluginKeys: [...A2UI_DEFAULT_ENABLED_PLUGIN_KEYS],
 });
 
+/**
+ * Note: applying this on the write path is destructive by design — persisting
+ * a save while a plugin is uninstalled from the build drops its key from the
+ * DB, so reinstalling won't restore prior enablement (the admin re-enables
+ * it). We accept that over keeping unrecognized keys around indefinitely.
+ */
 const normalizeSettings = (settings: RuntimeSettings): RuntimeSettings => ({
   ...settings,
   enabledA2uiCatalogPluginKeys: normalizeA2uiCatalogPluginKeys(

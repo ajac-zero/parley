@@ -6,6 +6,8 @@ import {
   A2UI_CHARTS_CATALOG_ID,
   A2UI_MIME_TYPE,
   A2UI_SUPPORTED_CATALOG_IDS,
+  type A2uiMessage,
+  type A2uiOutputRef,
   applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
@@ -17,8 +19,8 @@ import {
   pointerDelete,
   pointerGet,
   pointerSet,
-  reduceA2uiMessages,
-  reduceA2uiOutputs,
+  reduceA2uiMessages as reduceA2uiMessagesStrict,
+  reduceA2uiOutputs as reduceA2uiOutputsStrict,
   resolveDynamic,
   resolvePath,
   summarizeA2uiAction,
@@ -34,6 +36,20 @@ import chartsCatalog from "../../catalogs/charts/v1/catalog.json";
 
 const BASIC_CATALOG =
   "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json";
+
+/* Production callers must pass the deployment's *enabled* catalog set
+ * explicitly (the parameter is required so admin enablement can't be
+ * bypassed by omission). Tests default to every installed catalog unless
+ * the case under test says otherwise. */
+const reduceA2uiMessages = (
+  messages: A2uiMessage[],
+  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+) => reduceA2uiMessagesStrict(messages, enabledCatalogIds);
+
+const reduceA2uiOutputs = (
+  outputs: A2uiOutputRef[],
+  enabledCatalogIds: readonly string[] = A2UI_SUPPORTED_CATALOG_IDS,
+) => reduceA2uiOutputsStrict(outputs, enabledCatalogIds);
 
 /* ------------------------------ JSON Pointer ------------------------------ */
 
