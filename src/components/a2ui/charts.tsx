@@ -1,6 +1,6 @@
 /**
  * Native views for Parley's first-party charts catalog
- * (catalogs/charts/v1/catalog.json): the A2UI Basic Catalog plus two leaf
+ * (ajac-zero/a2ui-catalogs, charts/v1): the A2UI Basic Catalog plus two leaf
  * components — `Chart` (line/bar/area over data-model rows, with optional
  * point/range selection written back through two-way binding) and `Stat`
  * (a labeled headline number with an optional delta).

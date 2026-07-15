@@ -2,7 +2,7 @@
 
 const A2UI_MIME_TYPE = "application/a2ui+json";
 const A2UI_CHARTS_CATALOG_ID =
-  "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
+  "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json";
 
 type ContentPart = Record<string, unknown> & { type: string };
 type ORItem = Record<string, unknown> & { type: string };

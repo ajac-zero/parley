@@ -37,12 +37,12 @@ export const A2UI_BASIC_CATALOG_IDS: readonly string[] = [
 ];
 
 /**
- * Parley's built-in charts catalog: the Basic Catalog plus `Chart` and `Stat`
- * leaf components. The ID names the published contract in
- * catalogs/charts/v1/catalog.json — it is never fetched at runtime.
+ * Built-in renderer support for the ajac-zero charts catalog: the Basic
+ * Catalog plus `Chart` and `Stat` leaf components. The independently owned
+ * contract is never fetched at runtime.
  */
 export const A2UI_CHARTS_CATALOG_ID =
-  "https://github.com/ajac-zero/parley/blob/main/catalogs/charts/v1/catalog.json";
+  "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json";
 
 /** Catalog IDs Parley fully supports (and advertises). */
 export const A2UI_SUPPORTED_CATALOG_IDS: readonly string[] = [

@@ -102,9 +102,10 @@ catalog is a contract (a standalone JSON Schema) plus trusted renderer
 implementations on the host; receiving an unknown catalog must not cause
 Parley to download or execute anything.
 
-Parley ships one first-party custom catalog: the charts catalog
-(`catalogs/charts/v1/catalog.json`), which composes the official Basic
-Catalog v0.9.1 with two leaf components — `Chart` (line/bar/area series
+Parley ships a renderer for the independently owned
+[ajac-zero Charts v1 catalog](https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json),
+which composes the official Basic Catalog v0.9.1 with two leaf components —
+`Chart` (line/bar/area series
 over data-model rows, with optional point/range selection written back
 through two-way binding) and `Stat` (a labeled headline number with an
 optional delta). Because both extensions are leaves, every Basic Catalog
@@ -114,11 +115,10 @@ versioned catalog ID.
 
 How it works today:
 
-- Contract: the schema's `$id` is the catalog ID
+- Contract: the external schema's `$id` is the catalog ID
   (`A2UI_CHARTS_CATALOG_ID` in `src/lib/a2ui.ts`). Catalog IDs are opaque,
   versioned identifiers agreed out-of-band — never fetched at runtime; the
-  published file documents the contract for tool authors, and a test keeps
-  it in lockstep with the advertised ID.
+  independently published file documents the contract for tool authors.
 - Rendering: a registry in `src/components/a2ui/catalog.tsx` maps each
   supported `catalogId` to its component views. The charts views
   (`src/components/a2ui/charts.tsx`) lazy-load so the charting library
