@@ -157,7 +157,7 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   return (
     <A2uiSurfaceContext.Provider value={contextValue}>
       <div
-        className="group/surface relative w-full max-w-lg"
+        className="group/surface relative w-full max-w-2xl"
         data-a2ui-surface={surface.surfaceId}
       >
         {/* Pin affordance only: a pinned surface renders in the canvas,
@@ -187,7 +187,7 @@ function UnsupportedSurface({
   fallbackText: string | null;
 }) {
   return (
-    <div className="w-full max-w-lg rounded-xl border border-dashed bg-card/50 px-4 py-3">
+    <div className="w-full max-w-2xl rounded-xl border border-dashed bg-card/50 px-4 py-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <LayoutDashboard className="size-3.5" />
         This tool returned an interactive UI

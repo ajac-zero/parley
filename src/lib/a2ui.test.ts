@@ -620,7 +620,6 @@ describe("extractA2uiResources", () => {
       includeZero: true,
     });
   });
-
 });
 
 /* --------------------------- charts catalog contract ----------------------- */
