@@ -18,6 +18,8 @@ export const RuntimeSettingsSchema = Schema.Struct({
   /** Extra CSS injected globally — paste a tweakcn/shadcn theme here. */
   customCss: Schema.NullOr(Schema.String.pipe(Schema.maxLength(100_000))),
   chatDisclaimer: Schema.NullOr(Schema.String.pipe(Schema.maxLength(500))),
+  /** Trusted catalog plugins enabled for this deployment. */
+  enabledA2uiCatalogPluginKeys: Schema.Array(Schema.String),
 });
 
 export type RuntimeSettings = typeof RuntimeSettingsSchema.Type;

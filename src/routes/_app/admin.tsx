@@ -1,9 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { Check, Copy, ExternalLink, Link2, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +35,7 @@ import {
   setUserRole,
   updateSettings,
 } from "~/functions/admin";
+import { A2UI_CATALOG_PLUGINS } from "~/lib/a2ui-catalog-plugins";
 import { adminSettingsQuery, agentsQuery, usersQuery } from "~/lib/queries";
 import { cn } from "~/lib/utils";
 
@@ -39,7 +48,7 @@ export const Route = createFileRoute("/_app/admin")({
   component: AdminPage,
 });
 
-type Tab = "branding" | "users";
+type Tab = "branding" | "catalogs" | "users";
 
 function AdminPage() {
   const [tab, setTab] = useState<Tab>("branding");
@@ -56,6 +65,7 @@ function AdminPage() {
           {(
             [
               ["branding", "Branding & access"],
+              ["catalogs", "Catalogs"],
               ["users", "Members"],
             ] as const
           ).map(([value, label]) => (
@@ -76,10 +86,185 @@ function AdminPage() {
         </div>
 
         <div className="pt-8">
-          {tab === "branding" ? <BrandingTab /> : <UsersTab />}
+          {tab === "branding" ? (
+            <BrandingTab />
+          ) : tab === "catalogs" ? (
+            <CatalogsTab />
+          ) : (
+            <UsersTab />
+          )}
         </div>
       </div>
     </main>
+  );
+}
+
+/* -------------------------------- catalogs ------------------------------- */
+
+function CatalogsTab() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery(adminSettingsQuery());
+  const [enabled, setEnabled] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (settings) setEnabled([...settings.enabledA2uiCatalogPluginKeys]);
+  }, [settings]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      updateSettings({ data: { enabledA2uiCatalogPluginKeys: enabled } }),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      await router.invalidate();
+      toast.success("Catalog settings saved.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-medium text-lg">Installed catalog plugins</h2>
+        <p className="mt-1 text-muted-foreground text-sm">
+          These trusted renderers are installed in this Parley build. Disabling
+          one falls back to the tool's text response instead of rendering its
+          UI.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {A2UI_CATALOG_PLUGINS.map((plugin) => {
+          const checked = enabled.includes(plugin.key);
+          return (
+            <div
+              key={plugin.key}
+              className="flex items-center justify-between gap-4 rounded-xl border p-4 text-sm"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 font-medium">
+                  {plugin.name}
+                  {plugin.builtin && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground text-xs">
+                      Built in
+                    </span>
+                  )}
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground"
+                      >
+                        <Link2 />
+                        Catalog ID
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {plugin.name} ID
+                          {plugin.catalogIds.length === 1 ? "" : "s"}
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">
+                          Catalog ID{plugin.catalogIds.length === 1 ? "" : "s"}{" "}
+                          for {plugin.name}.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-2">
+                        {plugin.catalogIds.map((catalogId) => (
+                          <CatalogIdRow key={catalogId} catalogId={catalogId} />
+                        ))}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <p className="mt-0.5 text-muted-foreground">
+                  {plugin.description}
+                </p>
+              </div>
+              <Switch
+                aria-label={`${checked ? "Disable" : "Enable"} ${plugin.name}`}
+                checked={checked}
+                onCheckedChange={(next) =>
+                  setEnabled((current) =>
+                    next
+                      ? [...new Set([...current, plugin.key])]
+                      : current.filter((key) => key !== plugin.key),
+                  )
+                }
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <Button
+        type="button"
+        disabled={!settings || mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? "Saving…" : "Save catalogs"}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Catalog IDs are opaque identifiers agreed out-of-band; they merely tend to
+ * look like URLs. Only offer "open" when one is actually navigable.
+ */
+function isNavigableUrl(catalogId: string): boolean {
+  try {
+    const url = new URL(catalogId);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function CatalogIdRow({ catalogId }: { catalogId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(catalogId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy the catalog ID.");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2">
+      <span className="min-w-0 flex-1 select-all break-all px-1 py-0.5 font-mono text-xs">
+        {catalogId}
+      </span>
+      {isNavigableUrl(catalogId) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Open catalog ID"
+          asChild
+        >
+          <a href={catalogId} target="_blank" rel="noreferrer noopener">
+            <ExternalLink />
+          </a>
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={copied ? "Catalog ID copied" : "Copy catalog ID"}
+        onClick={copy}
+      >
+        {copied ? <Check /> : <Copy />}
+      </Button>
+    </div>
   );
 }
 
