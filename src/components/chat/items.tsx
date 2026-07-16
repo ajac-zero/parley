@@ -74,7 +74,9 @@ export function formatFileSize(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
   let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
+  // Compare the displayed (rounded) value so e.g. 999,999 B renders as
+  // "1 MB" rather than "1,000 KB".
+  while (unit < units.length - 1 && Math.round(value * 10) / 10 >= 1000) {
     value /= 1000;
     unit += 1;
   }

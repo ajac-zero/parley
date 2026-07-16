@@ -206,7 +206,7 @@ describe("chatStore new-chat -> conversation migration", () => {
       filename: "report.xlsx",
       mime_type: pending.mime_type,
       size: 3,
-      file_url: "parley-file:file-1",
+      file_url: "parley-file:file_1",
     };
 
     vi.stubGlobal(

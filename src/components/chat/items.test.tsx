@@ -46,6 +46,12 @@ describe("attachment helpers", () => {
     expect(formatFileSize(Number.NaN)).toBe("0 B");
   });
 
+  it("promotes units when rounding reaches the next threshold", () => {
+    expect(formatFileSize(999_949)).toBe("999.9 KB");
+    expect(formatFileSize(999_999)).toBe("1 MB");
+    expect(formatFileSize(999_999_999)).toBe("1 GB");
+  });
+
   it.each([
     ["text/csv", "spreadsheet"],
     ["application/vnd.ms-excel", "spreadsheet"],
