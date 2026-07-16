@@ -11,9 +11,13 @@ import {
 } from "vitest";
 import { handleDemoResponses } from "../../../examples/demo-agent/agent";
 import {
+  artifactAttachmentItem,
   buildCreateResponseBody,
+  downloadArtifact,
   OpenResponsesClient,
+  resolveArtifactUrl,
   responsesUrl,
+  validateDownloadableArtifact,
 } from "./client";
 
 const server = createServer(async (request, response) => {
@@ -180,5 +184,185 @@ describe("Open Responses requests", () => {
       store: false,
       temperature: 0.2,
     });
+  });
+});
+
+describe("provider artifact downloads", () => {
+  const artifact = {
+    type: "ajac-zero:artifact" as const,
+    id: "artifact-1",
+    status: "completed" as const,
+    filename: "report.pdf",
+    mime_type: "application/pdf",
+    size: 3,
+    content_url: "/v1/artifacts/artifact-1",
+  };
+
+  it("resolves relative same-origin URLs and rejects cross-origin URLs", () => {
+    expect(
+      resolveArtifactUrl("https://agent.example/v1", artifact.content_url).href,
+    ).toBe("https://agent.example/v1/artifacts/artifact-1");
+    expect(() =>
+      resolveArtifactUrl(
+        "https://agent.example/v1",
+        "https://evil.example/file",
+      ),
+    ).toThrow(/agent origin/);
+    expect(() =>
+      resolveArtifactUrl("https://agent.example/v1", "//evil.example/file"),
+    ).toThrow(/agent origin/);
+  });
+
+  it("rejects malformed artifact metadata", () => {
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, filename: "../secret" }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, mime_type: "not a mime" }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, filename: ".." }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, id: "a".repeat(201) }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({
+        ...artifact,
+        content_url: `/${"a".repeat(2000)}`,
+      }),
+    ).toThrow(/invalid artifact/);
+  });
+
+  it("uses bearer auth and returns received bytes", async () => {
+    let request: { url: string; init?: RequestInit } | undefined;
+    const result = await downloadArtifact(
+      { baseUrl: "https://agent.example/v1", apiKey: "secret-key" },
+      artifact,
+      10,
+      async (input, init) => {
+        request = { url: String(input), init };
+        return new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "content-length": "3",
+            "content-type": "application/pdf",
+          },
+        });
+      },
+    );
+    expect(request?.url).toBe("https://agent.example/v1/artifacts/artifact-1");
+    expect(new Headers(request?.init?.headers).get("authorization")).toBe(
+      "Bearer secret-key",
+    );
+    expect(request?.init?.redirect).toBe("manual");
+    expect([...result.data]).toEqual([1, 2, 3]);
+  });
+
+  it("rejects declared oversize artifacts before fetching", async () => {
+    const fetcher = vi.fn();
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        { ...artifact, size: 11 },
+        10,
+        fetcher,
+      ),
+    ).rejects.toThrow(/size limit/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("requires a matching response Content-Type case-insensitively", async () => {
+    const upper = { ...artifact, mime_type: "Application/PDF" };
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        upper,
+        10,
+        async () =>
+          new Response(new Uint8Array([1, 2, 3]), {
+            headers: { "content-type": "application/pdf; charset=binary" },
+          }),
+      ),
+    ).resolves.toMatchObject({ artifact: upper });
+
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        artifact,
+        10,
+        async () => new Response(new Uint8Array([1, 2, 3])),
+      ),
+    ).rejects.toThrow(/Content-Type/);
+  });
+
+  it("builds the namespaced persisted attachment without provider bytes", () => {
+    expect(
+      artifactAttachmentItem(artifact, { id: "file-1", size: 123 }),
+    ).toEqual({
+      type: "parley:attachment",
+      id: "artifact-1",
+      status: "completed",
+      filename: "report.pdf",
+      mime_type: "application/pdf",
+      size: 123,
+      file_url: "parley-file:file-1",
+      provider_artifact: { id: "artifact-1" },
+    });
+  });
+
+  it("rejects oversized Content-Length before reading", async () => {
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        artifact,
+        2,
+        async () =>
+          new Response(new Uint8Array([1, 2, 3]), {
+            headers: {
+              "content-length": "3",
+              "content-type": "application/pdf",
+            },
+          }),
+      ),
+    ).rejects.toThrow(/size limit/);
+  });
+
+  it("rejects streamed bytes over the limit without Content-Length", async () => {
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        artifact,
+        2,
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(new Uint8Array([1, 2]));
+                controller.enqueue(new Uint8Array([3]));
+                controller.close();
+              },
+            }),
+            { headers: { "content-type": "application/pdf" } },
+          ),
+      ),
+    ).rejects.toThrow(/size limit/);
+  });
+
+  it("does not compare decoded bytes with an encoded Content-Length", async () => {
+    const result = await downloadArtifact(
+      { baseUrl: "https://agent.example/v1" },
+      artifact,
+      10,
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "content-encoding": "gzip",
+            "content-length": "2",
+            "content-type": "application/pdf",
+          },
+        }),
+    );
+
+    expect([...result.data]).toEqual([1, 2, 3]);
   });
 });
