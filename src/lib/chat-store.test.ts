@@ -40,7 +40,10 @@ describe("chatStore new-chat -> conversation migration", () => {
 
   afterEach(() => {
     // Clean up any leftover entries between tests.
+    chatStore.handlers = {};
     chatStore.remove(NEW_CHAT_KEY);
+    chatStore.remove("conv_artifact");
+    chatStore.remove("conv_legacy_finished");
   });
 
   it("keeps NEW_CHAT_KEY resolving to the live entry through migration (no flicker gap)", async () => {
@@ -172,5 +175,146 @@ describe("chatStore new-chat -> conversation migration", () => {
 
     chatStore.remove(firstConversationId);
     chatStore.remove(NEW_CHAT_KEY);
+  });
+
+  it("replaces a pending artifact with finalized output in place", async () => {
+    const conversationId = "conv_artifact";
+    let releaseFinished: (() => void) | undefined;
+    let releaseCleanup: (() => void) | undefined;
+    const holdFinished = new Promise<void>((resolve) => {
+      releaseFinished = resolve;
+    });
+    const holdCleanup = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    chatStore.handlers = { onTurnFinished: () => holdCleanup };
+
+    const pending = {
+      type: "ajac-zero:artifact",
+      id: "artifact-1",
+      status: "completed",
+      filename: "report.xlsx",
+      mime_type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 3,
+      content_url: "/v1/artifacts/artifact-1/content",
+    };
+    const attachment = {
+      type: "parley:attachment",
+      id: "artifact-1",
+      status: "completed",
+      filename: "report.xlsx",
+      mime_type: pending.mime_type,
+      size: 3,
+      file_url: "parley-file:file-1",
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        sseResponse(
+          [
+            {
+              data: {
+                type: "response.completed",
+                response: {
+                  id: "response-1",
+                  status: "completed",
+                  output: [
+                    { type: "message", role: "assistant", content: "Ready" },
+                    pending,
+                  ],
+                },
+              },
+            },
+            {
+              data: {
+                type: "parley.turn.finished",
+                turn_id: "turn-artifact",
+                status: "completed",
+                items: [
+                  { type: "message", role: "assistant", content: "Ready" },
+                  attachment,
+                ],
+              },
+              after: holdFinished,
+            },
+          ],
+          {
+            "x-parley-turn-id": "turn-artifact",
+            "x-parley-conversation-id": conversationId,
+          },
+        ),
+      ),
+    );
+
+    chatStore.send({ conversationId, text: "build report" });
+    await vi.waitFor(() => {
+      expect(chatStore.get(conversationId)?.state.items[1]).toEqual(pending);
+    });
+
+    releaseFinished?.();
+    await vi.waitFor(() => {
+      const items = chatStore.get(conversationId)?.state.items;
+      expect(items).toHaveLength(2);
+      expect(items?.[1]).toEqual(attachment);
+      expect(items?.some((item) => item?.type === "ajac-zero:artifact")).toBe(
+        false,
+      );
+    });
+
+    releaseCleanup?.();
+    await vi.waitFor(() => {
+      expect(chatStore.get(conversationId)).toBeUndefined();
+    });
+  });
+
+  it("retains streamed output when a legacy final event has no item array", async () => {
+    const conversationId = "conv_legacy_finished";
+    let releaseCleanup: (() => void) | undefined;
+    const holdCleanup = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    chatStore.handlers = { onTurnFinished: () => holdCleanup };
+    const message = { type: "message", role: "assistant", content: "Ready" };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        sseResponse(
+          [
+            {
+              data: {
+                type: "response.completed",
+                response: {
+                  id: "response-legacy",
+                  status: "completed",
+                  output: [message],
+                },
+              },
+            },
+            {
+              data: {
+                type: "parley.turn.finished",
+                turn_id: "turn-legacy",
+                status: "completed",
+                items: "invalid",
+              },
+            },
+          ],
+          {
+            "x-parley-turn-id": "turn-legacy",
+            "x-parley-conversation-id": conversationId,
+          },
+        ),
+      ),
+    );
+
+    chatStore.send({ conversationId, text: "hello" });
+    await vi.waitFor(() => {
+      expect(chatStore.get(conversationId)?.state.items).toEqual([message]);
+      expect(chatStore.get(conversationId)?.phase).toBe("finished");
+    });
+    releaseCleanup?.();
   });
 });

@@ -139,7 +139,9 @@ Providers may emit the optional `ajac-zero:artifact` item from the
 profile. Parley validates and downloads completed artifacts from the agent's
 own origin, stores the bytes as a user-owned file, and persists a durable
 `parley:attachment` in place of the provider URL. Artifact and attachment
-items are never replayed to providers.
+items are never replayed to providers. While ingestion is in progress, Parley
+shows the provider artifact as preparing; the terminal turn event replaces it
+with the finalized durable attachment.
 
 ## A minimal agent (Bun/Node)
 

@@ -429,11 +429,15 @@ class ChatStore {
 
       case "parley.turn.finished": {
         const status = (event.status as TurnStatus) ?? "failed";
+        const items = Array.isArray(event.items)
+          ? (event.items as ORItem[])
+          : entry.state.items;
         const error =
           (event.error as { code?: string; message: string } | null) ?? null;
         this.#update(key, {
           phase: "finished",
           finishedStatus: status,
+          state: { ...entry.state, items },
           error: error ?? entry.error,
           ...indexPatch,
         });

@@ -464,6 +464,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           type: "parley.turn.finished",
           turn_id: ctx.turnId,
           status,
+          items,
           usage: state.usage,
           error: state.error,
         });
@@ -736,6 +737,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
               type: "parley.turn.finished",
               turn_id: ctx.turnId,
               status: "failed",
+              items: [],
               error: { message: "Internal error while running the turn." },
             });
             yield* finishStream(ctx.turnId);

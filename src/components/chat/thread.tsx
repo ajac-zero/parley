@@ -2,7 +2,11 @@ import { AlertCircle } from "lucide-react";
 import { Fragment, memo, useMemo } from "react";
 import type { A2uiActionHandler } from "~/components/a2ui/context";
 import {
+  AssistantAttachment,
   AssistantMessage,
+  isDownloadableArtifactItem,
+  isParleyAttachmentItem,
+  PreparingArtifact,
   ReasoningBlock,
   ThinkingDot,
   ToolCallBlock,
@@ -20,6 +24,7 @@ import type { A2uiCallSurfaces } from "~/lib/a2ui";
 import type { ActiveTurn } from "~/lib/chat-store";
 import {
   A2UI_ITEM_TYPE,
+  ARTIFACT_ITEM_TYPE,
   type FunctionCallItem,
   type FunctionCallOutputItem,
   type MessageItem,
@@ -329,6 +334,22 @@ export const Thread = memo(function Thread({
           if (item.type === A2UI_ITEM_TYPE) {
             // Derived presentation rendered inline with its linked call.
             return <Fragment key={entry.key} />;
+          }
+
+          if (item.type === ARTIFACT_ITEM_TYPE) {
+            return isDownloadableArtifactItem(item) ? (
+              <PreparingArtifact key={entry.key} item={item} />
+            ) : (
+              <UnknownItemBlock key={entry.key} item={item} />
+            );
+          }
+
+          if (item.type === "parley:attachment") {
+            return isParleyAttachmentItem(item) ? (
+              <AssistantAttachment key={entry.key} item={item} />
+            ) : (
+              <UnknownItemBlock key={entry.key} item={item} />
+            );
           }
 
           if (item.type === "compaction") {
