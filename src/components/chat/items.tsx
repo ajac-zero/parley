@@ -2,7 +2,16 @@ import {
   Check,
   ChevronRight,
   Copy,
+  FileArchive,
+  FileAudio,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileVideo,
+  Loader2,
   MousePointerClick,
+  Paperclip,
   Pencil,
   RefreshCw,
   Wrench,
@@ -36,11 +45,13 @@ import {
 import { type A2uiCallSurfaces, messageA2uiActions } from "~/lib/a2ui";
 import {
   type ContentPart,
+  type DownloadableArtifactItem,
   type FunctionCallItem,
   type FunctionCallOutputItem,
   type MessageItem,
   messageText,
   type ORItem,
+  type ParleyAttachmentItem,
   type ReasoningItem,
   reasoningSummaryText,
 } from "~/lib/openresponses";
@@ -52,6 +63,116 @@ export const fileRefToUrl = (ref: string): string =>
   ref.startsWith(FILE_REF_PREFIX)
     ? `/api/files/${ref.slice(FILE_REF_PREFIX.length)}`
     : ref;
+
+const parleyFileUrl = (ref: string): string | null => {
+  if (!ref.startsWith(FILE_REF_PREFIX)) return null;
+  const id = ref.slice(FILE_REF_PREFIX.length);
+  return /^file_[a-z0-9]+$/.test(id) ? `/api/files/${id}` : null;
+};
+
+export function formatFileSize(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+  let unit = 0;
+  // Compare the displayed (rounded) value so e.g. 999,999 B renders as
+  // "1 MB" rather than "1,000 KB".
+  while (unit < units.length - 1 && Math.round(value * 10) / 10 >= 1000) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
+}
+
+export function isDownloadableArtifactItem(
+  item: ORItem,
+): item is DownloadableArtifactItem {
+  const value = item as Partial<DownloadableArtifactItem>;
+  return (
+    value.type === "ajac-zero:artifact" &&
+    value.status === "completed" &&
+    typeof value.filename === "string" &&
+    typeof value.mime_type === "string" &&
+    typeof value.size === "number" &&
+    Number.isFinite(value.size) &&
+    value.size >= 0
+  );
+}
+
+export function isParleyAttachmentItem(
+  item: ORItem,
+): item is ParleyAttachmentItem {
+  const value = item as Partial<ParleyAttachmentItem>;
+  return (
+    value.type === "parley:attachment" &&
+    value.status === "completed" &&
+    typeof value.filename === "string" &&
+    typeof value.mime_type === "string" &&
+    typeof value.size === "number" &&
+    Number.isFinite(value.size) &&
+    value.size >= 0 &&
+    typeof value.file_url === "string" &&
+    parleyFileUrl(value.file_url) !== null
+  );
+}
+
+export type AttachmentKind =
+  | "spreadsheet"
+  | "image"
+  | "audio"
+  | "video"
+  | "archive"
+  | "code"
+  | "pdf"
+  | "text"
+  | "file";
+
+export function attachmentKindForMime(mimeType: string): AttachmentKind {
+  const mime = mimeType.toLowerCase();
+  if (
+    mime.includes("spreadsheet") ||
+    mime.includes("excel") ||
+    mime === "text/csv"
+  ) {
+    return "spreadsheet";
+  }
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  if (
+    mime.includes("zip") ||
+    mime.includes("compressed") ||
+    mime.includes("archive") ||
+    mime.includes("tar")
+  ) {
+    return "archive";
+  }
+  if (
+    mime.includes("json") ||
+    mime.includes("javascript") ||
+    mime.includes("xml") ||
+    mime.includes("yaml")
+  ) {
+    return "code";
+  }
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("text/")) return "text";
+  return "file";
+}
+
+const ATTACHMENT_VISUAL = {
+  spreadsheet: {
+    Icon: FileSpreadsheet,
+    color: "text-emerald-600 dark:text-emerald-400",
+  },
+  image: { Icon: FileImage, color: "text-violet-600 dark:text-violet-400" },
+  audio: { Icon: FileAudio, color: "text-amber-600 dark:text-amber-400" },
+  video: { Icon: FileVideo, color: "text-pink-600 dark:text-pink-400" },
+  archive: { Icon: FileArchive, color: "text-orange-600 dark:text-orange-400" },
+  code: { Icon: FileCode, color: "text-sky-600 dark:text-sky-400" },
+  pdf: { Icon: FileText, color: "text-red-600 dark:text-red-400" },
+  text: { Icon: FileText, color: "text-blue-600 dark:text-blue-400" },
+  file: { Icon: Paperclip, color: "text-muted-foreground" },
+} as const;
 
 function useCopy(text: string) {
   const [copied, setCopied] = useState(false);
@@ -271,6 +392,54 @@ export const AssistantMessage = memo(function AssistantMessage({
           )}
         </Actions>
       )}
+    </div>
+  );
+});
+
+export const AssistantAttachment = memo(function AssistantAttachment({
+  item,
+}: {
+  item: ParleyAttachmentItem;
+}) {
+  const url = parleyFileUrl(item.file_url);
+  if (!url) return null;
+  const { Icon: FileIcon, color } =
+    ATTACHMENT_VISUAL[attachmentKindForMime(item.mime_type)];
+  return (
+    <a
+      href={url}
+      download={item.filename}
+      className="flex w-fit max-w-full items-center gap-3 rounded-xl border bg-card px-3.5 py-3 text-sm transition-colors hover:bg-accent"
+    >
+      <FileIcon className={cn("size-4 shrink-0", color)} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{item.filename}</span>
+        <span className="text-muted-foreground text-xs">
+          {item.mime_type} · {formatFileSize(item.size)}
+        </span>
+      </span>
+    </a>
+  );
+});
+
+export const PreparingArtifact = memo(function PreparingArtifact({
+  item,
+}: {
+  item: DownloadableArtifactItem;
+}) {
+  return (
+    <div
+      role="status"
+      aria-label={`Preparing download ${item.filename}`}
+      className="flex w-fit max-w-full items-center gap-3 rounded-xl border bg-card px-3.5 py-3 text-sm"
+    >
+      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{item.filename}</span>
+        <span className="text-muted-foreground text-xs">
+          Preparing download · {formatFileSize(item.size)}
+        </span>
+      </span>
     </div>
   );
 });

@@ -632,6 +632,8 @@ export interface ParleyTurnFinished {
   type: "parley.turn.finished";
   turn_id: string;
   status: TurnStatus;
+  /** Finalized agent output after platform transformations. */
+  items: ORItem[];
   usage?: Record<string, unknown> | null;
   error?: { code?: string; message: string } | null;
 }
