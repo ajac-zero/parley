@@ -23,6 +23,8 @@ import {
   type FunctionCallOutputItem,
   type MessageItem,
   type ORItem,
+  isFunctionCallItem,
+  isFunctionCallOutputItem,
 } from "~/lib/openresponses";
 
 export {
@@ -769,7 +771,7 @@ function extractFromParts(parts: unknown[]): A2uiExtraction {
       continue;
     }
     const text = textFromPart(part);
-    if (text) texts.push(text);
+    if (text !== null) texts.push(text);
   }
   return {
     resources,
@@ -845,7 +847,7 @@ export function a2uiPresentationOutput(
     return null;
   }
   const output: ContentPart[] = [];
-  if (item.fallback_text) {
+  if (item.fallback_text !== undefined) {
     output.push({ type: "output_text", text: item.fallback_text });
   }
   output.push({
@@ -944,6 +946,13 @@ function canonicalPartsExcludingSurfaces(
  *     trajectory order like any other pair of writes to a shared surface.
  */
 export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
+  const callIds = new Set<string>();
+  const outputCallIds = new Set<string>();
+  for (const item of items) {
+    if (isFunctionCallItem(item)) callIds.add(item.call_id);
+    if (isFunctionCallOutputItem(item)) outputCallIds.add(item.call_id);
+  }
+
   // Union, per call_id, of every surface a valid sidecar linked to that
   // call *recreates* (carries its own createSurface for) — regardless of
   // where in the trajectory the sidecar(s) fall. Only these surfaces are
@@ -954,7 +963,14 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
   for (const item of items) {
     if (item.type !== A2UI_ITEM_TYPE) continue;
     const presentation = item as A2uiPresentationItem;
-    if (!a2uiPresentationOutput(presentation)) continue;
+    const output = a2uiPresentationOutput(presentation);
+    if (
+      !output ||
+      !callIds.has(output.callId) ||
+      !outputCallIds.has(output.callId)
+    ) {
+      continue;
+    }
     const ids =
       recreatedSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
     for (const message of presentation.messages as A2uiMessage[]) {
@@ -965,8 +981,10 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
   }
 
   const outputs: A2uiOutputRef[] = [];
+  const pendingSidecars = new Map<string, A2uiOutputRef[]>();
+  const emittedOutputCallIds = new Set<string>();
   for (const item of items) {
-    if (item.type === "function_call_output") {
+    if (isFunctionCallOutputItem(item)) {
       const call = item as FunctionCallOutputItem;
       if (!call.call_id) continue;
       const overlap = recreatedSurfaceIdsByCall.get(call.call_id);
@@ -975,9 +993,24 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
           ? canonicalPartsExcludingSurfaces(call.output, overlap)
           : call.output;
       outputs.push({ callId: call.call_id, output });
+      emittedOutputCallIds.add(call.call_id);
+      outputs.push(...(pendingSidecars.get(call.call_id) ?? []));
+      pendingSidecars.delete(call.call_id);
     } else if (item.type === A2UI_ITEM_TYPE) {
       const output = a2uiPresentationOutput(item as A2uiPresentationItem);
-      if (output) outputs.push(output);
+      if (
+        output &&
+        callIds.has(output.callId) &&
+        outputCallIds.has(output.callId)
+      ) {
+        if (emittedOutputCallIds.has(output.callId)) {
+          outputs.push(output);
+        } else {
+          const pending = pendingSidecars.get(output.callId) ?? [];
+          pending.push(output);
+          pendingSidecars.set(output.callId, pending);
+        }
+      }
     }
   }
   return outputs;
@@ -1022,7 +1055,7 @@ export function reduceA2uiOutputs(
     referencedIds: Set<string>;
   }
 
-  const scans: CallScan[] = [];
+  const scans = new Map<string, CallScan>();
   const allMessages: A2uiMessage[] = [];
   /** surfaceId -> callId of the latest createSurface (the render anchor). */
   const anchors = new Map<string, string>();
@@ -1049,17 +1082,26 @@ export function reduceA2uiOutputs(
         }
       }
     }
-    scans.push({
-      callId,
-      hasResources: extraction.resources.length > 0,
-      fallbackText: extraction.fallbackText,
-      referencedIds,
-    });
+    const scan = scans.get(callId);
+    if (scan) {
+      scan.hasResources ||= extraction.resources.length > 0;
+      if (extraction.fallbackText !== null) {
+        scan.fallbackText = extraction.fallbackText;
+      }
+      for (const surfaceId of referencedIds) scan.referencedIds.add(surfaceId);
+    } else {
+      scans.set(callId, {
+        callId,
+        hasResources: extraction.resources.length > 0,
+        fallbackText: extraction.fallbackText,
+        referencedIds,
+      });
+    }
   }
 
   const reduced = reduceA2uiMessages(allMessages, enabledCatalogIds);
   const result = new Map<string, A2uiCallSurfaces>();
-  for (const scan of scans) {
+  for (const scan of scans.values()) {
     const surfaces = reduced.filter(
       (surface) => anchors.get(surface.surfaceId) === scan.callId,
     );

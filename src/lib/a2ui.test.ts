@@ -408,6 +408,220 @@ describe("reduceA2uiOutputs", () => {
     ]);
     expect(byCall.size).toBe(0);
   });
+
+  it("retains the latest non-null fallback for repeated call IDs", () => {
+    const resource = (surfaceId: string): ContentPart =>
+      ({
+        type: "resource",
+        resource: {
+          mimeType: A2UI_MIME_TYPE,
+          text: JSON.stringify([createSurface(surfaceId)]),
+        },
+      }) as never;
+    const outputs = [
+      {
+        callId: "call_1",
+        output: [
+          { type: "output_text", text: "Readable result" },
+          resource("s1"),
+        ],
+      },
+      { callId: "call_1", output: [resource("s2")] },
+    ];
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.fallbackText).toBe(
+      "Readable result",
+    );
+    outputs.push({
+      callId: "call_1",
+      output: [{ type: "output_text", text: "Newer result" }, resource("s3")],
+    });
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.fallbackText).toBe(
+      "Newer result",
+    );
+  });
+});
+
+describe("collectA2uiOutputs", () => {
+  const sidecar = (
+    messages: unknown[],
+    callId = "missing",
+    fallbackText?: string,
+  ): A2uiPresentationItem => ({
+    type: "ajac-zero:a2ui",
+    id: "sidecar",
+    status: "completed",
+    call_id: callId,
+    mime_type: A2UI_MIME_TYPE,
+    uri: "a2ui://example/sidecar",
+    fallback_text: fallbackText,
+    messages: messages as Array<Record<string, unknown>>,
+  });
+
+  const canonicalItems = (): ORItem[] => [
+    {
+      type: "function_call",
+      call_id: "call_1",
+      name: "tool",
+      arguments: "{}",
+    },
+    {
+      type: "function_call_output",
+      call_id: "call_1",
+      output: [
+        {
+          type: "resource",
+          resource: {
+            mimeType: A2UI_MIME_TYPE,
+            text: JSON.stringify([createSurface()]),
+          },
+        },
+      ],
+    },
+  ];
+
+  it("ignores an orphan sidecar that updates a valid surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      {
+        type: "function_call",
+        call_id: "missing",
+        name: "orphan",
+        arguments: "{}",
+      },
+      sidecar([
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "hijacked" }],
+          },
+        },
+      ]),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root,
+    ).toBeUndefined();
+  });
+
+  it("ignores an orphan sidecar that deletes a valid surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      { type: "function_call_output", call_id: "missing", output: "{}" },
+      sidecar([{ deleteSurface: { surfaceId: "s1" } }]),
+    ]);
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.surfaces).toHaveLength(1);
+  });
+
+  it("applies a linked sidecar in order and moves a recreated surface anchor", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      sidecar(
+        [
+          createSurface(),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "fresh" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root
+        ?.text,
+    ).toBe("fresh");
+  });
+
+  it("applies a linked update-only sidecar to its canonical surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      sidecar(
+        [
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root
+        ?.text,
+    ).toBe("updated");
+  });
+
+  it("defers a linked sidecar that arrives before its canonical output", () => {
+    const [call, output] = canonicalItems();
+    const outputs = collectA2uiOutputs([
+      call as ORItem,
+      sidecar(
+        [
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+      output as ORItem,
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root
+        ?.text,
+    ).toBe("updated");
+  });
+
+  it("preserves canonical fallback through an empty sidecar and uses a later sidecar fallback", () => {
+    const items: ORItem[] = [
+      {
+        type: "function_call",
+        call_id: "call_1",
+        name: "tool",
+        arguments: "{}",
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_1",
+        output: [
+          { type: "output_text", text: "Readable result" },
+          {
+            type: "resource",
+            resource: {
+              mimeType: A2UI_MIME_TYPE,
+              text: JSON.stringify([
+                {
+                  createSurface: {
+                    surfaceId: "s1",
+                    catalogId: "urn:unsupported",
+                  },
+                },
+              ]),
+            },
+          },
+        ],
+      },
+      sidecar([createSurface("s2")], "call_1"),
+    ];
+    let group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("Readable result");
+    expect(group?.showFallback).toBe(false);
+
+    items.push(sidecar([createSurface("s3")], "call_1", ""));
+    group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("");
+    expect(group?.showFallback).toBe(false);
+
+    items.push(sidecar([createSurface("s4")], "call_1", "Newer result"));
+    group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("Newer result");
+    expect(group?.showFallback).toBe(false);
+  });
 });
 
 /* ------------------------- dynamic values & checks ------------------------ */

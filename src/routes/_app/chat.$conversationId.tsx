@@ -58,8 +58,8 @@ function ConversationPage() {
    * any linked presentation sidecar taking precedence over it) in
    * trajectory order, so a later result can update or delete a surface
    * created by an earlier call. Computed here (not in Thread) because
-   * placement is host policy — the same map drives both inline anchors and
-   * the pinned side canvas. */
+  * placement is host policy — the same map drives both inline anchors and
+  * the pinned side canvas. */
   const a2uiByCall = useMemo(() => {
     const outputs = collectA2uiOutputs(entries.map((entry) => entry.item));
     return reduceA2uiOutputs(outputs, config.enabledA2uiCatalogIds);
