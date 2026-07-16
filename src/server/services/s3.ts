@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -50,6 +51,13 @@ export class S3 extends Effect.Service<S3>()("S3", {
             Body: body,
             ContentType: contentType,
           }),
+        ),
+      ),
+
+    deleteObject: (key: string) =>
+      Effect.promise(() =>
+        client.send(
+          new DeleteObjectCommand({ Bucket: appEnv.s3Bucket, Key: key }),
         ),
       ),
 

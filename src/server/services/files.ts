@@ -55,6 +55,8 @@ export class Files extends Effect.Service<Files>()("Files", {
             size: data.byteLength,
             storageKey,
           }),
+        ).pipe(
+          Effect.onError(() => s3.deleteObject(storageKey).pipe(Effect.ignore)),
         );
         return { id, name, mimeType, size: data.byteLength };
       });
@@ -92,6 +94,15 @@ export class Files extends Effect.Service<Files>()("Files", {
         return { file, stream };
       });
 
+    const removeOwned = (userId: string, id: string) =>
+      Effect.gen(function* () {
+        const file = yield* getOwned(userId, id);
+        yield* s3.deleteObject(file.storageKey);
+        yield* Effect.promise(() =>
+          db.delete(schema.files).where(eq(schema.files.id, id)),
+        );
+      });
+
     /**
      * Presigned URL for an external agent to fetch the file directly, or
      * `null` if no publicly-reachable S3 endpoint is configured — callers
@@ -107,7 +118,15 @@ export class Files extends Effect.Service<Files>()("Files", {
         return { file, url };
       });
 
-    return { save, getOwned, getBytes, getStream, getUrl, maxBytes };
+    return {
+      save,
+      getOwned,
+      getBytes,
+      getStream,
+      removeOwned,
+      getUrl,
+      maxBytes,
+    };
   }),
   dependencies: [Db.Default, S3.Default],
 }) {}

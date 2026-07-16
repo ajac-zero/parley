@@ -35,6 +35,8 @@ type ArtifactFetcher = (url: URL, init?: RequestInit) => Promise<Response>;
 const MIME_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 
 const validArtifactFilename = (filename: string): boolean =>
+  filename !== "." &&
+  filename !== ".." &&
   ![...filename].some((character) => {
     const code = character.charCodeAt(0);
     return character === "/" || character === "\\" || code < 32 || code === 127;
@@ -65,11 +67,13 @@ export function validateDownloadableArtifact(
     artifact.status !== "completed" ||
     typeof artifact.id !== "string" ||
     artifact.id.length === 0 ||
+    artifact.id.length > 200 ||
     typeof artifact.size !== "number" ||
     !Number.isSafeInteger(artifact.size) ||
     artifact.size < 0 ||
     typeof artifact.content_url !== "string" ||
     artifact.content_url.length === 0 ||
+    artifact.content_url.length > 2000 ||
     typeof artifact.filename !== "string" ||
     artifact.filename.length === 0 ||
     artifact.filename.length > 300 ||
@@ -107,8 +111,14 @@ export async function downloadArtifact(
   value: unknown,
   maxBytes: number,
   fetcher: ArtifactFetcher = fetch,
+  signal?: AbortSignal,
 ): Promise<{ artifact: DownloadableArtifactItem; data: Uint8Array }> {
   const artifact = validateDownloadableArtifact(value);
+  if (artifact.size > maxBytes) {
+    throw new AgentRequestError({
+      message: "Agent artifact exceeds the file size limit.",
+    });
+  }
   const url = resolveArtifactUrl(endpoint.baseUrl, artifact.content_url);
   let response: Response;
   try {
@@ -120,6 +130,7 @@ export async function downloadArtifact(
           : {}),
       },
       redirect: "manual",
+      signal,
     });
   } catch (error) {
     throw new AgentRequestError({ message: connectionErrorMessage(error) });
@@ -130,6 +141,7 @@ export async function downloadArtifact(
     response.status < 200 ||
     response.status >= 300
   ) {
+    await response.body?.cancel();
     throw new AgentRequestError({
       status: response.status,
       message: `Agent artifact download returned HTTP ${response.status}.`,
@@ -140,22 +152,27 @@ export async function downloadArtifact(
     ?.split(";", 1)[0]
     ?.trim();
   if (
-    responseType &&
-    (!MIME_TYPE.test(responseType) || responseType !== artifact.mime_type)
+    !responseType ||
+    !MIME_TYPE.test(responseType) ||
+    responseType.toLowerCase() !== artifact.mime_type.toLowerCase()
   ) {
+    await response.body.cancel();
     throw new AgentRequestError({
       message: "Agent artifact response has an unexpected Content-Type.",
     });
   }
   const lengthHeader = response.headers.get("content-length");
-  if (lengthHeader !== null) {
+  const encoded = response.headers.has("content-encoding");
+  if (lengthHeader !== null && !encoded) {
     const length = Number(lengthHeader);
     if (!Number.isSafeInteger(length) || length < 0) {
+      await response.body.cancel();
       throw new AgentRequestError({
         message: "Agent artifact has an invalid Content-Length.",
       });
     }
     if (length > maxBytes) {
+      await response.body.cancel();
       throw new AgentRequestError({
         message: "Agent artifact exceeds the file size limit.",
       });
@@ -184,7 +201,7 @@ export async function downloadArtifact(
       message: "Agent artifact download failed while reading data.",
     });
   }
-  if (lengthHeader !== null && size !== Number(lengthHeader)) {
+  if (lengthHeader !== null && !encoded && size !== Number(lengthHeader)) {
     throw new AgentRequestError({
       message: "Agent artifact response was truncated.",
     });

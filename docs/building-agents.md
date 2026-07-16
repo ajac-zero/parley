@@ -132,6 +132,15 @@ for live argument streaming), execute the tool yourself, then emit a
 renders the call and its output; in replay mode both items are included in
 subsequent turns' input so your agent keeps the context.
 
+### Downloadable artifacts
+
+Providers may emit the optional `ajac-zero:artifact` item from the
+[Open Responses Extensions](https://github.com/ajac-zero/openresponses-extensions)
+profile. Parley validates and downloads completed artifacts from the agent's
+own origin, stores the bytes as a user-owned file, and persists a durable
+`parley:attachment` in place of the provider URL. Artifact and attachment
+items are never replayed to providers.
+
 ## A minimal agent (Bun/Node)
 
 ```ts

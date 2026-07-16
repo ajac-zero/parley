@@ -11,7 +11,9 @@ import {
 } from "effect";
 import { A2UI_MIME_TYPE } from "~/lib/a2ui";
 import {
+  ARTIFACT_ITEM_TYPE,
   type ContentPart,
+  type DownloadableArtifactItem,
   finalizePartialItems,
   initialTurnStreamState,
   type MessageItem,
@@ -29,7 +31,10 @@ import { appEnv } from "~/server/env";
 import { turnId as newTurnId } from "~/server/ids";
 import {
   AgentRequestError,
+  artifactAttachmentItem,
+  downloadArtifact,
   OpenResponsesClient,
+  validateDownloadableArtifact,
 } from "~/server/openresponses/client";
 import { type Actor, Agents } from "~/server/services/agents";
 import { Conversations, titleFromText } from "~/server/services/conversations";
@@ -74,6 +79,7 @@ export const isMissingEstablishedContinuation = (
 
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
+const MAX_ARTIFACTS_PER_TURN = 10;
 
 const keys = (turnId: string) => ({
   events: `parley:turn:${turnId}:events`,
@@ -301,6 +307,90 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
       return rest as unknown as ORItem;
     };
 
+    const ingestArtifacts = (
+      actor: Actor,
+      endpoint: { baseUrl: string; apiKey?: string | null },
+      items: ORItem[],
+    ) =>
+      Effect.gen(function* () {
+        const artifacts = yield* Effect.try({
+          try: () =>
+            items
+              .filter(
+                (item): item is DownloadableArtifactItem =>
+                  item.type === ARTIFACT_ITEM_TYPE &&
+                  (item as { status?: unknown }).status === "completed",
+              )
+              .map(validateDownloadableArtifact),
+          catch: (error) =>
+            error instanceof AgentRequestError
+              ? error
+              : new AgentRequestError({
+                  message: "Agent returned an invalid artifact.",
+                }),
+        });
+        const ids = new Set(artifacts.map((artifact) => artifact.id));
+        const totalBytes = artifacts.reduce(
+          (total, artifact) => total + artifact.size,
+          0,
+        );
+        if (
+          artifacts.length > MAX_ARTIFACTS_PER_TURN ||
+          ids.size !== artifacts.length ||
+          !Number.isSafeInteger(totalBytes) ||
+          totalBytes > files.maxBytes
+        ) {
+          return yield* new AgentRequestError({
+            message: "Agent returned too many or oversized artifacts.",
+          });
+        }
+
+        const savedFileIds: string[] = [];
+        const result = yield* Effect.forEach(items, (item) => {
+          if (item.type !== ARTIFACT_ITEM_TYPE) return Effect.succeed(item);
+          if ((item as { status?: unknown }).status !== "completed") {
+            return Effect.succeed(null);
+          }
+          return Effect.tryPromise({
+            try: (signal) =>
+              downloadArtifact(endpoint, item, files.maxBytes, fetch, signal),
+            catch: (error) =>
+              error instanceof AgentRequestError
+                ? error
+                : new AgentRequestError({
+                    message: "Could not download agent artifact.",
+                  }),
+          }).pipe(
+            Effect.flatMap(({ artifact, data }) =>
+              files
+                .save(actor.userId, artifact.filename, artifact.mime_type, data)
+                .pipe(
+                  Effect.tap((file) =>
+                    Effect.sync(() => savedFileIds.push(file.id)),
+                  ),
+                  Effect.map((file) => artifactAttachmentItem(artifact, file)),
+                  Effect.mapError(
+                    () =>
+                      new AgentRequestError({
+                        message: "Could not save agent artifact.",
+                      }),
+                  ),
+                ),
+            ),
+          );
+        }).pipe(
+          Effect.onError(() =>
+            Effect.forEach(savedFileIds, (id) =>
+              files.removeOwned(actor.userId, id).pipe(Effect.ignore),
+            ),
+          ),
+        );
+        return {
+          items: result.filter((item): item is ORItem => item != null),
+          fileIds: savedFileIds,
+        };
+      });
+
     const activeTurnFor = (conversationId: string) =>
       Effect.promise(() =>
         db
@@ -335,16 +425,20 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
       ctx: EngineContext,
       status: TurnStatus,
       state: TurnStreamState,
+      artifactFileIds: string[] = [],
     ) =>
       Effect.gen(function* () {
         const items = finalizePartialItems(state.items);
         if (items.length > 0) {
-          yield* conversations.appendItems(
-            ctx.conversation.id,
-            ctx.turnId,
-            "agent",
-            items,
-          );
+          yield* conversations
+            .appendItems(ctx.conversation.id, ctx.turnId, "agent", items)
+            .pipe(
+              Effect.onError(() =>
+                Effect.forEach(artifactFileIds, (id) =>
+                  files.removeOwned(ctx.actor.userId, id).pipe(Effect.ignore),
+                ),
+              ),
+            );
         }
         yield* Effect.promise(() =>
           db
@@ -378,6 +472,8 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
 
     const runEngine = (ctx: EngineContext) =>
       Effect.gen(function* () {
+        const deadline = Date.now() + appEnv.turnMaxDurationSec * 1000;
+        let artifactFileIds: string[] = [];
         const k = keys(ctx.turnId);
         yield* Effect.promise(() =>
           db
@@ -513,7 +609,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             }),
           );
 
-        const outcome = yield* Effect.raceFirst(
+        let outcome = yield* Effect.raceFirst(
           consume.pipe(Effect.as("finished" as const)),
           Deferred.await(cancelled).pipe(Effect.as("cancelled" as const)),
         ).pipe(
@@ -536,20 +632,68 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
         );
 
         const state = yield* Ref.get(stateRef);
+        if (outcome === "finished" && state.status === "completed") {
+          const safeItems = state.items.filter(
+            (item) => item?.type !== ARTIFACT_ITEM_TYPE,
+          );
+          const remainingMs = Math.max(1, deadline - Date.now());
+          const ingestionOutcome = yield* Effect.raceFirst(
+            ingestArtifacts(
+              ctx.actor,
+              endpoint,
+              state.items.filter((item): item is ORItem => item != null),
+            ).pipe(
+              Effect.timeoutFail({
+                duration: Duration.millis(remainingMs),
+                onTimeout: () =>
+                  new AgentRequestError({
+                    message: "Agent artifact ingestion timed out.",
+                  }),
+              }),
+              Effect.tap((ingested) =>
+                Ref.update(stateRef, (current) => ({
+                  ...current,
+                  items: ingested.items,
+                })),
+              ),
+              Effect.map((ingested) => ({
+                type: "ingested" as const,
+                fileIds: ingested.fileIds,
+              })),
+            ),
+            Deferred.await(cancelled).pipe(
+              Effect.as({ type: "cancelled" as const }),
+            ),
+          ).pipe(
+            Effect.catchAll((error) =>
+              Ref.update(stateRef, (current) => ({
+                ...current,
+                status: "failed" as const,
+                items: safeItems,
+                error: current.error ?? { message: error.message },
+              })).pipe(Effect.as({ type: "failed" as const })),
+            ),
+          );
+          if (ingestionOutcome.type === "cancelled") outcome = "cancelled";
+          if (ingestionOutcome.type === "ingested") {
+            artifactFileIds = ingestionOutcome.fileIds;
+          }
+        }
+        const processedState = yield* Ref.get(stateRef);
         const status: TurnStatus =
           outcome === "cancelled"
             ? "cancelled"
-            : outcome === "failed" || state.status === "failed"
+            : outcome === "failed" || processedState.status === "failed"
               ? "failed"
-              : state.status === "incomplete"
+              : processedState.status === "incomplete"
                 ? "incomplete"
-                : state.status === "completed"
+                : processedState.status === "completed"
                   ? "completed"
                   : "failed";
 
         // A finished stream that never reached a terminal response state means
         // the agent ended the stream early.
-        if (outcome === "finished" && state.status === "in_progress") {
+        if (outcome === "finished" && processedState.status === "in_progress") {
           yield* Ref.update(stateRef, (s) => ({
             ...s,
             error: s.error ?? {
@@ -560,7 +704,12 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
         }
 
         const finalState = yield* Ref.get(stateRef);
-        yield* persistOutcome(ctx, status, finalState);
+        if (status !== "completed") {
+          finalState.items = finalState.items.filter(
+            (item) => item?.type !== ARTIFACT_ITEM_TYPE,
+          );
+        }
+        yield* persistOutcome(ctx, status, finalState, artifactFileIds);
       }).pipe(
         Effect.catchTag("AgentRequestError", (error) =>
           persistOutcome(ctx, "failed", {

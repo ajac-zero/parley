@@ -220,6 +220,18 @@ describe("provider artifact downloads", () => {
     expect(() =>
       validateDownloadableArtifact({ ...artifact, mime_type: "not a mime" }),
     ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, filename: ".." }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({ ...artifact, id: "a".repeat(201) }),
+    ).toThrow(/invalid artifact/);
+    expect(() =>
+      validateDownloadableArtifact({
+        ...artifact,
+        content_url: `/${"a".repeat(2000)}`,
+      }),
+    ).toThrow(/invalid artifact/);
   });
 
   it("uses bearer auth and returns received bytes", async () => {
@@ -246,6 +258,43 @@ describe("provider artifact downloads", () => {
     expect([...result.data]).toEqual([1, 2, 3]);
   });
 
+  it("rejects declared oversize artifacts before fetching", async () => {
+    const fetcher = vi.fn();
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        { ...artifact, size: 11 },
+        10,
+        fetcher,
+      ),
+    ).rejects.toThrow(/size limit/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("requires a matching response Content-Type case-insensitively", async () => {
+    const upper = { ...artifact, mime_type: "Application/PDF" };
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        upper,
+        10,
+        async () =>
+          new Response(new Uint8Array([1, 2, 3]), {
+            headers: { "content-type": "application/pdf; charset=binary" },
+          }),
+      ),
+    ).resolves.toMatchObject({ artifact: upper });
+
+    await expect(
+      downloadArtifact(
+        { baseUrl: "https://agent.example/v1" },
+        artifact,
+        10,
+        async () => new Response(new Uint8Array([1, 2, 3])),
+      ),
+    ).rejects.toThrow(/Content-Type/);
+  });
+
   it("builds the namespaced persisted attachment without provider bytes", () => {
     expect(
       artifactAttachmentItem(artifact, { id: "file-1", size: 123 }),
@@ -269,7 +318,10 @@ describe("provider artifact downloads", () => {
         2,
         async () =>
           new Response(new Uint8Array([1, 2, 3]), {
-            headers: { "content-length": "3" },
+            headers: {
+              "content-length": "3",
+              "content-type": "application/pdf",
+            },
           }),
       ),
     ).rejects.toThrow(/size limit/);
@@ -290,8 +342,27 @@ describe("provider artifact downloads", () => {
                 controller.close();
               },
             }),
+            { headers: { "content-type": "application/pdf" } },
           ),
       ),
     ).rejects.toThrow(/size limit/);
+  });
+
+  it("does not compare decoded bytes with an encoded Content-Length", async () => {
+    const result = await downloadArtifact(
+      { baseUrl: "https://agent.example/v1" },
+      artifact,
+      10,
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "content-encoding": "gzip",
+            "content-length": "2",
+            "content-type": "application/pdf",
+          },
+        }),
+    );
+
+    expect([...result.data]).toEqual([1, 2, 3]);
   });
 });
