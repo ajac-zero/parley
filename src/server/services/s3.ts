@@ -62,15 +62,6 @@ export class S3 extends Effect.Service<S3>()("S3", {
         return bytes ?? new Uint8Array(0);
       }),
 
-    getObjectStream: (key: string) =>
-      Effect.promise(async () => {
-        const res = await client.send(
-          new GetObjectCommand({ Bucket: appEnv.s3Bucket, Key: key }),
-        );
-        if (!res.Body) throw new Error("Object body is missing.");
-        return res.Body.transformToWebStream();
-      }),
-
     /** Verifies the bucket is reachable and accessible, for health checks. */
     ping: Effect.promise(() =>
       client.send(new HeadBucketCommand({ Bucket: appEnv.s3Bucket })),

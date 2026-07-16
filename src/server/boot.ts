@@ -61,7 +61,6 @@ async function seedDemoAgent(): Promise<void> {
     avatar: "🤖",
     baseUrl: appEnv.demoAgentUrl,
     continuation: "replay",
-    fileDelivery: "url",
     supportsImages: true,
     supportsFiles: true,
     isEnabled: true,

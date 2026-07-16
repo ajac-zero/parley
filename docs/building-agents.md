@@ -59,27 +59,13 @@ User messages arrive as message items:
   "content": [
     { "type": "input_text", "text": "What's in this picture?" },
     { "type": "input_image", "image_url": "data:image/png;base64,…" },
-    { "type": "input_file", "filename": "report.pdf", "file_url": "https://parley.example/api/attachments/…" }
+    { "type": "input_file", "filename": "report.pdf", "file_data": "data:application/pdf;base64,…" }
   ]
 }
 ```
 
-Non-image attachments follow the agent's **File delivery** setting:
-
-- **Capability URL** (default): `file_url` is a single-file, HMAC-signed
-  Parley URL. It remains valid for `ATTACHMENT_CAPABILITY_TTL_SEC` (default
-  15 minutes), which must exceed the maximum turn duration by at least 60
-  seconds. Stateful servers must ingest URL-backed input during the original
-  turn if they need it for later `previous_response_id` continuations. The
-  endpoint serves bytes directly without redirects and requires the agent to
-  reach the Parley deployment configured by `APP_URL`.
-- **Inline base64**: the part carries raw base64 in `file_data` instead of
-  `file_url`. Choose this for agents that cannot reach Parley. Requests are
-  larger and are sent again on every replayed turn.
-
-The modes are explicit: Parley never falls back from one to the other.
-`input_image` / `input_file` parts only appear if you enable the matching
-capability toggles on the agent.
+Attachments are inlined as base64 data URLs. `input_image` / `input_file`
+parts only appear if you enable the matching capability toggles on the agent.
 
 ## The response
 

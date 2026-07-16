@@ -32,7 +32,6 @@ Parley splits configuration in two:
 | `CHAT_RATE_LIMIT`               | `30`    | Chat messages per user per minute; `0` disables rate limiting.                                        |
 | `TURN_IDLE_TIMEOUT_SEC`         | `120`   | Abort a turn if the agent sends no events for this long.                                              |
 | `TURN_MAX_DURATION_SEC`         | `600`   | Hard cap on total turn duration.                                                                      |
-| `ATTACHMENT_CAPABILITY_TTL_SEC` | `900`   | Lifetime of `input_file.file_url` capabilities. Must be at least 60 seconds longer than `TURN_MAX_DURATION_SEC`. |
 | `BLOCK_PRIVATE_AGENT_ADDRESSES` | `false` | Refuse agent base URLs that resolve to loopback/private ranges. **Enable on multi-tenant deployments** to prevent SSRF. |
 | `ALLOW_USER_AGENTS`             | `true`  | Let non-admin members register personal agents. When `false`, only admins manage agents.              |
 | `LOG_LEVEL`                     | `Info`  | Effect log level: `All`, `Trace`, `Debug`, `Info`, `Warning`, `Error`, `Fatal`, `None`.               |

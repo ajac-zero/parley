@@ -85,13 +85,6 @@ export class Files extends Effect.Service<Files>()("Files", {
         return { ...file, data };
       });
 
-    const getStream = (userId: string, id: string) =>
-      Effect.gen(function* () {
-        const file = yield* getOwned(userId, id);
-        const stream = yield* s3.getObjectStream(file.storageKey);
-        return { file, stream };
-      });
-
     /**
      * Presigned URL for an external agent to fetch the file directly, or
      * `null` if no publicly-reachable S3 endpoint is configured — callers
@@ -107,7 +100,7 @@ export class Files extends Effect.Service<Files>()("Files", {
         return { file, url };
       });
 
-    return { save, getOwned, getBytes, getStream, getUrl, maxBytes };
+    return { save, getOwned, getBytes, getUrl, maxBytes };
   }),
   dependencies: [Db.Default, S3.Default],
 }) {}

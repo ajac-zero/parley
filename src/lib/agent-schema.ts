@@ -24,10 +24,6 @@ export const AgentInputSchema = Schema.Struct({
   model: Schema.NullOr(Schema.String.pipe(Schema.maxLength(200))),
   instructions: Schema.NullOr(Schema.String.pipe(Schema.maxLength(32_000))),
   continuation: Schema.Literal("replay", "previous_response_id"),
-  /** How non-image files are delivered: capability URL or inline base64. */
-  fileDelivery: Schema.optionalWith(Schema.Literal("url", "inline"), {
-    default: () => "url" as const,
-  }),
   supportsImages: Schema.Boolean,
   supportsFiles: Schema.Boolean,
   params: Schema.NullOr(

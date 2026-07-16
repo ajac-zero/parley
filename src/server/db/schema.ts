@@ -146,15 +146,6 @@ export const agents = pgTable(
     })
       .notNull()
       .default("replay"),
-    /**
-     * How non-image files reach the agent. The configured mode is explicit;
-     * Parley does not fall back between URL and inline delivery.
-     */
-    fileDelivery: text("file_delivery", {
-      enum: ["url", "inline"],
-    })
-      .notNull()
-      .default("url"),
     supportsImages: boolean("supports_images").notNull().default(false),
     supportsFiles: boolean("supports_files").notNull().default(false),
     /** Extra request params merged into the request body (temperature, reasoning, ...). */
