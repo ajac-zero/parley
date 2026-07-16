@@ -408,6 +408,219 @@ describe("reduceA2uiOutputs", () => {
     ]);
     expect(byCall.size).toBe(0);
   });
+
+  it("retains the latest non-null fallback for repeated call IDs", () => {
+    const resource = (surfaceId: string): ContentPart =>
+      ({
+        type: "resource",
+        resource: {
+          mimeType: A2UI_MIME_TYPE,
+          text: JSON.stringify([createSurface(surfaceId)]),
+        },
+      }) as never;
+    const outputs = [
+      {
+        callId: "call_1",
+        output: [
+          { type: "output_text", text: "Readable result" },
+          resource("s1"),
+        ],
+      },
+      { callId: "call_1", output: [resource("s2")] },
+    ];
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.fallbackText).toBe(
+      "Readable result",
+    );
+    outputs.push({
+      callId: "call_1",
+      output: [{ type: "output_text", text: "Newer result" }, resource("s3")],
+    });
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.fallbackText).toBe(
+      "Newer result",
+    );
+  });
+});
+
+describe("collectA2uiOutputs", () => {
+  const sidecar = (
+    messages: unknown[],
+    callId = "missing",
+    fallbackText?: string,
+  ): A2uiPresentationItem => ({
+    type: "ajac-zero:a2ui",
+    id: "sidecar",
+    status: "completed",
+    call_id: callId,
+    mime_type: A2UI_MIME_TYPE,
+    uri: "a2ui://example/sidecar",
+    fallback_text: fallbackText,
+    messages: messages as Array<Record<string, unknown>>,
+  });
+
+  const canonicalItems = (): ORItem[] => [
+    {
+      type: "function_call",
+      call_id: "call_1",
+      name: "tool",
+      arguments: "{}",
+    },
+    {
+      type: "function_call_output",
+      call_id: "call_1",
+      output: [
+        {
+          type: "resource",
+          resource: {
+            mimeType: A2UI_MIME_TYPE,
+            text: JSON.stringify([createSurface()]),
+          },
+        },
+      ],
+    },
+  ];
+
+  it("ignores an orphan sidecar that updates a valid surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      {
+        type: "function_call",
+        call_id: "missing",
+        name: "orphan",
+        arguments: "{}",
+      },
+      sidecar([
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "hijacked" }],
+          },
+        },
+      ]),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root,
+    ).toBeUndefined();
+  });
+
+  it("ignores an orphan sidecar that deletes a valid surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      { type: "function_call_output", call_id: "missing", output: "{}" },
+      sidecar([{ deleteSurface: { surfaceId: "s1" } }]),
+    ]);
+    expect(reduceA2uiOutputs(outputs).get("call_1")?.surfaces).toHaveLength(1);
+  });
+
+  it("applies a linked sidecar in order and moves a recreated surface anchor", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      sidecar(
+        [
+          createSurface(),
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "fresh" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root
+        ?.text,
+    ).toBe("fresh");
+  });
+
+  it("applies a linked update-only sidecar to its canonical surface", () => {
+    const outputs = collectA2uiOutputs([
+      ...canonicalItems(),
+      sidecar(
+        [
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root
+        ?.text,
+    ).toBe("updated");
+  });
+
+  it("keeps an update-only sidecar before its canonical output in trajectory order", () => {
+    const [call, output] = canonicalItems();
+    const outputs = collectA2uiOutputs([
+      call as ORItem,
+      sidecar(
+        [
+          {
+            updateComponents: {
+              surfaceId: "s1",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ],
+        "call_1",
+      ),
+      output as ORItem,
+    ]);
+    expect(
+      reduceA2uiOutputs(outputs).get("call_1")?.surfaces[0]?.components.root,
+    ).toBeUndefined();
+  });
+
+  it("preserves canonical fallback through an empty sidecar and uses a later sidecar fallback", () => {
+    const items: ORItem[] = [
+      {
+        type: "function_call",
+        call_id: "call_1",
+        name: "tool",
+        arguments: "{}",
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_1",
+        output: [
+          { type: "output_text", text: "Readable result" },
+          {
+            type: "resource",
+            resource: {
+              mimeType: A2UI_MIME_TYPE,
+              text: JSON.stringify([
+                {
+                  createSurface: {
+                    surfaceId: "s1",
+                    catalogId: "urn:unsupported",
+                  },
+                },
+              ]),
+            },
+          },
+        ],
+      },
+      sidecar([createSurface("s2")], "call_1"),
+    ];
+    let group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("Readable result");
+    expect(group?.showFallback).toBe(false);
+
+    items.push(sidecar([createSurface("s3")], "call_1", ""));
+    group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("");
+    expect(group?.showFallback).toBe(false);
+
+    items.push(sidecar([createSurface("s4")], "call_1", "Newer result"));
+    group = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call_1");
+    expect(group?.fallbackText).toBe("Newer result");
+    expect(group?.showFallback).toBe(false);
+  });
 });
 
 /* ------------------------- dynamic values & checks ------------------------ */
@@ -733,6 +946,13 @@ describe("extractA2uiResources", () => {
 /* ------------------------ conversation trajectory order --------------------- */
 
 describe("collectA2uiOutputs", () => {
+  const functionCall = (callId: string): ORItem => ({
+    type: "function_call",
+    call_id: callId,
+    name: "tool",
+    arguments: "{}",
+  });
+
   const functionCallOutput = (
     callId: string,
     messages: A2uiMessage[],
@@ -763,7 +983,10 @@ describe("collectA2uiOutputs", () => {
     // reduction would apply call2's update before call1's createSurface,
     // discarding it.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call1", []),
       functionCallOutput("call2", [
         {
           updateComponents: {
@@ -780,8 +1003,53 @@ describe("collectA2uiOutputs", () => {
     expect(surface?.components.root?.text).toBe("from call2");
   });
 
+  it("keeps a pre-output recreating sidecar before an intervening update", () => {
+    const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
+      presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call2", [
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "from call2" }],
+          },
+        },
+      ]),
+      functionCallOutput("call1", []),
+    ];
+
+    const surface = reduceA2uiOutputs(collectA2uiOutputs(items)).get("call1")
+      ?.surfaces[0];
+    expect(surface?.components.root?.text).toBe("from call2");
+  });
+
+  it("discards a pre-output update-only sidecar before another call creates its target", () => {
+    const items: ORItem[] = [
+      functionCall("call1"),
+      presentationSidecar("call1", [
+        {
+          updateComponents: {
+            surfaceId: "s1",
+            components: [{ id: "root", component: "Text", text: "sidecar" }],
+          },
+        },
+      ]),
+      functionCall("call2"),
+      functionCallOutput("call2", [createSurface("s1")]),
+      functionCallOutput("call1", []),
+    ];
+
+    expect(
+      reduceA2uiOutputs(collectA2uiOutputs(items)).get("call2")?.surfaces[0]
+        ?.components.root,
+    ).toBeUndefined();
+  });
+
   it("preserves order regardless of whether the sidecar or canonical output comes first", () => {
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       functionCallOutput("call2", [
         {
           updateComponents: {
@@ -791,6 +1059,7 @@ describe("collectA2uiOutputs", () => {
         },
       ]),
       presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call1", []),
     ];
 
     const outputs = collectA2uiOutputs(items);
@@ -822,6 +1091,7 @@ describe("collectA2uiOutputs", () => {
     } as ContentPart;
 
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -862,6 +1132,31 @@ describe("collectA2uiOutputs", () => {
     expect(reduced.get("call1")?.fallbackText).toBe("sidecar wins");
   });
 
+  it("preserves an empty canonical fallback through a recreating sidecar", () => {
+    const items: ORItem[] = [
+      functionCall("call1"),
+      {
+        type: "function_call_output",
+        call_id: "call1",
+        output: [
+          { type: "output_text", text: "" },
+          {
+            type: "resource",
+            resource: {
+              mimeType: A2UI_MIME_TYPE,
+              text: JSON.stringify([createSurface("s1")]),
+            },
+          },
+        ],
+      } as FunctionCallOutputItem,
+      presentationSidecar("call1", [createSurface("s1")]),
+    ];
+
+    expect(
+      reduceA2uiOutputs(collectA2uiOutputs(items)).get("call1")?.fallbackText,
+    ).toBe("");
+  });
+
   it("preserves canonical content for surfaces the sidecar doesn't describe", () => {
     // The canonical output creates two surfaces (s1, s2); the sidecar only
     // replaces s1. s2 must survive untouched — precedence is per-surface,
@@ -876,6 +1171,7 @@ describe("collectA2uiOutputs", () => {
     } as ContentPart;
 
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -915,6 +1211,8 @@ describe("collectA2uiOutputs", () => {
     // (s0); that update is unrelated to the sidecar's surface (s1) and must
     // not be dropped.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       {
         type: "function_call_output",
         call_id: "call0",
@@ -967,6 +1265,8 @@ describe("collectA2uiOutputs", () => {
     // last, it must win — relocating it to call1's position (right after
     // call1's own canonical output) would let call2's update win instead.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1008,6 +1308,7 @@ describe("collectA2uiOutputs", () => {
 
   it("preserves multiple sidecars for one call, each reduced in its own trajectory position", () => {
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1067,6 +1368,7 @@ describe("collectA2uiOutputs", () => {
     // canonical createSurface (because the surface is "covered" by a
     // sidecar) would leave the update with no surface to apply to.
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",

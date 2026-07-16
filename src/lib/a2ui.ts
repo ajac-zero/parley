@@ -21,6 +21,8 @@ import {
   type A2uiPresentationItem,
   type ContentPart,
   type FunctionCallOutputItem,
+  isFunctionCallItem,
+  isFunctionCallOutputItem,
   type MessageItem,
   type ORItem,
 } from "~/lib/openresponses";
@@ -769,7 +771,7 @@ function extractFromParts(parts: unknown[]): A2uiExtraction {
       continue;
     }
     const text = textFromPart(part);
-    if (text) texts.push(text);
+    if (text !== null) texts.push(text);
   }
   return {
     resources,
@@ -845,7 +847,7 @@ export function a2uiPresentationOutput(
     return null;
   }
   const output: ContentPart[] = [];
-  if (item.fallback_text) {
+  if (item.fallback_text !== undefined) {
     output.push({ type: "output_text", text: item.fallback_text });
   }
   output.push({
@@ -891,7 +893,7 @@ function canonicalPartsExcludingSurfaces(
 ): ContentPart[] {
   const extraction = extractA2uiResources(output);
   const parts: ContentPart[] = [];
-  if (extraction.fallbackText) {
+  if (extraction.fallbackText !== null) {
     parts.push({ type: "output_text", text: extraction.fallbackText });
   }
   for (const resource of extraction.resources) {
@@ -921,16 +923,11 @@ function canonicalPartsExcludingSurfaces(
  *
  * Two rules, both required for correct A2UI state:
  *
- *  1. Order must match the conversation's actual trajectory. Surfaces are
- *     shared, order-sensitive state (a later call can update a surface an
- *     earlier one created), so grouping items by kind before reducing —
- *     e.g. all canonical outputs, then all sidecars — silently reorders
- *     them relative to each other and can discard newer writes. Each
- *     sidecar is therefore kept as its own entry at its own trajectory
- *     position — never relocated to, or merged into, its linked call's
- *     position — and never deduplicated: a call can have more than one
- *     sidecar over time, and the extension contract requires all of them
- *     to be reduced in trajectory order, same as any other message source.
+ *  1. Linkage is evaluated against the current whole trajectory, but every
+ *     eligible sidecar stays at its actual item position. Recomputing when a
+ *     canonical pair arrives can make an earlier sidecar eligible without
+ *     reordering it relative to other calls. Sidecars are never deduplicated;
+ *     a call can have more than one over time.
  *  2. When a call has *both* a canonical embedded-resource form and a
  *     linked presentation sidecar that *recreates* a surface (its own
  *     `createSurface`), the sidecar is authoritative for that surface: the
@@ -944,6 +941,13 @@ function canonicalPartsExcludingSurfaces(
  *     trajectory order like any other pair of writes to a shared surface.
  */
 export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
+  const callIds = new Set<string>();
+  const outputCallIds = new Set<string>();
+  for (const item of items) {
+    if (isFunctionCallItem(item)) callIds.add(item.call_id);
+    if (isFunctionCallOutputItem(item)) outputCallIds.add(item.call_id);
+  }
+
   // Union, per call_id, of every surface a valid sidecar linked to that
   // call *recreates* (carries its own createSurface for) — regardless of
   // where in the trajectory the sidecar(s) fall. Only these surfaces are
@@ -954,7 +958,14 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
   for (const item of items) {
     if (item.type !== A2UI_ITEM_TYPE) continue;
     const presentation = item as A2uiPresentationItem;
-    if (!a2uiPresentationOutput(presentation)) continue;
+    const output = a2uiPresentationOutput(presentation);
+    if (
+      !output ||
+      !callIds.has(output.callId) ||
+      !outputCallIds.has(output.callId)
+    ) {
+      continue;
+    }
     const ids =
       recreatedSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
     for (const message of presentation.messages as A2uiMessage[]) {
@@ -966,7 +977,7 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
 
   const outputs: A2uiOutputRef[] = [];
   for (const item of items) {
-    if (item.type === "function_call_output") {
+    if (isFunctionCallOutputItem(item)) {
       const call = item as FunctionCallOutputItem;
       if (!call.call_id) continue;
       const overlap = recreatedSurfaceIdsByCall.get(call.call_id);
@@ -977,7 +988,13 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
       outputs.push({ callId: call.call_id, output });
     } else if (item.type === A2UI_ITEM_TYPE) {
       const output = a2uiPresentationOutput(item as A2uiPresentationItem);
-      if (output) outputs.push(output);
+      if (
+        output &&
+        callIds.has(output.callId) &&
+        outputCallIds.has(output.callId)
+      ) {
+        outputs.push(output);
+      }
     }
   }
   return outputs;
@@ -1022,7 +1039,7 @@ export function reduceA2uiOutputs(
     referencedIds: Set<string>;
   }
 
-  const scans: CallScan[] = [];
+  const scans = new Map<string, CallScan>();
   const allMessages: A2uiMessage[] = [];
   /** surfaceId -> callId of the latest createSurface (the render anchor). */
   const anchors = new Map<string, string>();
@@ -1049,17 +1066,26 @@ export function reduceA2uiOutputs(
         }
       }
     }
-    scans.push({
-      callId,
-      hasResources: extraction.resources.length > 0,
-      fallbackText: extraction.fallbackText,
-      referencedIds,
-    });
+    const scan = scans.get(callId);
+    if (scan) {
+      scan.hasResources ||= extraction.resources.length > 0;
+      if (extraction.fallbackText !== null) {
+        scan.fallbackText = extraction.fallbackText;
+      }
+      for (const surfaceId of referencedIds) scan.referencedIds.add(surfaceId);
+    } else {
+      scans.set(callId, {
+        callId,
+        hasResources: extraction.resources.length > 0,
+        fallbackText: extraction.fallbackText,
+        referencedIds,
+      });
+    }
   }
 
   const reduced = reduceA2uiMessages(allMessages, enabledCatalogIds);
   const result = new Map<string, A2uiCallSurfaces>();
-  for (const scan of scans) {
+  for (const scan of scans.values()) {
     const surfaces = reduced.filter(
       (surface) => anchors.get(surface.surfaceId) === scan.callId,
     );
