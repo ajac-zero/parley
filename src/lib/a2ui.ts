@@ -893,7 +893,7 @@ function canonicalPartsExcludingSurfaces(
 ): ContentPart[] {
   const extraction = extractA2uiResources(output);
   const parts: ContentPart[] = [];
-  if (extraction.fallbackText) {
+  if (extraction.fallbackText !== null) {
     parts.push({ type: "output_text", text: extraction.fallbackText });
   }
   for (const resource of extraction.resources) {
@@ -923,16 +923,11 @@ function canonicalPartsExcludingSurfaces(
  *
  * Two rules, both required for correct A2UI state:
  *
- *  1. Order must match the conversation's actual trajectory. Surfaces are
- *     shared, order-sensitive state (a later call can update a surface an
- *     earlier one created), so grouping items by kind before reducing —
- *     e.g. all canonical outputs, then all sidecars — silently reorders
- *     them relative to each other and can discard newer writes. Each
- *     sidecar is therefore kept as its own entry at its own trajectory
- *     position — never relocated to, or merged into, its linked call's
- *     position — and never deduplicated: a call can have more than one
- *     sidecar over time, and the extension contract requires all of them
- *     to be reduced in trajectory order, same as any other message source.
+ *  1. Linkage is evaluated against the current whole trajectory, but every
+ *     eligible sidecar stays at its actual item position. Recomputing when a
+ *     canonical pair arrives can make an earlier sidecar eligible without
+ *     reordering it relative to other calls. Sidecars are never deduplicated;
+ *     a call can have more than one over time.
  *  2. When a call has *both* a canonical embedded-resource form and a
  *     linked presentation sidecar that *recreates* a surface (its own
  *     `createSurface`), the sidecar is authoritative for that surface: the
@@ -981,8 +976,6 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
   }
 
   const outputs: A2uiOutputRef[] = [];
-  const pendingSidecars = new Map<string, A2uiOutputRef[]>();
-  const emittedOutputCallIds = new Set<string>();
   for (const item of items) {
     if (isFunctionCallOutputItem(item)) {
       const call = item as FunctionCallOutputItem;
@@ -993,9 +986,6 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
           ? canonicalPartsExcludingSurfaces(call.output, overlap)
           : call.output;
       outputs.push({ callId: call.call_id, output });
-      emittedOutputCallIds.add(call.call_id);
-      outputs.push(...(pendingSidecars.get(call.call_id) ?? []));
-      pendingSidecars.delete(call.call_id);
     } else if (item.type === A2UI_ITEM_TYPE) {
       const output = a2uiPresentationOutput(item as A2uiPresentationItem);
       if (
@@ -1003,13 +993,7 @@ export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
         callIds.has(output.callId) &&
         outputCallIds.has(output.callId)
       ) {
-        if (emittedOutputCallIds.has(output.callId)) {
-          outputs.push(output);
-        } else {
-          const pending = pendingSidecars.get(output.callId) ?? [];
-          pending.push(output);
-          pendingSidecars.set(output.callId, pending);
-        }
+        outputs.push(output);
       }
     }
   }
