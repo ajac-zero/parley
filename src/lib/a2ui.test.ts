@@ -947,6 +947,13 @@ describe("extractA2uiResources", () => {
 /* ------------------------ conversation trajectory order --------------------- */
 
 describe("collectA2uiOutputs", () => {
+  const functionCall = (callId: string): ORItem => ({
+    type: "function_call",
+    call_id: callId,
+    name: "tool",
+    arguments: "{}",
+  });
+
   const functionCallOutput = (
     callId: string,
     messages: A2uiMessage[],
@@ -977,7 +984,10 @@ describe("collectA2uiOutputs", () => {
     // reduction would apply call2's update before call1's createSurface,
     // discarding it.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call1", []),
       functionCallOutput("call2", [
         {
           updateComponents: {
@@ -996,6 +1006,8 @@ describe("collectA2uiOutputs", () => {
 
   it("preserves order regardless of whether the sidecar or canonical output comes first", () => {
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       functionCallOutput("call2", [
         {
           updateComponents: {
@@ -1005,6 +1017,7 @@ describe("collectA2uiOutputs", () => {
         },
       ]),
       presentationSidecar("call1", [createSurface("s1")]),
+      functionCallOutput("call1", []),
     ];
 
     const outputs = collectA2uiOutputs(items);
@@ -1036,6 +1049,7 @@ describe("collectA2uiOutputs", () => {
     } as ContentPart;
 
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1090,6 +1104,7 @@ describe("collectA2uiOutputs", () => {
     } as ContentPart;
 
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1129,6 +1144,8 @@ describe("collectA2uiOutputs", () => {
     // (s0); that update is unrelated to the sidecar's surface (s1) and must
     // not be dropped.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       {
         type: "function_call_output",
         call_id: "call0",
@@ -1181,6 +1198,8 @@ describe("collectA2uiOutputs", () => {
     // last, it must win — relocating it to call1's position (right after
     // call1's own canonical output) would let call2's update win instead.
     const items: ORItem[] = [
+      functionCall("call1"),
+      functionCall("call2"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1222,6 +1241,7 @@ describe("collectA2uiOutputs", () => {
 
   it("preserves multiple sidecars for one call, each reduced in its own trajectory position", () => {
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
@@ -1281,6 +1301,7 @@ describe("collectA2uiOutputs", () => {
     // canonical createSurface (because the surface is "covered" by a
     // sidecar) would leave the update with no surface to apply to.
     const items: ORItem[] = [
+      functionCall("call1"),
       {
         type: "function_call_output",
         call_id: "call1",
