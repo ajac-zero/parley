@@ -14,7 +14,11 @@ import { useActiveTurn } from "~/hooks/use-active-turn";
 import { useElementHeight } from "~/hooks/use-element-size";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import { usePinnedSurfaces } from "~/hooks/use-pinned-surfaces";
-import { collectA2uiOutputs, reduceA2uiOutputs } from "~/lib/a2ui";
+import {
+  collectA2uiOutputs,
+  reduceA2uiOutputs,
+  ScopedCallMap,
+} from "~/lib/a2ui";
 import { chatStore } from "~/lib/chat-store";
 import type { FunctionCallItem } from "~/lib/openresponses";
 import { conversationQuery } from "~/lib/queries";
@@ -61,7 +65,9 @@ function ConversationPage() {
    * placement is host policy — the same map drives both inline anchors and
    * the pinned side canvas. */
   const a2uiByCall = useMemo(() => {
-    const outputs = collectA2uiOutputs(entries.map((entry) => entry.item));
+    const outputs = collectA2uiOutputs(
+      entries.map((entry) => ({ item: entry.item, turnKey: entry.turnKey })),
+    );
     return reduceA2uiOutputs(outputs, config.enabledA2uiCatalogIds);
   }, [entries, config.enabledA2uiCatalogIds]);
 
@@ -76,20 +82,23 @@ function ConversationPage() {
   );
 
   const canvasItems = useMemo(() => {
-    const callNames = new Map<string, string>();
+    // Scoped like every other call_id lookup here: the same id may be
+    // reused by an unrelated call in a different turn (see ~/lib/a2ui's
+    // `ScopedCallMap` docs).
+    const callNames = new ScopedCallMap<string>();
     for (const entry of entries) {
       if (entry.item.type === "function_call") {
         const call = entry.item as FunctionCallItem;
-        if (call.call_id) callNames.set(call.call_id, call.name);
+        if (call.call_id) callNames.set(entry.turnKey, call.call_id, call.name);
       }
     }
     const items: A2uiCanvasItem[] = [];
-    for (const [callId, group] of a2uiByCall) {
+    for (const [turnKey, callId, group] of a2uiByCall.entries()) {
       for (const surface of group.surfaces) {
         if (surface.supported && pinnedSet.has(surface.surfaceId)) {
           items.push({
             surface,
-            title: callNames.get(callId) ?? surface.surfaceId,
+            title: callNames.get(turnKey, callId) ?? surface.surfaceId,
           });
         }
       }

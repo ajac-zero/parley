@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
   A2UI_INSTALLED_CATALOG_IDS,
+  type A2uiCallSurfaces,
   type A2uiMessage,
   type A2uiOutputRef,
   extractA2uiResources,
@@ -27,8 +28,29 @@ import { handleDemoResponses } from "./agent";
 const reduceA2uiMessages = (messages: A2uiMessage[]) =>
   reduceA2uiMessagesStrict(messages, A2UI_INSTALLED_CATALOG_IDS);
 
-const reduceA2uiOutputs = (outputs: A2uiOutputRef[]) =>
-  reduceA2uiOutputsStrict(outputs, A2UI_INSTALLED_CATALOG_IDS);
+/*
+ * `reduceA2uiOutputs` scopes every lookup by `(turnKey, callId)` in
+ * production (call_id is only unique within one turn — see
+ * ~/lib/a2ui.ts's `ScopedCallMap` docs). These tests only ever reduce one
+ * turn's worth of output at a time, so default everything to one implicit
+ * turn and flatten the result back to a plain `Map<callId, ...>`.
+ */
+const DEFAULT_TURN = "turn1";
+
+const reduceA2uiOutputs = (
+  outputs: Array<{ callId: string; output: A2uiOutputRef["output"] }>,
+): Map<string, A2uiCallSurfaces> => {
+  const scoped = reduceA2uiOutputsStrict(
+    outputs.map((output) => ({ ...output, turnKey: DEFAULT_TURN })),
+    A2UI_INSTALLED_CATALOG_IDS,
+  );
+  const flat = new Map<string, A2uiCallSurfaces>();
+  for (const callId of new Set(outputs.map((output) => output.callId))) {
+    const value = scoped.get(DEFAULT_TURN, callId);
+    if (value) flat.set(callId, value);
+  }
+  return flat;
+};
 
 const request = (body: unknown) =>
   new Request("http://demo.local/v1/responses", {

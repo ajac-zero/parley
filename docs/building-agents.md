@@ -132,6 +132,18 @@ for live argument streaming), execute the tool yourself, then emit a
 renders the call and its output; in replay mode both items are included in
 subsequent turns' input so your agent keeps the context.
 
+**`call_id` uniqueness:** `call_id` only needs to be unique within the
+single response (turn) it belongs to — Parley scopes every
+`function_call` ↔ `function_call_output` (and, if you use them, A2UI
+presentation sidecar) pairing by `(turn, call_id)`, never by `call_id`
+alone. Reusing a short or sequential id scheme across turns is fine and
+expected. What Parley does *not* support is reusing the same `call_id` for
+more than one `function_call`/`function_call_output` within the *same*
+response — that's ambiguous, and Parley degrades deterministically (no
+output is paired to those calls) rather than guessing which one you meant.
+See "call_id uniqueness scope" in [generative-ui.md](./generative-ui.md)
+for how this interacts with A2UI surfaces specifically.
+
 ### Downloadable artifacts
 
 Providers may emit the optional `ajac-zero:artifact` item from the

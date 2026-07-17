@@ -827,16 +827,94 @@ export function extractA2uiResources(
 
 /* ------------------------- conversation-level state ------------------------ */
 
-/** One tool output in conversation order, keyed by its `call_id`. */
+/**
+ * `call_id` is assigned by the agent/model and is only guaranteed unique
+ * *within the single turn (response) that produced it* — an agent may
+ * legitimately reuse the same `call_id` string in a later, unrelated turn
+ * (see docs/generative-ui.md, "call_id uniqueness scope"). Every
+ * conversation-wide lookup keyed by `call_id` in this module and its
+ * consumers (`components/chat/thread.tsx`,
+ * `routes/_app/chat.$conversationId.tsx`) must therefore also carry the
+ * `turnKey` that scopes it, or it risks conflating two unrelated calls that
+ * happen to share an id. `turnKey` is typically the persisted `turnId`
+ * (falling back to something unique per-entry when unavailable, e.g. an
+ * orphaned item with no turn) — see `ThreadEntry.turnId` in `thread.tsx`.
+ */
+export type TurnKey = string;
+
+/**
+ * Minimal two-level map keyed by `(turnKey, callId)`, used everywhere a
+ * `call_id` lookup must be scoped to the turn that produced it.
+ */
+export class ScopedCallMap<V> {
+  #inner = new Map<TurnKey, Map<string, V>>();
+
+  set(turnKey: TurnKey, callId: string, value: V): void {
+    let inner = this.#inner.get(turnKey);
+    if (!inner) {
+      inner = new Map();
+      this.#inner.set(turnKey, inner);
+    }
+    inner.set(callId, value);
+  }
+
+  get(turnKey: TurnKey, callId: string): V | undefined {
+    return this.#inner.get(turnKey)?.get(callId);
+  }
+
+  has(turnKey: TurnKey, callId: string): boolean {
+    return this.#inner.get(turnKey)?.has(callId) ?? false;
+  }
+
+  /** Every stored value, in no particular order. */
+  *values(): IterableIterator<V> {
+    for (const inner of this.#inner.values()) {
+      yield* inner.values();
+    }
+  }
+
+  /** Every `[turnKey, callId, value]` triple, in no particular order. */
+  *entries(): IterableIterator<[TurnKey, string, V]> {
+    for (const [turnKey, inner] of this.#inner) {
+      for (const [callId, value] of inner) {
+        yield [turnKey, callId, value];
+      }
+    }
+  }
+
+  get size(): number {
+    let total = 0;
+    for (const inner of this.#inner.values()) total += inner.size;
+    return total;
+  }
+}
+
+/** One trajectory item paired with the turn (response) that produced it. */
+export interface A2uiTrajectoryItem {
+  item: ORItem;
+  turnKey: TurnKey;
+}
+
+/** One tool output in conversation order, scoped to its turn and `call_id`. */
 export interface A2uiOutputRef {
+  turnKey: TurnKey;
   callId: string;
   output: string | ContentPart[] | null | undefined;
+}
+
+/**
+ * A sidecar's own linkage, before it's known to be eligible (that requires
+ * trajectory-wide context — see `collectA2uiOutputs`) or scoped to a turn.
+ */
+export interface A2uiSidecarOutput {
+  callId: string;
+  output: ContentPart[];
 }
 
 /** Converts a valid presentation sidecar into ordinary reducer input. */
 export function a2uiPresentationOutput(
   item: A2uiPresentationItem,
-): A2uiOutputRef | null {
+): A2uiSidecarOutput | null {
   if (
     item.status !== "completed" ||
     item.mime_type !== A2UI_MIME_TYPE ||
@@ -921,7 +999,7 @@ function canonicalPartsExcludingSurfaces(
  * its raw items (canonical `function_call_output`s and, where present,
  * their linked `ajac-zero:a2ui` presentation sidecars).
  *
- * Two rules, both required for correct A2UI state:
+ * Three rules, all required for correct A2UI state:
  *
  *  1. Linkage is evaluated against the current whole trajectory, but every
  *     eligible sidecar stays at its actual item position. Recomputing when a
@@ -939,61 +1017,76 @@ function canonicalPartsExcludingSurfaces(
  *     else about the canonical output, including other surfaces entirely)
  *     is preserved and simply reduced before the sidecar's update, in
  *     trajectory order like any other pair of writes to a shared surface.
+ *  3. `call_id` is only required to be unique *within one turn* (see
+ *     `A2uiTrajectoryItem`/`ScopedCallMap`). Every lookup below is scoped by
+ *     `turnKey`, so a later turn reusing an earlier turn's `call_id` cannot
+ *     link to that earlier call's output or sidecars — each turn's calls
+ *     are reduced entirely independently. Canonical `function_call_output`
+ *     items are (as before) always collected regardless of whether a
+ *     matching `function_call` is present in `entries` at all (trajectories
+ *     may be truncated); only *sidecar* linkage additionally requires both
+ *     a `function_call` and its output to be present in the same turn,
+ *     matching the pre-existing (now turn-scoped) eligibility rule.
  */
-export function collectA2uiOutputs(items: ORItem[]): A2uiOutputRef[] {
-  const callIds = new Set<string>();
-  const outputCallIds = new Set<string>();
-  for (const item of items) {
-    if (isFunctionCallItem(item)) callIds.add(item.call_id);
-    if (isFunctionCallOutputItem(item)) outputCallIds.add(item.call_id);
+export function collectA2uiOutputs(
+  entries: readonly A2uiTrajectoryItem[],
+): A2uiOutputRef[] {
+  const callIds = new ScopedCallMap<true>();
+  const outputCallIds = new ScopedCallMap<true>();
+  for (const { item, turnKey } of entries) {
+    if (isFunctionCallItem(item)) callIds.set(turnKey, item.call_id, true);
+    if (isFunctionCallOutputItem(item)) {
+      outputCallIds.set(turnKey, item.call_id, true);
+    }
   }
 
-  // Union, per call_id, of every surface a valid sidecar linked to that
-  // call *recreates* (carries its own createSurface for) — regardless of
-  // where in the trajectory the sidecar(s) fall. Only these surfaces are
-  // ones the sidecar fully replaces; a sidecar that merely references a
-  // surface incrementally must not suppress the canonical setup it relies
-  // on.
-  const recreatedSurfaceIdsByCall = new Map<string, Set<string>>();
-  for (const item of items) {
+  // Union, per (turnKey, call_id), of every surface a valid sidecar linked
+  // to that call *recreates* (carries its own createSurface for) —
+  // regardless of where in the trajectory the sidecar(s) fall. Only these
+  // surfaces are ones the sidecar fully replaces; a sidecar that merely
+  // references a surface incrementally must not suppress the canonical
+  // setup it relies on.
+  const recreatedSurfaceIdsByCall = new ScopedCallMap<Set<string>>();
+  for (const { item, turnKey } of entries) {
     if (item.type !== A2UI_ITEM_TYPE) continue;
     const presentation = item as A2uiPresentationItem;
     const output = a2uiPresentationOutput(presentation);
     if (
       !output ||
-      !callIds.has(output.callId) ||
-      !outputCallIds.has(output.callId)
+      !callIds.has(turnKey, output.callId) ||
+      !outputCallIds.has(turnKey, output.callId)
     ) {
       continue;
     }
     const ids =
-      recreatedSurfaceIdsByCall.get(presentation.call_id) ?? new Set<string>();
+      recreatedSurfaceIdsByCall.get(turnKey, presentation.call_id) ??
+      new Set<string>();
     for (const message of presentation.messages as A2uiMessage[]) {
       const created = createdSurfaceIdInMessage(message);
       if (created) ids.add(created);
     }
-    recreatedSurfaceIdsByCall.set(presentation.call_id, ids);
+    recreatedSurfaceIdsByCall.set(turnKey, presentation.call_id, ids);
   }
 
   const outputs: A2uiOutputRef[] = [];
-  for (const item of items) {
+  for (const { item, turnKey } of entries) {
     if (isFunctionCallOutputItem(item)) {
       const call = item as FunctionCallOutputItem;
       if (!call.call_id) continue;
-      const overlap = recreatedSurfaceIdsByCall.get(call.call_id);
+      const overlap = recreatedSurfaceIdsByCall.get(turnKey, call.call_id);
       const output =
         overlap && overlap.size > 0
           ? canonicalPartsExcludingSurfaces(call.output, overlap)
           : call.output;
-      outputs.push({ callId: call.call_id, output });
+      outputs.push({ turnKey, callId: call.call_id, output });
     } else if (item.type === A2UI_ITEM_TYPE) {
       const output = a2uiPresentationOutput(item as A2uiPresentationItem);
       if (
         output &&
-        callIds.has(output.callId) &&
-        outputCallIds.has(output.callId)
+        callIds.has(turnKey, output.callId) &&
+        outputCallIds.has(turnKey, output.callId)
       ) {
-        outputs.push(output);
+        outputs.push({ turnKey, callId: output.callId, output: output.output });
       }
     }
   }
@@ -1017,36 +1110,44 @@ export interface A2uiCallSurfaces {
 /**
  * Reduces A2UI resources across a whole conversation's tool outputs.
  *
- * Surfaces are shared state: a later output may `updateComponents` /
- * `updateDataModel` / `deleteSurface` a surface created by an earlier tool
- * call (that is how an agent morphs a form into its result in place). Each
- * surviving surface is anchored to — and should be rendered at — the output
+ * Surfaces are shared state *conversation-wide, regardless of turn*: a
+ * later output may `updateComponents` / `updateDataModel` / `deleteSurface`
+ * a surface created by an earlier tool call, possibly in an earlier turn
+ * (that is how an agent morphs a form into its result in place). Each
+ * surviving surface is anchored to — and should be rendered at — the call
  * containing its latest `createSurface`; outputs that merely update an
- * existing surface render nothing themselves.
+ * existing surface render nothing themselves. `call_id` (unlike `surfaceId`)
+ * is only unique within a turn, so the anchor and every call-keyed lookup
+ * here carry `turnKey` alongside `callId` (see `A2uiOutputRef`).
  *
  * `enabledCatalogIds` is required for the same reason as in
  * `reduceA2uiMessages`: enabled (admin settings) must never silently default
  * to installed (build manifest).
  */
 export function reduceA2uiOutputs(
-  outputs: A2uiOutputRef[],
+  outputs: readonly A2uiOutputRef[],
   enabledCatalogIds: readonly string[],
-): Map<string, A2uiCallSurfaces> {
+): ScopedCallMap<A2uiCallSurfaces> {
   interface CallScan {
+    turnKey: TurnKey;
     callId: string;
     hasResources: boolean;
     fallbackText: string | null;
     referencedIds: Set<string>;
   }
+  interface Anchor {
+    turnKey: TurnKey;
+    callId: string;
+  }
 
-  const scans = new Map<string, CallScan>();
+  const scans = new ScopedCallMap<CallScan>();
   const allMessages: A2uiMessage[] = [];
-  /** surfaceId -> callId of the latest createSurface (the render anchor). */
-  const anchors = new Map<string, string>();
+  /** surfaceId -> (turnKey, callId) of the latest createSurface (the render anchor). */
+  const anchors = new Map<string, Anchor>();
   /** Every surfaceId a createSurface was seen for, live or not. */
   const createdIds = new Set<string>();
 
-  for (const { callId, output } of outputs) {
+  for (const { turnKey, callId, output } of outputs) {
     const extraction = extractA2uiResources(output);
     const referencedIds = new Set<string>();
     for (const resource of extraction.resources) {
@@ -1059,14 +1160,14 @@ export function reduceA2uiOutputs(
           if (body && typeof body.surfaceId === "string") {
             referencedIds.add(body.surfaceId);
             if (key === "createSurface") {
-              anchors.set(body.surfaceId, callId);
+              anchors.set(body.surfaceId, { turnKey, callId });
               createdIds.add(body.surfaceId);
             }
           }
         }
       }
     }
-    const scan = scans.get(callId);
+    const scan = scans.get(turnKey, callId);
     if (scan) {
       scan.hasResources ||= extraction.resources.length > 0;
       if (extraction.fallbackText !== null) {
@@ -1074,7 +1175,8 @@ export function reduceA2uiOutputs(
       }
       for (const surfaceId of referencedIds) scan.referencedIds.add(surfaceId);
     } else {
-      scans.set(callId, {
+      scans.set(turnKey, callId, {
+        turnKey,
         callId,
         hasResources: extraction.resources.length > 0,
         fallbackText: extraction.fallbackText,
@@ -1084,20 +1186,27 @@ export function reduceA2uiOutputs(
   }
 
   const reduced = reduceA2uiMessages(allMessages, enabledCatalogIds);
-  const result = new Map<string, A2uiCallSurfaces>();
-  for (const scan of scans.values()) {
-    const surfaces = reduced.filter(
-      (surface) => anchors.get(surface.surfaceId) === scan.callId,
-    );
-    if (!scan.hasResources && surfaces.length === 0) continue;
-    const touchesKnownSurface = [...scan.referencedIds].some((id) =>
+  const result = new ScopedCallMap<A2uiCallSurfaces>();
+  for (const {
+    turnKey,
+    callId,
+    hasResources,
+    fallbackText,
+    referencedIds,
+  } of scans.values()) {
+    const surfaces = reduced.filter((surface) => {
+      const anchor = anchors.get(surface.surfaceId);
+      return anchor?.turnKey === turnKey && anchor?.callId === callId;
+    });
+    if (!hasResources && surfaces.length === 0) continue;
+    const touchesKnownSurface = [...referencedIds].some((id) =>
       createdIds.has(id),
     );
-    result.set(scan.callId, {
+    result.set(turnKey, callId, {
       surfaces,
-      fallbackText: scan.fallbackText,
+      fallbackText,
       showFallback:
-        scan.hasResources && surfaces.length === 0 && !touchesKnownSurface,
+        hasResources && surfaces.length === 0 && !touchesKnownSurface,
     });
   }
   return result;
