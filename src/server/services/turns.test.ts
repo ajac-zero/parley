@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMissingEstablishedContinuation } from "./turns";
+import { hasMessageContent, isMissingEstablishedContinuation } from "./turns";
 
 describe("stateful continuation", () => {
   it("allows full replay when no response has completed", () => {
@@ -26,5 +26,46 @@ describe("stateful continuation", () => {
 
   it("does not apply to replay-mode agents", () => {
     expect(isMissingEstablishedContinuation("replay", null, true)).toBe(false);
+  });
+});
+
+describe("message emptiness policy", () => {
+  it("rejects a message with no text, files, or a2ui", () => {
+    expect(hasMessageContent({ text: "  ", fileIds: [] })).toBe(false);
+  });
+
+  it("accepts plain text", () => {
+    expect(hasMessageContent({ text: "hello", fileIds: [] })).toBe(true);
+  });
+
+  it("accepts a file attachment with no text", () => {
+    expect(hasMessageContent({ text: "", fileIds: ["file_1"] })).toBe(true);
+  });
+
+  it("accepts an A2UI-only message (no text, no files)", () => {
+    expect(
+      hasMessageContent({ text: "", fileIds: [], a2ui: [{ action: "tap" }] }),
+    ).toBe(true);
+  });
+
+  it("treats an empty a2ui array as no content", () => {
+    expect(hasMessageContent({ text: "", fileIds: [], a2ui: [] })).toBe(false);
+  });
+
+  it("accepts normal text-plus-A2UI messages unchanged", () => {
+    expect(
+      hasMessageContent({
+        text: "confirmed",
+        fileIds: [],
+        a2ui: [{ action: "tap" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("applies the same policy regardless of whether this is the first or a later turn", () => {
+    const a2uiOnly = { text: "", fileIds: [], a2ui: [{ action: "tap" }] };
+    // Same message shape must be valid whether it's the initial message of a
+    // new conversation or a subsequent message in an existing one.
+    expect(hasMessageContent(a2uiOnly)).toBe(true);
   });
 });
