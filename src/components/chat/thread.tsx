@@ -142,6 +142,19 @@ export function buildThread(
         streaming:
           active.phase !== "finished" &&
           (item as { status?: string }).status !== "completed",
+        // Falls back per-item-index like the persisted-row case above, but
+        // unlike that case this fallback is provably unreachable rather
+        // than merely dormant: `active.turnId` is set from the
+        // `x-parley-turn-id` response header (`chat-store.ts`'s
+        // `#dispatch`) *before* the SSE body is ever consumed into
+        // `state.items` — and identically supplied up front on `resume()` —
+        // so no agent item (which only ever arrives via that same SSE
+        // stream) can land in `active.state.items` while `active.turnId`
+        // is still null. If that invariant ever changes, this per-index
+        // fallback would stop pairing a live turn's own function_call and
+        // function_call_output with each other (the same class of bug this
+        // file's turnKey scoping otherwise fixes), so keep it in sync with
+        // `chat-store.ts` if the dispatch ordering there ever changes.
         turnKey: active.turnId ?? `stream:${index}`,
       });
     });

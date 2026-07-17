@@ -84,7 +84,13 @@ function ConversationPage() {
   const canvasItems = useMemo(() => {
     // Scoped like every other call_id lookup here: the same id may be
     // reused by an unrelated call in a different turn (see ~/lib/a2ui's
-    // `ScopedCallMap` docs).
+    // `ScopedCallMap` docs). This is purely a cosmetic lookup (a pinned
+    // canvas card's title) — if an agent reuses one call_id for two
+    // distinct function_call items with different names in the *same*
+    // turn (not enforced; see docs/building-agents.md's "call_id
+    // uniqueness"), the later name silently wins here. That's an accepted,
+    // low-stakes trade-off: unlike A2UI surface content or tool-output
+    // pairing, a mislabeled card title has no correctness impact.
     const callNames = new ScopedCallMap<string>();
     for (const entry of entries) {
       if (entry.item.type === "function_call") {
