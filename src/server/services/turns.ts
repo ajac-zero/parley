@@ -80,6 +80,12 @@ export const isMissingEstablishedContinuation = (
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
 const MAX_ARTIFACTS_PER_TURN = 10;
+/** Matches the HTTP schema's `fileIds` limit (see routes/api/chat.ts). */
+export const MAX_MESSAGE_ATTACHMENTS = 10;
+
+/** True when a message's attachment list exceeds the per-turn limit. */
+export const exceedsAttachmentLimit = (fileIds: readonly string[]): boolean =>
+  fileIds.length > MAX_MESSAGE_ATTACHMENTS;
 
 const keys = (turnId: string) => ({
   events: `parley:turn:${turnId}:events`,
@@ -166,7 +172,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             data: a2ui,
           } as unknown as ContentPart);
         }
-        for (const id of fileIds.slice(0, 10)) {
+        for (const id of fileIds) {
           const file = yield* files.getOwned(actor.userId, id).pipe(
             Effect.mapError(
               () =>
@@ -758,19 +764,24 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             ),
           );
 
+        if (params.message && exceedsAttachmentLimit(params.message.fileIds)) {
+          return yield* new TurnError({
+            message: `A message cannot include more than ${MAX_MESSAGE_ATTACHMENTS} attachments.`,
+            status: 400,
+          });
+        }
+
         const ownedFiles = params.message
-          ? yield* Effect.forEach(
-              params.message.fileIds.slice(0, 10),
-              (fileId) =>
-                files.getOwned(actor.userId, fileId).pipe(
-                  Effect.mapError(
-                    () =>
-                      new TurnError({
-                        message: "Attachment not found.",
-                        status: 400,
-                      }),
-                  ),
+          ? yield* Effect.forEach(params.message.fileIds, (fileId) =>
+              files.getOwned(actor.userId, fileId).pipe(
+                Effect.mapError(
+                  () =>
+                    new TurnError({
+                      message: "Attachment not found.",
+                      status: 400,
+                    }),
                 ),
+              ),
             )
           : [];
 
