@@ -10,6 +10,7 @@ import {
   Stream,
 } from "effect";
 import { A2UI_MIME_TYPE } from "~/lib/a2ui";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "~/lib/attachments";
 import {
   ARTIFACT_ITEM_TYPE,
   type ContentPart,
@@ -46,6 +47,16 @@ export class TurnError extends Data.TaggedError("TurnError")<{
   message: string;
   status?: number;
 }> {}
+
+const validateAttachmentCount = (fileIds: readonly string[]) => {
+  if (fileIds.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    return new TurnError({
+      message: `Too many attachments (max ${MAX_ATTACHMENTS_PER_MESSAGE}).`,
+      status: 400,
+    });
+  }
+  return null;
+};
 
 export interface StartTurnParams {
   conversationId?: string | null;
@@ -184,7 +195,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             data: a2ui,
           } as unknown as ContentPart);
         }
-        for (const id of fileIds.slice(0, 10)) {
+        for (const id of fileIds) {
           const file = yield* files.getOwned(actor.userId, id).pipe(
             Effect.mapError(
               () =>
@@ -768,6 +779,11 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
 
     const start = (actor: Actor, params: StartTurnParams) =>
       Effect.gen(function* () {
+        const attachmentCountError = validateAttachmentCount(
+          params.message?.fileIds ?? [],
+        );
+        if (attachmentCountError) return yield* attachmentCountError;
+
         yield* rateLimit
           .chat(actor.userId)
           .pipe(
@@ -777,18 +793,16 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           );
 
         const ownedFiles = params.message
-          ? yield* Effect.forEach(
-              params.message.fileIds.slice(0, 10),
-              (fileId) =>
-                files.getOwned(actor.userId, fileId).pipe(
-                  Effect.mapError(
-                    () =>
-                      new TurnError({
-                        message: "Attachment not found.",
-                        status: 400,
-                      }),
-                  ),
+          ? yield* Effect.forEach(params.message.fileIds, (fileId) =>
+              files.getOwned(actor.userId, fileId).pipe(
+                Effect.mapError(
+                  () =>
+                    new TurnError({
+                      message: "Attachment not found.",
+                      status: 400,
+                    }),
                 ),
+              ),
             )
           : [];
 

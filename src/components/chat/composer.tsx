@@ -15,6 +15,7 @@ import {
   usePromptInputController,
   useProviderAttachments,
 } from "~/components/ui/prompt-input";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "~/lib/attachments";
 import { cn } from "~/lib/utils";
 
 export interface ComposerProps {
@@ -132,7 +133,7 @@ function ComposerInner({
       <PromptInput
         onSubmit={handleSubmit}
         multiple
-        maxFiles={10}
+        maxFiles={MAX_ATTACHMENTS_PER_MESSAGE}
         maxFileSize={fileMaxMb * 1024 * 1024}
         onError={(err) => {
           toast.error(
