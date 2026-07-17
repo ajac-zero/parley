@@ -88,6 +88,24 @@ export const isMissingEstablishedContinuation = (
   lastResponseId === null &&
   hasCompletedResponse;
 
+/**
+ * Single, explicit emptiness policy for user messages.
+ *
+ * A message carries content if it has non-blank text, at least one
+ * attachment, or at least one A2UI action. This applies uniformly to the
+ * first turn of a conversation and to every subsequent turn: A2UI-only
+ * messages are valid in both cases, so the same API message shape is never
+ * accepted in one context and rejected in the other.
+ */
+export const hasMessageContent = (message: {
+  text: string;
+  fileIds: string[];
+  a2ui?: unknown[];
+}): boolean =>
+  message.text.trim().length > 0 ||
+  message.fileIds.length > 0 ||
+  (message.a2ui?.length ?? 0) > 0;
+
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
 const MAX_ARTIFACTS_PER_TURN = 10;
@@ -808,11 +826,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
               status: 400,
             });
           }
-          if (
-            !params.message ||
-            (params.message.text.trim().length === 0 &&
-              params.message.fileIds.length === 0)
-          ) {
+          if (!params.message || !hasMessageContent(params.message)) {
             return yield* new TurnError({
               message: "A message is required to start a conversation.",
               status: 400,
@@ -917,12 +931,7 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
           }),
         );
 
-        if (
-          params.message &&
-          (params.message.text.trim().length > 0 ||
-            params.message.fileIds.length > 0 ||
-            (params.message.a2ui?.length ?? 0) > 0)
-        ) {
+        if (params.message && hasMessageContent(params.message)) {
           if (params.message.text.length > 64_000) {
             return yield* new TurnError({
               message: "Message is too long (max 64k characters).",
