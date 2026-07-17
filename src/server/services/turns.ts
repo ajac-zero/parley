@@ -80,12 +80,40 @@ export const isMissingEstablishedContinuation = (
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
 const MAX_ARTIFACTS_PER_TURN = 10;
-/** Matches the HTTP schema's `fileIds` limit (see routes/api/chat.ts). */
+/**
+ * Per-message attachment cap. The HTTP schema's `fileIds` field
+ * (routes/api/chat.ts) imports this constant so the two stay in sync.
+ */
 export const MAX_MESSAGE_ATTACHMENTS = 10;
 
-/** True when a message's attachment list exceeds the per-turn limit. */
-export const exceedsAttachmentLimit = (fileIds: readonly string[]): boolean =>
-  fileIds.length > MAX_MESSAGE_ATTACHMENTS;
+export interface AttachmentLimitViolation {
+  message: string;
+  status: number;
+}
+
+/**
+ * Validates a message's attachment list against the per-turn cap, returning
+ * the exact `TurnError`-shaped violation `Turns.start` rejects with, or
+ * `null` when the list is acceptable. Exported so tests can exercise the
+ * precise rule `start` enforces without needing the full `Turns` service.
+ */
+export const validateMessageAttachments = (
+  fileIds: readonly string[],
+): AttachmentLimitViolation | null => {
+  if (fileIds.length > MAX_MESSAGE_ATTACHMENTS) {
+    return {
+      message: `A message cannot include more than ${MAX_MESSAGE_ATTACHMENTS} attachments.`,
+      status: 400,
+    };
+  }
+  if (new Set(fileIds).size !== fileIds.length) {
+    return {
+      message: "A message cannot reference the same attachment twice.",
+      status: 400,
+    };
+  }
+  return null;
+};
 
 const keys = (turnId: string) => ({
   events: `parley:turn:${turnId}:events`,
@@ -764,11 +792,13 @@ export class Turns extends Effect.Service<Turns>()("Turns", {
             ),
           );
 
-        if (params.message && exceedsAttachmentLimit(params.message.fileIds)) {
-          return yield* new TurnError({
-            message: `A message cannot include more than ${MAX_MESSAGE_ATTACHMENTS} attachments.`,
-            status: 400,
-          });
+        if (params.message) {
+          const violation = validateMessageAttachments(
+            params.message.fileIds ?? [],
+          );
+          if (violation) {
+            return yield* new TurnError(violation);
+          }
         }
 
         const ownedFiles = params.message

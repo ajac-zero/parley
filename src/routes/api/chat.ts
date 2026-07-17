@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Effect, Schema } from "effect";
 import { jsonError, requireSession, sseResponse } from "~/server/http";
 import { serverRuntime } from "~/server/runtime";
-import { Turns } from "~/server/services/turns";
+import { MAX_MESSAGE_ATTACHMENTS, Turns } from "~/server/services/turns";
 
 const ChatRequestSchema = Schema.Struct({
   conversationId: Schema.optional(Schema.NullOr(Schema.String)),
@@ -12,7 +12,9 @@ const ChatRequestSchema = Schema.Struct({
       Schema.Struct({
         text: Schema.String.pipe(Schema.maxLength(64_000)),
         fileIds: Schema.optionalWith(
-          Schema.Array(Schema.String).pipe(Schema.maxItems(10)),
+          Schema.Array(Schema.String).pipe(
+            Schema.maxItems(MAX_MESSAGE_ATTACHMENTS),
+          ),
           { default: () => [] },
         ),
         /** A2UI client -> server messages (user actions from surfaces). */

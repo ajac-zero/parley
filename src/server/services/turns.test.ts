@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  exceedsAttachmentLimit,
   isMissingEstablishedContinuation,
   MAX_MESSAGE_ATTACHMENTS,
+  validateMessageAttachments,
 } from "./turns";
 
 describe("stateful continuation", () => {
@@ -33,24 +33,34 @@ describe("stateful continuation", () => {
   });
 });
 
-describe("attachment limit", () => {
+describe("validateMessageAttachments", () => {
   it("accepts exactly the maximum number of attachments", () => {
     const fileIds = Array.from(
       { length: MAX_MESSAGE_ATTACHMENTS },
       (_, i) => `file_${i}`,
     );
-    expect(exceedsAttachmentLimit(fileIds)).toBe(false);
+    expect(validateMessageAttachments(fileIds)).toBeNull();
   });
 
-  it("rejects one more than the maximum number of attachments", () => {
+  it("rejects one more than the maximum number of attachments with a 400", () => {
     const fileIds = Array.from(
       { length: MAX_MESSAGE_ATTACHMENTS + 1 },
       (_, i) => `file_${i}`,
     );
-    expect(exceedsAttachmentLimit(fileIds)).toBe(true);
+    const violation = validateMessageAttachments(fileIds);
+    expect(violation).not.toBeNull();
+    expect(violation?.status).toBe(400);
+    expect(violation?.message).toMatch(/more than 10 attachments/);
   });
 
   it("accepts an empty attachment list", () => {
-    expect(exceedsAttachmentLimit([])).toBe(false);
+    expect(validateMessageAttachments([])).toBeNull();
+  });
+
+  it("rejects duplicate attachment ids even within the limit", () => {
+    const violation = validateMessageAttachments(["file_1", "file_1"]);
+    expect(violation).not.toBeNull();
+    expect(violation?.status).toBe(400);
+    expect(violation?.message).toMatch(/same attachment twice/);
   });
 });
