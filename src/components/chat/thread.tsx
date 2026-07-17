@@ -201,8 +201,8 @@ const SCROLL_BUTTON_GAP = 16;
 const HEADER_INSET = 52;
 
 /**
- * Marks a `(turnKey, call_id)` pairing as ambiguous (more than one
- * `function_call_output` shared that id within one turn) so it can be
+ * Marks a `(turnKey, call_id)` pairing as ambiguous (more than one call or
+ * output shared that id within one turn) so it can be
  * distinguished from "no output yet" without guessing which output is the
  * right one.
  */
@@ -214,8 +214,8 @@ export const AMBIGUOUS_CALL_OUTPUT = Symbol("ambiguous-call-id");
  * unscoped map would let a later turn's output silently replace an
  * earlier, unrelated call's (the exact bug this scoping fixes; see
  * docs/generative-ui.md). If an agent additionally violates that per-turn
- * uniqueness contract (more than one `function_call_output` shares a
- * `call_id` within the *same* turn), the pairing is ambiguous —
+ * uniqueness contract (more than one call or output shares a `call_id`
+ * within the *same* turn), the pairing is ambiguous —
  * `AMBIGUOUS_CALL_OUTPUT` is stored instead of picking one output
  * arbitrarily, so the call can render with no paired output rather than a
  * potentially wrong one.
@@ -223,22 +223,39 @@ export const AMBIGUOUS_CALL_OUTPUT = Symbol("ambiguous-call-id");
 export function pairOutputsByCall(
   entries: readonly Pick<ThreadEntry, "item" | "turnKey">[],
 ): ScopedCallMap<FunctionCallOutputItem | typeof AMBIGUOUS_CALL_OUTPUT> {
-  const map = new ScopedCallMap<
+  const groups = new ScopedCallMap<{
+    callCount: number;
+    outputs: FunctionCallOutputItem[];
+  }>();
+  for (const entry of entries) {
+    if (
+      entry.item.type !== "function_call" &&
+      entry.item.type !== "function_call_output"
+    ) {
+      continue;
+    }
+    const item = entry.item as FunctionCallItem | FunctionCallOutputItem;
+    if (!item.call_id) continue;
+    const group = groups.get(entry.turnKey, item.call_id) ?? {
+      callCount: 0,
+      outputs: [],
+    };
+    if (item.type === "function_call") group.callCount += 1;
+    else group.outputs.push(item);
+    groups.set(entry.turnKey, item.call_id, group);
+  }
+
+  const result = new ScopedCallMap<
     FunctionCallOutputItem | typeof AMBIGUOUS_CALL_OUTPUT
   >();
-  for (const entry of entries) {
-    if (entry.item.type === "function_call_output") {
-      const output = entry.item as FunctionCallOutputItem;
-      if (!output.call_id) continue;
-      const existing = map.get(entry.turnKey, output.call_id);
-      map.set(
-        entry.turnKey,
-        output.call_id,
-        existing === undefined ? output : AMBIGUOUS_CALL_OUTPUT,
-      );
+  for (const [turnKey, callId, group] of groups.entries()) {
+    if (group.callCount === 1 && group.outputs.length === 1) {
+      result.set(turnKey, callId, group.outputs[0] as FunctionCallOutputItem);
+    } else if (group.callCount > 1 || group.outputs.length > 1) {
+      result.set(turnKey, callId, AMBIGUOUS_CALL_OUTPUT);
     }
   }
-  return map;
+  return result;
 }
 
 export const Thread = memo(function Thread({

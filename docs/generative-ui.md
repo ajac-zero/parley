@@ -74,9 +74,9 @@ How it works today:
   provider replay, and reduces its A2UI messages at the linked call. If both
   forms describe the same surface, the explicit presentation sidecar takes
   precedence.
-- `call_id` uniqueness scope: `call_id` is defined by the agent/model (Open
-  Responses does not itself guarantee it), and **Parley only requires it to
-  be unique within the single turn (response) that produced it**.
+- `call_id` uniqueness scope: Open Responses calls `call_id` unique but does
+  not explicitly define that uniqueness scope. Parley therefore treats it as
+  unique within the single turn (response) that produced it.
   `function_call` <-> `function_call_output` <-> presentation-sidecar
   linkage, and tool-call ↔ output pairing in the thread, are all scoped by
   `(turn, call_id)`, never by `call_id` alone.
@@ -86,21 +86,11 @@ How it works today:
   unreasonable, unenforceable burden on tool authors. `surfaceId` is the
   one identifier that *is* conversation-wide (surfaces persist and can be
   updated across turns by design — see "Surface lifecycle" below); do not
-  conflate the two scopes. If an agent violates the within-turn contract by
-  emitting more than one `function_call_output` sharing a `call_id` in the
-  *same* turn, the two consumers of `call_id` degrade differently, by
-  design, rather than silently picking an arbitrary one:
-  - The thread's raw tool-call/output display treats it as ambiguous and
-    pairs no output at all with that call (`pairOutputsByCall` in
-    `src/components/chat/thread.tsx`), since a plain output has no notion
-    of more than one legitimate source.
-  - The A2UI reducer (`collectA2uiOutputs`/`reduceA2uiOutputs` in
-    `src/lib/a2ui.ts`) instead accumulates *all* of a `call_id`'s A2UI
-    content together into one call group, in trajectory order — the same
-    deterministic merge it already applies to a canonical output plus its
-    linked presentation sidecar (both intentionally share one `call_id`).
-    A genuine duplicate `function_call_output` is processed as just
-    another contribution to that same merge, not detected as an error.
+  conflate the two scopes. Within a turn, a scoped id is linkable only when
+  exactly one canonical `function_call` and one `function_call_output` use it.
+  Duplicate calls or outputs are ambiguous: the thread pairs no output and
+  A2UI ignores canonical content and sidecars for that scoped id rather than
+  combining potentially unrelated results.
 - Rendering: surfaces are reduced from the standard `createSurface` /
   `updateComponents` / `updateDataModel` / `deleteSurface` messages and
   rendered with native components (`src/components/a2ui/`). Data binding is

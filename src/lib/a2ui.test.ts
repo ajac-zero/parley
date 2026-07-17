@@ -299,6 +299,7 @@ describe("reduceA2uiMessages", () => {
     ]);
     expect(surface?.dataOps).toHaveLength(0);
     expect(surface?.dataModel).toEqual({});
+    expect(surface?.generation).toBe("local:2");
   });
 });
 
@@ -1244,6 +1245,7 @@ describe("collectA2uiOutputs", () => {
     // (s0); that update is unrelated to the sidecar's surface (s1) and must
     // not be dropped.
     const items: ORItem[] = [
+      functionCall("call0"),
       functionCall("call1"),
       functionCall("call2"),
       {
@@ -1534,18 +1536,93 @@ describe("call_id uniqueness scope", () => {
     expect(turnB?.surfaces[0]?.surfaceId).toBe("s_b");
   });
 
-  it("resolves duplicate function_calls sharing one id within a turn deterministically", () => {
-    // An agent emitting two distinct function_call items sharing one
-    // call_id in the same turn violates the within-turn uniqueness
-    // contract this module documents. `collectA2uiOutputs`/
-    // `reduceA2uiOutputs` are keyed only by call_id (not by which physical
-    // function_call instance), so both duplicate calls deterministically
-    // resolve to the very same, correctly-scoped surface group — not a
-    // silently corrupted merge of two different calls' state, which is
-    // the actual bug this scoping fixes. (Rendering *both* duplicate calls
-    // with the same group is a host/UI-layer concern — see
-    // `~/components/chat/thread.tsx`'s `pairOutputsByCall`, which handles
-    // the analogous, but distinct, function_call_output pairing case.)
+  it("keeps surfaces conversation-wide when call_id is reused across turns", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("shared")]),
+        turnKey: "turn_a",
+      },
+      { item: functionCall("call_1"), turnKey: "turn_b" },
+      {
+        item: functionCallOutput("call_1", [
+          {
+            updateComponents: {
+              surfaceId: "shared",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ]),
+        turnKey: "turn_b",
+      },
+    ];
+
+    const reduced = reduceA2uiOutputsStrict(
+      collectA2uiOutputsStrict(entries),
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+
+    expect(
+      reduced.get("turn_a", "call_1")?.surfaces[0]?.components.root?.text,
+    ).toBe("updated");
+    expect(reduced.get("turn_b", "call_1")?.surfaces).toHaveLength(0);
+  });
+
+  it("changes generation when a later output recreates a surface", () => {
+    const outputs = [
+      {
+        turnKey: "turn_a",
+        callId: "call_1",
+        output: JSON.stringify([createSurface("shared")]),
+      },
+      {
+        turnKey: "turn_b",
+        callId: "call_1",
+        output: JSON.stringify([createSurface("shared")]),
+      },
+    ];
+
+    const first = reduceA2uiOutputsStrict(
+      outputs.slice(0, 1),
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_a", "call_1")?.surfaces[0];
+    const replaced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_b", "call_1")?.surfaces[0];
+
+    expect(first?.generation).not.toBe(replaced?.generation);
+  });
+
+  it("keeps generation stable when unrelated messages are inserted", () => {
+    const base = {
+      turnKey: "turn_a",
+      callId: "call_1",
+      sourceKey: "output_item_1",
+    };
+    const before = reduceA2uiOutputsStrict(
+      [{ ...base, output: JSON.stringify([createSurface("shared")]) }],
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_a", "call_1")?.surfaces[0];
+    const after = reduceA2uiOutputsStrict(
+      [
+        {
+          ...base,
+          output: JSON.stringify([
+            createSurface("other"),
+            createSurface("shared"),
+          ]),
+        },
+      ],
+      A2UI_INSTALLED_CATALOG_IDS,
+    )
+      .get("turn_a", "call_1")
+      ?.surfaces.find((surface) => surface.surfaceId === "shared");
+
+    expect(after?.generation).toBe(before?.generation);
+  });
+
+  it("ignores A2UI for duplicate function_calls sharing one id", () => {
     const entries = [
       { item: functionCall("call_1"), turnKey: "turn_a" },
       { item: functionCall("call_1"), turnKey: "turn_a" },
@@ -1560,7 +1637,41 @@ describe("call_id uniqueness scope", () => {
       outputs,
       A2UI_INSTALLED_CATALOG_IDS,
     );
-    expect(reduced.get("turn_a", "call_1")?.surfaces[0]?.surfaceId).toBe("s1");
+    expect(reduced.get("turn_a", "call_1")).toBeUndefined();
+  });
+
+  it("ignores A2UI for duplicate function_call_outputs sharing one id", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s1")]),
+        turnKey: "turn_a",
+      },
+      {
+        item: functionCallOutput("call_1", [createSurface("s2")]),
+        turnKey: "turn_a",
+      },
+      {
+        item: {
+          type: "ajac-zero:a2ui",
+          id: "a2ui_call_1",
+          status: "completed",
+          call_id: "call_1",
+          mime_type: A2UI_MIME_TYPE,
+          uri: "a2ui://example/call_1",
+          messages: [createSurface("sidecar_surface")],
+        } as A2uiPresentationItem,
+        turnKey: "turn_a",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+    expect(outputs).toEqual([]);
+    expect(reduced.get("turn_a", "call_1")).toBeUndefined();
   });
 
   it("keeps an unrelated call in the same turn unaffected by another call's duplicate id", () => {

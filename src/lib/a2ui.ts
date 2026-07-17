@@ -87,6 +87,8 @@ export interface A2uiDataOp {
 /** Accumulated state of one surface after reducing a message list. */
 export interface A2uiSurface {
   surfaceId: string;
+  /** Stable identity of the latest createSurface in the trajectory. */
+  generation: string;
   catalogId: string;
   theme: Record<string, unknown> | null;
   /** Flat component map (adjacency list); the tree hangs off id "root". */
@@ -254,6 +256,7 @@ export function reduceA2uiMessages(
   enabledCatalogIds: readonly string[],
 ): A2uiSurface[] {
   const surfaces = new Map<string, A2uiSurface>();
+  const generations = new Map<string, number>();
   const enabledCatalogs = new Set(enabledCatalogIds);
 
   for (const raw of messages) {
@@ -265,8 +268,15 @@ export function reduceA2uiMessages(
     if (create && typeof create.surfaceId === "string") {
       const catalogId =
         typeof create.catalogId === "string" ? create.catalogId : "";
+      const ordinal = (generations.get(create.surfaceId) ?? 0) + 1;
+      generations.set(create.surfaceId, ordinal);
+      const generation =
+        typeof message.__parley_generation === "string"
+          ? message.__parley_generation
+          : `local:${ordinal}`;
       surfaces.set(create.surfaceId, {
         surfaceId: create.surfaceId,
+        generation,
         catalogId,
         theme: asRecord(create.theme),
         components: {},
@@ -828,10 +838,9 @@ export function extractA2uiResources(
 /* ------------------------- conversation-level state ------------------------ */
 
 /**
- * `call_id` is assigned by the agent/model and is only guaranteed unique
- * *within the single turn (response) that produced it* — an agent may
- * legitimately reuse the same `call_id` string in a later, unrelated turn
- * (see docs/generative-ui.md, "call_id uniqueness scope"). Every
+ * Open Responses does not define the scope of `call_id` uniqueness. Parley
+ * treats it as unique within one turn (response), so an agent may reuse the
+ * same value in a later turn (see docs/generative-ui.md). Every
  * conversation-wide lookup keyed by `call_id` in this module and its
  * consumers (`components/chat/thread.tsx`,
  * `routes/_app/chat.$conversationId.tsx`) must therefore also carry the
@@ -892,12 +901,15 @@ export class ScopedCallMap<V> {
 interface A2uiTrajectoryItem {
   item: ORItem;
   turnKey: TurnKey;
+  /** Stable transcript entry identity (DB id or live turn/output index). */
+  sourceKey?: string;
 }
 
 /** One tool output in conversation order, scoped to its turn and `call_id`. */
 export interface A2uiOutputRef {
   turnKey: TurnKey;
   callId: string;
+  sourceKey?: string;
   output: string | ContentPart[] | null | undefined;
 }
 
@@ -1018,28 +1030,38 @@ function canonicalPartsExcludingSurfaces(
  *     else about the canonical output, including other surfaces entirely)
  *     is preserved and simply reduced before the sidecar's update, in
  *     trajectory order like any other pair of writes to a shared surface.
- *  3. `call_id` is only required to be unique *within one turn* (see
+ *  3. Parley treats `call_id` as unique *within one turn* (see
  *     `A2uiTrajectoryItem`/`ScopedCallMap`). Every lookup below is scoped by
  *     `turnKey`, so a later turn reusing an earlier turn's `call_id` cannot
  *     link to that earlier call's output or sidecars — each turn's calls
- *     are reduced entirely independently. Canonical `function_call_output`
- *     items are (as before) always collected regardless of whether a
- *     matching `function_call` is present in `entries` at all (trajectories
- *     may be truncated); only *sidecar* linkage additionally requires both
- *     a `function_call` and its output to be present in the same turn,
- *     matching the pre-existing (now turn-scoped) eligibility rule.
+ *     are reduced independently. A scoped key is admitted only when exactly
+ *     one canonical call and one canonical output exist; ambiguous or
+ *     incomplete keys fail closed instead of combining unrelated UI.
  */
 export function collectA2uiOutputs(
   entries: readonly A2uiTrajectoryItem[],
 ): A2uiOutputRef[] {
-  const callIds = new ScopedCallMap<true>();
-  const outputCallIds = new ScopedCallMap<true>();
+  const callCounts = new ScopedCallMap<number>();
+  const outputCounts = new ScopedCallMap<number>();
   for (const { item, turnKey } of entries) {
-    if (isFunctionCallItem(item)) callIds.set(turnKey, item.call_id, true);
+    if (isFunctionCallItem(item)) {
+      callCounts.set(
+        turnKey,
+        item.call_id,
+        (callCounts.get(turnKey, item.call_id) ?? 0) + 1,
+      );
+    }
     if (isFunctionCallOutputItem(item)) {
-      outputCallIds.set(turnKey, item.call_id, true);
+      outputCounts.set(
+        turnKey,
+        item.call_id,
+        (outputCounts.get(turnKey, item.call_id) ?? 0) + 1,
+      );
     }
   }
+  const isUnambiguous = (turnKey: TurnKey, callId: string) =>
+    callCounts.get(turnKey, callId) === 1 &&
+    outputCounts.get(turnKey, callId) === 1;
 
   // Union, per (turnKey, call_id), of every surface a valid sidecar linked
   // to that call *recreates* (carries its own createSurface for) —
@@ -1052,11 +1074,7 @@ export function collectA2uiOutputs(
     if (item.type !== A2UI_ITEM_TYPE) continue;
     const presentation = item as A2uiPresentationItem;
     const output = a2uiPresentationOutput(presentation);
-    if (
-      !output ||
-      !callIds.has(turnKey, output.callId) ||
-      !outputCallIds.has(turnKey, output.callId)
-    ) {
+    if (!output || !isUnambiguous(turnKey, output.callId)) {
       continue;
     }
     const ids =
@@ -1070,24 +1088,25 @@ export function collectA2uiOutputs(
   }
 
   const outputs: A2uiOutputRef[] = [];
-  for (const { item, turnKey } of entries) {
+  for (const { item, turnKey, sourceKey } of entries) {
     if (isFunctionCallOutputItem(item)) {
       const call = item as FunctionCallOutputItem;
-      if (!call.call_id) continue;
+      if (!call.call_id || !isUnambiguous(turnKey, call.call_id)) continue;
       const overlap = recreatedSurfaceIdsByCall.get(turnKey, call.call_id);
       const output =
         overlap && overlap.size > 0
           ? canonicalPartsExcludingSurfaces(call.output, overlap)
           : call.output;
-      outputs.push({ turnKey, callId: call.call_id, output });
+      outputs.push({ turnKey, callId: call.call_id, sourceKey, output });
     } else if (item.type === A2UI_ITEM_TYPE) {
       const output = a2uiPresentationOutput(item as A2uiPresentationItem);
-      if (
-        output &&
-        callIds.has(turnKey, output.callId) &&
-        outputCallIds.has(turnKey, output.callId)
-      ) {
-        outputs.push({ turnKey, callId: output.callId, output: output.output });
+      if (output && isUnambiguous(turnKey, output.callId)) {
+        outputs.push({
+          turnKey,
+          callId: output.callId,
+          sourceKey,
+          output: output.output,
+        });
       }
     }
   }
@@ -1148,12 +1167,37 @@ export function reduceA2uiOutputs(
   /** Every surfaceId a createSurface was seen for, live or not. */
   const createdIds = new Set<string>();
 
-  for (const { turnKey, callId, output } of outputs) {
+  for (const [
+    outputIndex,
+    { turnKey, callId, sourceKey, output },
+  ] of outputs.entries()) {
     const extraction = extractA2uiResources(output);
     const referencedIds = new Set<string>();
+    const createCounts = new Map<string, number>();
     for (const resource of extraction.resources) {
       for (const message of resource.messages) {
-        allMessages.push(message);
+        const surfaceId = message.createSurface?.surfaceId;
+        const createOccurrence =
+          typeof surfaceId === "string"
+            ? (createCounts.get(surfaceId) ?? 0) + 1
+            : null;
+        if (typeof surfaceId === "string" && createOccurrence !== null) {
+          createCounts.set(surfaceId, createOccurrence);
+        }
+        allMessages.push(
+          typeof surfaceId === "string"
+            ? {
+                ...message,
+                __parley_generation: JSON.stringify([
+                  turnKey,
+                  callId,
+                  sourceKey ?? `output:${outputIndex}`,
+                  surfaceId,
+                  createOccurrence,
+                ]),
+              }
+            : message,
+        );
         const record = asRecord(message);
         if (!record) continue;
         for (const key of MESSAGE_KEYS) {

@@ -66,7 +66,12 @@ function ConversationPage() {
    * the pinned side canvas. */
   const a2uiByCall = useMemo(() => {
     const outputs = collectA2uiOutputs(
-      entries.map((entry) => ({ item: entry.item, turnKey: entry.turnKey })),
+      entries.map((entry) => ({
+        item: entry.item,
+        turnKey: entry.turnKey,
+        sourceKey:
+          typeof entry.item.id === "string" ? entry.item.id : entry.key,
+      })),
     );
     return reduceA2uiOutputs(outputs, config.enabledA2uiCatalogIds);
   }, [entries, config.enabledA2uiCatalogIds]);

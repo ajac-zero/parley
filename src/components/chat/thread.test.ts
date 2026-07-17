@@ -55,7 +55,10 @@ const activeTurn = (overrides: Partial<ActiveTurn> = {}): ActiveTurn => ({
 describe("pairOutputsByCall (call_id uniqueness scope)", () => {
   it("pairs a call with its output within one turn", () => {
     const output = functionCallOutput("call_1");
-    const paired = pairOutputsByCall([entry(output, "turn_a")]);
+    const paired = pairOutputsByCall([
+      entry(functionCall("call_1"), "turn_a"),
+      entry(output, "turn_a"),
+    ]);
     expect(paired.get("turn_a", "call_1")).toBe(output);
   });
 
@@ -68,7 +71,9 @@ describe("pairOutputsByCall (call_id uniqueness scope)", () => {
     const outputA = functionCallOutput("call_1");
     const outputB = functionCallOutput("call_1");
     const paired = pairOutputsByCall([
+      entry(functionCall("call_1"), "turn_a"),
       entry(outputA, "turn_a"),
+      entry(functionCall("call_1"), "turn_b"),
       entry(outputB, "turn_b"),
     ]);
     expect(paired.get("turn_a", "call_1")).toBe(outputA);
@@ -86,8 +91,18 @@ describe("pairOutputsByCall (call_id uniqueness scope)", () => {
     const first = functionCallOutput("call_1");
     const second = functionCallOutput("call_1");
     const paired = pairOutputsByCall([
+      entry(functionCall("call_1"), "turn_a"),
       entry(first, "turn_a"),
       entry(second, "turn_a"),
+    ]);
+    expect(paired.get("turn_a", "call_1")).toBe(AMBIGUOUS_CALL_OUTPUT);
+  });
+
+  it("degrades deterministically when a call_id names multiple calls", () => {
+    const paired = pairOutputsByCall([
+      entry(functionCall("call_1"), "turn_a"),
+      entry(functionCall("call_1"), "turn_a"),
+      entry(functionCallOutput("call_1"), "turn_a"),
     ]);
     expect(paired.get("turn_a", "call_1")).toBe(AMBIGUOUS_CALL_OUTPUT);
   });
