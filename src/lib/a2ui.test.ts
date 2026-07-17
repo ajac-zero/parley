@@ -26,6 +26,7 @@ import {
   reduceA2uiOutputs as reduceA2uiOutputsStrict,
   resolveDynamic,
   resolvePath,
+  ScopedCallMap,
   summarizeA2uiAction,
 } from "~/lib/a2ui";
 import {
@@ -1444,6 +1445,59 @@ describe("collectA2uiOutputs", () => {
  * (not the single-implicit-turn wrappers used everywhere else in this
  * file), since they're specifically about the turn-scoping contract.
  */
+describe("ScopedCallMap", () => {
+  it("keeps values for the same callId in different turns independent", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "from turn a");
+    map.set("turn_b", "call_1", "from turn b");
+    expect(map.get("turn_a", "call_1")).toBe("from turn a");
+    expect(map.get("turn_b", "call_1")).toBe("from turn b");
+  });
+
+  it("overwrites only the exact (turnKey, callId) pair on repeated set", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "first");
+    map.set("turn_a", "call_1", "second");
+    expect(map.get("turn_a", "call_1")).toBe("second");
+  });
+
+  it("has() and get() agree on presence, including for unknown turns", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "value");
+    expect(map.has("turn_a", "call_1")).toBe(true);
+    expect(map.has("turn_a", "call_2")).toBe(false);
+    expect(map.has("turn_z", "call_1")).toBe(false);
+    expect(map.get("turn_z", "call_1")).toBeUndefined();
+  });
+
+  it("values() and entries() enumerate everything stored, across turns", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "a1");
+    map.set("turn_a", "call_2", "a2");
+    map.set("turn_b", "call_1", "b1");
+
+    expect(new Set(map.values())).toEqual(new Set(["a1", "a2", "b1"]));
+    expect(new Set(map.entries())).toEqual(
+      new Set([
+        ["turn_a", "call_1", "a1"],
+        ["turn_a", "call_2", "a2"],
+        ["turn_b", "call_1", "b1"],
+      ]),
+    );
+  });
+
+  it("size counts every stored value across all turns", () => {
+    const map = new ScopedCallMap<string>();
+    expect(map.size).toBe(0);
+    map.set("turn_a", "call_1", "a1");
+    map.set("turn_a", "call_2", "a2");
+    map.set("turn_b", "call_1", "b1");
+    expect(map.size).toBe(3);
+    map.set("turn_a", "call_1", "overwritten");
+    expect(map.size).toBe(3);
+  });
+});
+
 describe("call_id uniqueness scope", () => {
   const functionCall = (callId: string): ORItem => ({
     type: "function_call",

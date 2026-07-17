@@ -88,10 +88,19 @@ How it works today:
   updated across turns by design — see "Surface lifecycle" below); do not
   conflate the two scopes. If an agent violates the within-turn contract by
   emitting more than one `function_call_output` sharing a `call_id` in the
-  *same* turn, Parley degrades deterministically instead of guessing: the
-  thread renders that call with no paired output rather than an arbitrary
-  (possibly wrong) one (`pairOutputsByCall` in
-  `src/components/chat/thread.tsx`).
+  *same* turn, the two consumers of `call_id` degrade differently, by
+  design, rather than silently picking an arbitrary one:
+  - The thread's raw tool-call/output display treats it as ambiguous and
+    pairs no output at all with that call (`pairOutputsByCall` in
+    `src/components/chat/thread.tsx`), since a plain output has no notion
+    of more than one legitimate source.
+  - The A2UI reducer (`collectA2uiOutputs`/`reduceA2uiOutputs` in
+    `src/lib/a2ui.ts`) instead accumulates *all* of a `call_id`'s A2UI
+    content together into one call group, in trajectory order — the same
+    deterministic merge it already applies to a canonical output plus its
+    linked presentation sidecar (both intentionally share one `call_id`).
+    A genuine duplicate `function_call_output` is processed as just
+    another contribution to that same merge, not detected as an error.
 - Rendering: surfaces are reduced from the standard `createSurface` /
   `updateComponents` / `updateDataModel` / `deleteSurface` messages and
   rendered with native components (`src/components/a2ui/`). Data binding is

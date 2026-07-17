@@ -54,9 +54,12 @@ export interface ThreadEntry {
    * once `turnId` is null, nothing distinguishes items from that deleted
    * turn from items belonging to a *different* deleted turn, so grouping
    * orphans together by any shared fallback key would risk exactly the
-   * cross-turn `call_id` collision this scoping exists to prevent. No
-   * code currently deletes `turns` rows (only turn *items*, during
-   * regenerate), so this path is dormant today.
+   * cross-turn `call_id` collision this scoping exists to prevent. Nothing
+   * deletes an individual `turns` row on its own today (only turn *items*,
+   * during regenerate) — the only cascade that removes `turns` rows is
+   * deleting the whole conversation, which removes their `conversationItems`
+   * in the same operation, so no orphaned item is ever actually observable
+   * in practice; this path is dormant today.
    */
   turnKey: string;
 }

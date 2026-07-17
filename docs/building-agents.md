@@ -138,17 +138,22 @@ single response (turn) it belongs to — Parley scopes every
 presentation sidecar) pairing by `(turn, call_id)`, never by `call_id`
 alone. Reusing a short or sequential id scheme across turns is fine and
 expected. Within a *single* response, don't reuse the same `call_id` for
-more than one `function_call_output` — that's ambiguous, and Parley
-degrades deterministically (no output paired to any of them, rather than
-guessing which one you meant) instead of silently keeping whichever
-arrived last. Reusing a `call_id` across more than one `function_call` in
-the same response is not recommended either (each such call ends up paired
-with whatever single output shares that id, which is unlikely to be what
-you want), but Parley doesn't specifically detect or flag it — treat
-`call_id` as if it uniquely names one call within the response, not just
-one output. See "call_id uniqueness scope" in
-[generative-ui.md](./generative-ui.md) for how this interacts with A2UI
-surfaces specifically.
+more than one `function_call_output` — how Parley degrades depends on
+what's consuming it, not a single uniform rule: the thread's raw
+call/output display treats it as ambiguous and pairs no output with that
+call at all, while the A2UI reducer instead merges every output sharing
+that `call_id` together in trajectory order (the same merge it already
+applies to a canonical output plus its linked presentation sidecar, which
+intentionally share one `call_id` by design) — see "call_id uniqueness
+scope" in [generative-ui.md](./generative-ui.md) for exactly how each
+consumer handles it. Neither behavior is "guess which one you meant";
+either way, don't rely on a repeated `call_id` resolving to any specific
+one of the outputs. Reusing a `call_id` across more than one
+`function_call` in the same response is not recommended either (each such
+call ends up paired with whatever single output shares that id, which is
+unlikely to be what you want), but Parley doesn't specifically detect or
+flag it — treat `call_id` as if it uniquely names one call within the
+response, not just one output.
 
 ### Downloadable artifacts
 
