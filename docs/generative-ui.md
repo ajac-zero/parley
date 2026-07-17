@@ -101,6 +101,12 @@ How it works today:
   that produced the surface; the standalone demo agent shows the loop
   (ask it to "book a table" — submitting the form updates it in place
   into a confirmation).
+- Message emptiness: a user message needs non-blank text, an attachment, or
+  an `a2ui` payload — never all three empty. This applies identically to the
+  first turn of a conversation and to every later turn, so an A2UI-only
+  message (built-in surface actions with no readable text, or a direct API
+  client submitting one) is valid in both places. Starting a conversation
+  with an A2UI-only message uses the `New chat` fallback title.
 
 ### Built-in charts catalog (implemented)
 
