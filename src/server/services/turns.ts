@@ -10,6 +10,7 @@ import {
   Stream,
 } from "effect";
 import { A2UI_MIME_TYPE } from "~/lib/a2ui";
+import { MAX_MESSAGE_ATTACHMENTS } from "~/lib/limits";
 import {
   ARTIFACT_ITEM_TYPE,
   type ContentPart,
@@ -80,11 +81,6 @@ export const isMissingEstablishedContinuation = (
 const FILE_REF_PREFIX = "parley-file:";
 const TTL_SECONDS = 3600;
 const MAX_ARTIFACTS_PER_TURN = 10;
-/**
- * Per-message attachment cap. The HTTP schema's `fileIds` field
- * (routes/api/chat.ts) imports this constant so the two stay in sync.
- */
-export const MAX_MESSAGE_ATTACHMENTS = 10;
 
 export interface AttachmentLimitViolation {
   message: string;

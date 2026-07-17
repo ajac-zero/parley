@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Effect, Schema } from "effect";
+import { MAX_MESSAGE_ATTACHMENTS } from "~/lib/limits";
 import { jsonError, requireSession, sseResponse } from "~/server/http";
 import { serverRuntime } from "~/server/runtime";
-import { MAX_MESSAGE_ATTACHMENTS, Turns } from "~/server/services/turns";
+import { Turns } from "~/server/services/turns";
 
 const ChatRequestSchema = Schema.Struct({
   conversationId: Schema.optional(Schema.NullOr(Schema.String)),

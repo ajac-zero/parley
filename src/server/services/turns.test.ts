@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { MAX_MESSAGE_ATTACHMENTS } from "~/lib/limits";
 import {
   isMissingEstablishedContinuation,
-  MAX_MESSAGE_ATTACHMENTS,
   validateMessageAttachments,
 } from "./turns";
 
