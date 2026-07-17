@@ -74,6 +74,23 @@ How it works today:
   provider replay, and reduces its A2UI messages at the linked call. If both
   forms describe the same surface, the explicit presentation sidecar takes
   precedence.
+- `call_id` uniqueness scope: Open Responses calls `call_id` unique but does
+  not explicitly define that uniqueness scope. Parley therefore treats it as
+  unique within the single turn (response) that produced it.
+  `function_call` <-> `function_call_output` <-> presentation-sidecar
+  linkage, and tool-call ↔ output pairing in the thread, are all scoped by
+  `(turn, call_id)`, never by `call_id` alone.
+  Reusing the same `call_id` string in a later, unrelated turn is expected
+  and supported: agents and MCP servers commonly assign short or
+  sequential ids, and requiring conversation-wide uniqueness would be an
+  unreasonable, unenforceable burden on tool authors. `surfaceId` is the
+  one identifier that *is* conversation-wide (surfaces persist and can be
+  updated across turns by design — see "Surface lifecycle" below); do not
+  conflate the two scopes. Within a turn, a scoped id is linkable only when
+  exactly one canonical `function_call` and one `function_call_output` use it.
+  Duplicate calls or outputs are ambiguous: the thread pairs no output and
+  A2UI ignores canonical content and sidecars for that scoped id rather than
+  combining potentially unrelated results.
 - Rendering: surfaces are reduced from the standard `createSurface` /
   `updateComponents` / `updateDataModel` / `deleteSurface` messages and
   rendered with native components (`src/components/a2ui/`). Data binding is

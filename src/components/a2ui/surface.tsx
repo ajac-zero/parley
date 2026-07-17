@@ -49,8 +49,60 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 interface SurfaceLocalState {
   dataModel: unknown;
   appliedOps: number;
+  appliedOpsKey: string;
+  generation: string;
+  stateKey: string;
 }
 const surfaceStateStore = new Map<string, SurfaceLocalState>();
+
+const opsKey = (surface: A2uiSurface, count = surface.dataOps.length) =>
+  JSON.stringify(surface.dataOps.slice(0, count));
+
+export function reconcileSurfaceLocalState(
+  current: SurfaceLocalState,
+  surface: A2uiSurface,
+  stateKey: string = current.stateKey,
+  stored?: SurfaceLocalState,
+): SurfaceLocalState | null {
+  if (stateKey !== current.stateKey) {
+    return stored?.generation === surface.generation
+      ? stored
+      : {
+          dataModel: surface.dataModel,
+          appliedOps: surface.dataOps.length,
+          appliedOpsKey: opsKey(surface),
+          generation: surface.generation,
+          stateKey,
+        };
+  }
+  if (surface.generation !== current.generation) {
+    return {
+      dataModel: surface.dataModel,
+      appliedOps: surface.dataOps.length,
+      appliedOpsKey: opsKey(surface),
+      generation: surface.generation,
+      stateKey,
+    };
+  }
+  const prefixUnchanged =
+    opsKey(surface, current.appliedOps) === current.appliedOpsKey;
+  if (surface.dataOps.length === current.appliedOps && prefixUnchanged) {
+    return null;
+  }
+  return {
+    dataModel:
+      !prefixUnchanged || surface.dataOps.length < current.appliedOps
+        ? surface.dataModel
+        : applyA2uiDataOps(
+            current.dataModel,
+            surface.dataOps.slice(current.appliedOps),
+          ),
+    appliedOps: surface.dataOps.length,
+    appliedOpsKey: opsKey(surface),
+    generation: surface.generation,
+    stateKey,
+  };
+}
 
 /** Renders one supported surface with live local state. */
 export const A2uiSurfaceView = memo(function A2uiSurfaceView({
@@ -64,8 +116,11 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
 }) {
   const host = useA2uiHost();
   const stateKey = `${host?.stateScope ?? ""}:${surface.surfaceId}`;
+  const stored = surfaceStateStore.get(stateKey);
+  const storedForGeneration =
+    stored?.generation === surface.generation ? stored : undefined;
   const [dataModel, setDataModel] = useState<unknown>(
-    () => surfaceStateStore.get(stateKey)?.dataModel ?? surface.dataModel,
+    () => storedForGeneration?.dataModel ?? surface.dataModel,
   );
   /* Merge server data-model updates that arrive after mount (a later tool
    * result patching this surface) into local state without clobbering the
@@ -74,19 +129,32 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
    * If history was rewritten (ops shrank — e.g. an edited turn), reseed
    * from the server model and drop local edits. */
   const [appliedOps, setAppliedOps] = useState(
-    () => surfaceStateStore.get(stateKey)?.appliedOps ?? surface.dataOps.length,
+    () => storedForGeneration?.appliedOps ?? surface.dataOps.length,
   );
-  if (surface.dataOps.length !== appliedOps) {
-    const next =
-      surface.dataOps.length < appliedOps
-        ? surface.dataModel
-        : applyA2uiDataOps(dataModel, surface.dataOps.slice(appliedOps));
-    surfaceStateStore.set(stateKey, {
-      dataModel: next,
-      appliedOps: surface.dataOps.length,
-    });
-    setDataModel(next);
-    setAppliedOps(surface.dataOps.length);
+  const [appliedOpsKey, setAppliedOpsKey] = useState(
+    () => storedForGeneration?.appliedOpsKey ?? opsKey(surface),
+  );
+  const [generation, setGeneration] = useState(surface.generation);
+  const [localStateKey, setLocalStateKey] = useState(stateKey);
+  const reconciled = reconcileSurfaceLocalState(
+    {
+      dataModel,
+      appliedOps,
+      appliedOpsKey,
+      generation,
+      stateKey: localStateKey,
+    },
+    surface,
+    stateKey,
+    stored,
+  );
+  if (reconciled) {
+    surfaceStateStore.set(stateKey, reconciled);
+    setDataModel(reconciled.dataModel);
+    setAppliedOps(reconciled.appliedOps);
+    setAppliedOpsKey(reconciled.appliedOpsKey);
+    setGeneration(reconciled.generation);
+    setLocalStateKey(reconciled.stateKey);
   }
   /* Mirrors for reads inside event handlers (dispatch resolves bindings at
    * interaction time, against the latest local edits). */
@@ -103,11 +171,14 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
         surfaceStateStore.set(stateKey, {
           dataModel: next,
           appliedOps: appliedRef.current,
+          appliedOpsKey,
+          generation: surface.generation,
+          stateKey,
         });
         return next;
       });
     },
-    [stateKey],
+    [stateKey, surface.generation, appliedOpsKey],
   );
 
   const dispatchEvent = useCallback(
@@ -246,6 +317,7 @@ export const A2uiToolSurfaces = memo(function A2uiToolSurfaces({
       <UnsupportedSurface
         surface={{
           surfaceId: "",
+          generation: "unsupported",
           catalogId: "",
           theme: null,
           components: {},

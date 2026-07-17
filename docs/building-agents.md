@@ -132,6 +132,17 @@ for live argument streaming), execute the tool yourself, then emit a
 renders the call and its output; in replay mode both items are included in
 subsequent turns' input so your agent keeps the context.
 
+**`call_id` uniqueness:** Open Responses does not explicitly define the
+scope of uniqueness, so Parley treats `call_id` as unique within the single
+response (turn) it belongs to. Parley scopes every
+`function_call` ↔ `function_call_output` (and, if you use them, A2UI
+presentation sidecar) pairing by `(turn, call_id)`, never by `call_id`
+alone. Reusing a short or sequential id scheme across turns is fine and
+expected. Within one response, use each `call_id` for exactly one
+`function_call` and one `function_call_output`. If either is duplicated,
+Parley treats the association as ambiguous: the thread pairs no output and
+A2UI ignores content and sidecars for that scoped id.
+
 ### Downloadable artifacts
 
 Providers may emit the optional `ajac-zero:artifact` item from the

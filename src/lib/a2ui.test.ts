@@ -6,13 +6,14 @@ import {
   A2UI_CHARTS_CATALOG_ID,
   A2UI_INSTALLED_CATALOG_IDS,
   A2UI_MIME_TYPE,
+  type A2uiCallSurfaces,
   type A2uiMessage,
   type A2uiOutputRef,
   a2uiPresentationOutput,
   applyA2uiDataOps,
   buildA2uiActionPart,
   callCatalogFunction,
-  collectA2uiOutputs,
+  collectA2uiOutputs as collectA2uiOutputsStrict,
   extractA2uiResources,
   failedChecks,
   interpolate,
@@ -25,6 +26,7 @@ import {
   reduceA2uiOutputs as reduceA2uiOutputsStrict,
   resolveDynamic,
   resolvePath,
+  ScopedCallMap,
   summarizeA2uiAction,
 } from "~/lib/a2ui";
 import {
@@ -53,10 +55,41 @@ const reduceA2uiMessages = (
   enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
 ) => reduceA2uiMessagesStrict(messages, enabledCatalogIds);
 
+/**
+ * `collectA2uiOutputs`/`reduceA2uiOutputs` scope every lookup by
+ * `(turnKey, callId)` in production, since `call_id` is only unique within
+ * one turn (see the "call_id uniqueness scope" tests further below, which
+ * exercise the real, turn-aware signatures directly). Every other test in
+ * this file is only concerned with trajectory ordering *within* a single
+ * turn, so these wrappers default everything to one implicit turn
+ * (`DEFAULT_TURN`) and flatten the result back to a plain
+ * `Map<callId, ...>` / `{callId, output}[]`, so those call sites don't need
+ * to thread a turnKey through.
+ */
+const DEFAULT_TURN = "turn1";
+
+const collectA2uiOutputs = (
+  items: ORItem[],
+): Array<{ callId: string; output: A2uiOutputRef["output"] }> =>
+  collectA2uiOutputsStrict(
+    items.map((item) => ({ item, turnKey: DEFAULT_TURN })),
+  ).map(({ callId, output }) => ({ callId, output }));
+
 const reduceA2uiOutputs = (
-  outputs: A2uiOutputRef[],
+  outputs: Array<{ callId: string; output: A2uiOutputRef["output"] }>,
   enabledCatalogIds: readonly string[] = A2UI_INSTALLED_CATALOG_IDS,
-) => reduceA2uiOutputsStrict(outputs, enabledCatalogIds);
+): Map<string, A2uiCallSurfaces> => {
+  const scoped = reduceA2uiOutputsStrict(
+    outputs.map((output) => ({ ...output, turnKey: DEFAULT_TURN })),
+    enabledCatalogIds,
+  );
+  const flat = new Map<string, A2uiCallSurfaces>();
+  for (const callId of new Set(outputs.map((output) => output.callId))) {
+    const value = scoped.get(DEFAULT_TURN, callId);
+    if (value) flat.set(callId, value);
+  }
+  return flat;
+};
 
 /* ------------------------------ JSON Pointer ------------------------------ */
 
@@ -266,6 +299,7 @@ describe("reduceA2uiMessages", () => {
     ]);
     expect(surface?.dataOps).toHaveLength(0);
     expect(surface?.dataModel).toEqual({});
+    expect(surface?.generation).toBe("local:2");
   });
 });
 
@@ -1211,6 +1245,7 @@ describe("collectA2uiOutputs", () => {
     // (s0); that update is unrelated to the sidecar's surface (s1) and must
     // not be dropped.
     const items: ORItem[] = [
+      functionCall("call0"),
       functionCall("call1"),
       functionCall("call2"),
       {
@@ -1399,6 +1434,310 @@ describe("collectA2uiOutputs", () => {
     // carry the sidecar's incremental update.
     expect(surface?.surfaceId).toBe("s1");
     expect(surface?.components.root?.text).toBe("note");
+  });
+});
+
+/* --------------------------- call_id uniqueness scope ---------------------- */
+
+/**
+ * `call_id` is defined by the agent/model and is only required to be
+ * unique *within the turn (response) that produced it* — see
+ * docs/generative-ui.md. These tests exercise the real, turn-aware
+ * `collectA2uiOutputsStrict`/`reduceA2uiOutputsStrict` signatures directly
+ * (not the single-implicit-turn wrappers used everywhere else in this
+ * file), since they're specifically about the turn-scoping contract.
+ */
+describe("ScopedCallMap", () => {
+  it("keeps values for the same callId in different turns independent", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "from turn a");
+    map.set("turn_b", "call_1", "from turn b");
+    expect(map.get("turn_a", "call_1")).toBe("from turn a");
+    expect(map.get("turn_b", "call_1")).toBe("from turn b");
+  });
+
+  it("overwrites only the exact (turnKey, callId) pair on repeated set", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "first");
+    map.set("turn_a", "call_1", "second");
+    expect(map.get("turn_a", "call_1")).toBe("second");
+  });
+
+  it("has() and get() agree on presence, including for unknown turns", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "value");
+    expect(map.has("turn_a", "call_1")).toBe(true);
+    expect(map.has("turn_a", "call_2")).toBe(false);
+    expect(map.has("turn_z", "call_1")).toBe(false);
+    expect(map.get("turn_z", "call_1")).toBeUndefined();
+  });
+
+  it("values() and entries() enumerate everything stored, across turns", () => {
+    const map = new ScopedCallMap<string>();
+    map.set("turn_a", "call_1", "a1");
+    map.set("turn_a", "call_2", "a2");
+    map.set("turn_b", "call_1", "b1");
+
+    expect(new Set(map.values())).toEqual(new Set(["a1", "a2", "b1"]));
+    expect(new Set(map.entries())).toEqual(
+      new Set([
+        ["turn_a", "call_1", "a1"],
+        ["turn_a", "call_2", "a2"],
+        ["turn_b", "call_1", "b1"],
+      ]),
+    );
+  });
+});
+
+describe("call_id uniqueness scope", () => {
+  const functionCall = (callId: string): ORItem => ({
+    type: "function_call",
+    call_id: callId,
+    name: "tool",
+    arguments: "{}",
+  });
+
+  const functionCallOutput = (
+    callId: string,
+    messages: A2uiMessage[],
+  ): ORItem =>
+    ({
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(messages),
+    }) as FunctionCallOutputItem;
+
+  it("does not let a later turn's call reuse collide with an earlier turn's", () => {
+    // Both turns coincidentally use "call_1" — legitimate per the
+    // within-turn-only uniqueness contract. Each must resolve to its own,
+    // independent surface.
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s_a")]),
+        turnKey: "turn_a",
+      },
+      { item: functionCall("call_1"), turnKey: "turn_b" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s_b")]),
+        turnKey: "turn_b",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+
+    const turnA = reduced.get("turn_a", "call_1");
+    const turnB = reduced.get("turn_b", "call_1");
+    expect(turnA?.surfaces[0]?.surfaceId).toBe("s_a");
+    expect(turnB?.surfaces[0]?.surfaceId).toBe("s_b");
+  });
+
+  it("keeps surfaces conversation-wide when call_id is reused across turns", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("shared")]),
+        turnKey: "turn_a",
+      },
+      { item: functionCall("call_1"), turnKey: "turn_b" },
+      {
+        item: functionCallOutput("call_1", [
+          {
+            updateComponents: {
+              surfaceId: "shared",
+              components: [{ id: "root", component: "Text", text: "updated" }],
+            },
+          },
+        ]),
+        turnKey: "turn_b",
+      },
+    ];
+
+    const reduced = reduceA2uiOutputsStrict(
+      collectA2uiOutputsStrict(entries),
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+
+    expect(
+      reduced.get("turn_a", "call_1")?.surfaces[0]?.components.root?.text,
+    ).toBe("updated");
+    expect(reduced.get("turn_b", "call_1")?.surfaces).toHaveLength(0);
+  });
+
+  it("changes generation when a later output recreates a surface", () => {
+    const outputs = [
+      {
+        turnKey: "turn_a",
+        callId: "call_1",
+        output: JSON.stringify([createSurface("shared")]),
+      },
+      {
+        turnKey: "turn_b",
+        callId: "call_1",
+        output: JSON.stringify([createSurface("shared")]),
+      },
+    ];
+
+    const first = reduceA2uiOutputsStrict(
+      outputs.slice(0, 1),
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_a", "call_1")?.surfaces[0];
+    const replaced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_b", "call_1")?.surfaces[0];
+
+    expect(first?.generation).not.toBe(replaced?.generation);
+  });
+
+  it("keeps generation stable when unrelated messages are inserted", () => {
+    const base = {
+      turnKey: "turn_a",
+      callId: "call_1",
+      sourceKey: "output_item_1",
+    };
+    const before = reduceA2uiOutputsStrict(
+      [{ ...base, output: JSON.stringify([createSurface("shared")]) }],
+      A2UI_INSTALLED_CATALOG_IDS,
+    ).get("turn_a", "call_1")?.surfaces[0];
+    const after = reduceA2uiOutputsStrict(
+      [
+        {
+          ...base,
+          output: JSON.stringify([
+            createSurface("other"),
+            createSurface("shared"),
+          ]),
+        },
+      ],
+      A2UI_INSTALLED_CATALOG_IDS,
+    )
+      .get("turn_a", "call_1")
+      ?.surfaces.find((surface) => surface.surfaceId === "shared");
+
+    expect(after?.generation).toBe(before?.generation);
+  });
+
+  it("ignores A2UI for duplicate function_calls sharing one id", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s1")]),
+        turnKey: "turn_a",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+    expect(reduced.get("turn_a", "call_1")).toBeUndefined();
+  });
+
+  it("ignores A2UI for duplicate function_call_outputs sharing one id", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s1")]),
+        turnKey: "turn_a",
+      },
+      {
+        item: functionCallOutput("call_1", [createSurface("s2")]),
+        turnKey: "turn_a",
+      },
+      {
+        item: {
+          type: "ajac-zero:a2ui",
+          id: "a2ui_call_1",
+          status: "completed",
+          call_id: "call_1",
+          mime_type: A2UI_MIME_TYPE,
+          uri: "a2ui://example/call_1",
+          messages: [createSurface("sidecar_surface")],
+        } as A2uiPresentationItem,
+        turnKey: "turn_a",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+    expect(outputs).toEqual([]);
+    expect(reduced.get("turn_a", "call_1")).toBeUndefined();
+  });
+
+  it("keeps an unrelated call in the same turn unaffected by another call's duplicate id", () => {
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      { item: functionCall("call_2"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", [createSurface("s1")]),
+        turnKey: "turn_a",
+      },
+      {
+        item: functionCallOutput("call_2", [createSurface("s2")]),
+        turnKey: "turn_a",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+    expect(reduced.get("turn_a", "call_2")?.surfaces[0]?.surfaceId).toBe("s2");
+  });
+
+  it("scopes a linked presentation sidecar to its own turn too", () => {
+    const sidecar = (callId: string, messages: A2uiMessage[]): ORItem =>
+      ({
+        type: "ajac-zero:a2ui",
+        id: `a2ui_${callId}`,
+        status: "completed",
+        call_id: callId,
+        mime_type: A2UI_MIME_TYPE,
+        uri: `a2ui://example/${callId}`,
+        messages,
+      }) as A2uiPresentationItem;
+
+    // turn_a's call has a canonical output only; turn_b reuses "call_1"
+    // and has both a canonical output and a linked sidecar. The sidecar
+    // must never attach to turn_a's call of the same id.
+    const entries = [
+      { item: functionCall("call_1"), turnKey: "turn_a" },
+      {
+        item: functionCallOutput("call_1", []),
+        turnKey: "turn_a",
+      },
+      { item: functionCall("call_1"), turnKey: "turn_b" },
+      { item: functionCallOutput("call_1", []), turnKey: "turn_b" },
+      {
+        item: sidecar("call_1", [createSurface("sidecar_surface")]),
+        turnKey: "turn_b",
+      },
+    ];
+
+    const outputs = collectA2uiOutputsStrict(entries);
+    const reduced = reduceA2uiOutputsStrict(
+      outputs,
+      A2UI_INSTALLED_CATALOG_IDS,
+    );
+    // turn_a's call_1 had no A2UI content of its own, so it never gets a
+    // scan entry at all — the key point is that it certainly never picks
+    // up turn_b's sidecar surface.
+    expect(reduced.get("turn_a", "call_1")?.surfaces ?? []).toHaveLength(0);
+    expect(reduced.get("turn_b", "call_1")?.surfaces[0]?.surfaceId).toBe(
+      "sidecar_surface",
+    );
   });
 });
 

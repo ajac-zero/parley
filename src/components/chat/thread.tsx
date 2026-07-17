@@ -20,7 +20,7 @@ import {
   ConversationScrollButton,
 } from "~/components/ui/conversation";
 import type { ConversationDetail } from "~/functions/conversations";
-import type { A2uiCallSurfaces } from "~/lib/a2ui";
+import { type A2uiCallSurfaces, ScopedCallMap } from "~/lib/a2ui";
 import type { ActiveTurn } from "~/lib/chat-store";
 import {
   A2UI_ITEM_TYPE,
@@ -39,6 +39,29 @@ export interface ThreadEntry {
   /** Platform item id (present for persisted items). */
   itemDbId?: string;
   streaming?: boolean;
+  /**
+   * Scopes this entry's `call_id` fields to the turn (response) that
+   * produced them — `call_id` is only unique within a single turn, so an
+   * agent may legitimately reuse the same id in a later, unrelated turn.
+   * Falls back to something unique per-entry when no turn id is available
+   * (e.g. an item orphaned by a deleted turn row — `turnId` is
+   * `ON DELETE SET NULL`, see `schema.ts`), so it never accidentally
+   * groups with an unrelated entry. See `~/lib/a2ui`'s `ScopedCallMap`.
+   *
+   * Trade-off: this means two orphaned items that genuinely belonged to
+   * the *same* deleted turn also stop pairing with each other (each gets
+   * its own scope). That's intentional, not just accepted collateral —
+   * once `turnId` is null, nothing distinguishes items from that deleted
+   * turn from items belonging to a *different* deleted turn, so grouping
+   * orphans together by any shared fallback key would risk exactly the
+   * cross-turn `call_id` collision this scoping exists to prevent. Nothing
+   * deletes an individual `turns` row on its own today (only turn *items*,
+   * during regenerate) — the only cascade that removes `turns` rows is
+   * deleting the whole conversation, which removes their `conversationItems`
+   * in the same operation, so no orphaned item is ever actually observable
+   * in practice; this path is dormant today.
+   */
+  turnKey: string;
 }
 
 /** Merges the persisted transcript with the currently streaming turn. */
@@ -87,6 +110,7 @@ export function buildThread(
       item: row.payload,
       source: row.source,
       itemDbId: row.id,
+      turnKey: row.turnId ?? `item:${row.id}`,
     };
   });
 
@@ -98,6 +122,7 @@ export function buildThread(
           item: userItem.payload,
           source: "user",
           itemDbId: userItem.id,
+          turnKey: active.turnId ?? `item:${userItem.id}`,
         });
       }
     } else if (active.optimisticUserItem) {
@@ -105,6 +130,7 @@ export function buildThread(
         key: "__optimistic__",
         item: active.optimisticUserItem,
         source: "user",
+        turnKey: active.turnId ?? "__optimistic__",
       });
     }
     active.state.items.forEach((item, index) => {
@@ -116,6 +142,20 @@ export function buildThread(
         streaming:
           active.phase !== "finished" &&
           (item as { status?: string }).status !== "completed",
+        // Falls back per-item-index like the persisted-row case above, but
+        // unlike that case this fallback is provably unreachable rather
+        // than merely dormant: `active.turnId` is set from the
+        // `x-parley-turn-id` response header (`chat-store.ts`'s
+        // `#dispatch`) *before* the SSE body is ever consumed into
+        // `state.items` — and identically supplied up front on `resume()` —
+        // so no agent item (which only ever arrives via that same SSE
+        // stream) can land in `active.state.items` while `active.turnId`
+        // is still null. If that invariant ever changes, this per-index
+        // fallback would stop pairing a live turn's own function_call and
+        // function_call_output with each other (the same class of bug this
+        // file's turnKey scoping otherwise fixes), so keep it in sync with
+        // `chat-store.ts` if the dispatch ordering there ever changes.
+        turnKey: active.turnId ?? `stream:${index}`,
       });
     });
   }
@@ -160,6 +200,64 @@ const SCROLL_BUTTON_GAP = 16;
  */
 const HEADER_INSET = 52;
 
+/**
+ * Marks a `(turnKey, call_id)` pairing as ambiguous (more than one call or
+ * output shared that id within one turn) so it can be
+ * distinguished from "no output yet" without guessing which output is the
+ * right one.
+ */
+export const AMBIGUOUS_CALL_OUTPUT = Symbol("ambiguous-call-id");
+
+/**
+ * Pairs `function_call` items with their outputs, scoped by `(turnKey,
+ * call_id)` — `call_id` is only unique within a single turn, so an
+ * unscoped map would let a later turn's output silently replace an
+ * earlier, unrelated call's (the exact bug this scoping fixes; see
+ * docs/generative-ui.md). If an agent additionally violates that per-turn
+ * uniqueness contract (more than one call or output shares a `call_id`
+ * within the *same* turn), the pairing is ambiguous —
+ * `AMBIGUOUS_CALL_OUTPUT` is stored instead of picking one output
+ * arbitrarily, so the call can render with no paired output rather than a
+ * potentially wrong one.
+ */
+export function pairOutputsByCall(
+  entries: readonly Pick<ThreadEntry, "item" | "turnKey">[],
+): ScopedCallMap<FunctionCallOutputItem | typeof AMBIGUOUS_CALL_OUTPUT> {
+  const groups = new ScopedCallMap<{
+    callCount: number;
+    outputs: FunctionCallOutputItem[];
+  }>();
+  for (const entry of entries) {
+    if (
+      entry.item.type !== "function_call" &&
+      entry.item.type !== "function_call_output"
+    ) {
+      continue;
+    }
+    const item = entry.item as FunctionCallItem | FunctionCallOutputItem;
+    if (!item.call_id) continue;
+    const group = groups.get(entry.turnKey, item.call_id) ?? {
+      callCount: 0,
+      outputs: [],
+    };
+    if (item.type === "function_call") group.callCount += 1;
+    else group.outputs.push(item);
+    groups.set(entry.turnKey, item.call_id, group);
+  }
+
+  const result = new ScopedCallMap<
+    FunctionCallOutputItem | typeof AMBIGUOUS_CALL_OUTPUT
+  >();
+  for (const [turnKey, callId, group] of groups.entries()) {
+    if (group.callCount === 1 && group.outputs.length === 1) {
+      result.set(turnKey, callId, group.outputs[0] as FunctionCallOutputItem);
+    } else if (group.callCount > 1 || group.outputs.length > 1) {
+      result.set(turnKey, callId, AMBIGUOUS_CALL_OUTPUT);
+    }
+  }
+  return result;
+}
+
 export const Thread = memo(function Thread({
   entries,
   active,
@@ -185,11 +283,12 @@ export const Thread = memo(function Thread({
   onRetry?: () => void;
   onDismissError?: () => void;
   /**
-   * Conversation-wide A2UI surface state keyed by tool call id (see
-   * `reduceA2uiOutputs`). Computed by the host so the same map can also
-   * drive placements outside the thread (e.g. the pinned side canvas).
+   * Conversation-wide A2UI surface state, scoped by turn and keyed by tool
+   * call id within it (see `reduceA2uiOutputs`). Computed by the host so
+   * the same map can also drive placements outside the thread (e.g. the
+   * pinned side canvas).
    */
-  a2uiByCall?: ReadonlyMap<string, A2uiCallSurfaces>;
+  a2uiByCall?: ScopedCallMap<A2uiCallSurfaces>;
   /** Routes an A2UI action from a rendered tool surface back to the agent. */
   onA2uiAction?: A2uiActionHandler;
   disabled?: boolean;
@@ -209,17 +308,7 @@ export const Thread = memo(function Thread({
    */
   composerCardHeight?: number;
 }) {
-  /* Pair function_call items with their outputs. */
-  const pairedOutputs = useMemo(() => {
-    const map = new Map<string, FunctionCallOutputItem>();
-    for (const entry of entries) {
-      if (entry.item.type === "function_call_output") {
-        const output = entry.item as FunctionCallOutputItem;
-        if (output.call_id) map.set(output.call_id, output);
-      }
-    }
-    return map;
-  }, [entries]);
+  const pairedOutputs = useMemo(() => pairOutputsByCall(entries), [entries]);
 
   const lastAssistantKey = useMemo(() => {
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -313,13 +402,16 @@ export const Thread = memo(function Thread({
 
           if (item.type === "function_call") {
             const call = item as FunctionCallItem;
+            const paired = pairedOutputs.get(entry.turnKey, call.call_id);
             return (
               <ToolCallBlock
                 key={entry.key}
                 call={call}
-                output={pairedOutputs.get(call.call_id) ?? null}
+                output={
+                  paired === AMBIGUOUS_CALL_OUTPUT ? null : (paired ?? null)
+                }
                 streaming={entry.streaming}
-                a2ui={a2uiByCall?.get(call.call_id) ?? null}
+                a2ui={a2uiByCall?.get(entry.turnKey, call.call_id) ?? null}
                 onA2uiAction={onA2uiAction}
                 disabled={disabled}
               />
