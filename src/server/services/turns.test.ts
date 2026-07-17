@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { titleFromText } from "~/server/services/conversations";
 import { hasMessageContent, isMissingEstablishedContinuation } from "./turns";
 
 describe("stateful continuation", () => {
@@ -67,5 +68,24 @@ describe("message emptiness policy", () => {
     // Same message shape must be valid whether it's the initial message of a
     // new conversation or a subsequent message in an existing one.
     expect(hasMessageContent(a2uiOnly)).toBe(true);
+  });
+});
+
+describe("initial-turn title fallback for A2UI-only messages", () => {
+  // Mirrors the exact expression used at the conversation-creation call site
+  // in `start`: `titleFromText(params.message.text || ownedFiles[0]?.name || "")`.
+  const initialTitleFor = (text: string, firstFileName?: string) =>
+    titleFromText(text || firstFileName || "");
+
+  it("falls back to 'New chat' for an A2UI-only initial message (no text, no files)", () => {
+    expect(initialTitleFor("", undefined)).toBe("New chat");
+  });
+
+  it("still titles from the first file name when no text but a file is attached", () => {
+    expect(initialTitleFor("", "invoice.pdf")).toBe("invoice.pdf");
+  });
+
+  it("still titles from message text when present, regardless of a2ui", () => {
+    expect(initialTitleFor("Book a table", "invoice.pdf")).toBe("Book a table");
   });
 });
