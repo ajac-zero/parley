@@ -48,7 +48,7 @@ export class TurnError extends Data.TaggedError("TurnError")<{
   status?: number;
 }> {}
 
-export const validateAttachmentCount = (fileIds: readonly string[]) => {
+const validateAttachmentCount = (fileIds: readonly string[]) => {
   if (fileIds.length > MAX_ATTACHMENTS_PER_MESSAGE) {
     return new TurnError({
       message: `Too many attachments (max ${MAX_ATTACHMENTS_PER_MESSAGE}).`,
