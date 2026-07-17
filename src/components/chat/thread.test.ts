@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ConversationDetail } from "~/functions/conversations";
 import type { ActiveTurn } from "~/lib/chat-store";
@@ -11,12 +13,17 @@ import {
   AMBIGUOUS_CALL_OUTPUT,
   buildThread,
   pairOutputsByCall,
+  Thread,
+  type ThreadEntry,
 } from "./thread";
 
-const functionCallOutput = (callId: string): FunctionCallOutputItem => ({
+const functionCallOutput = (
+  callId: string,
+  output: string = JSON.stringify({ ok: true, forCall: callId }),
+): FunctionCallOutputItem => ({
   type: "function_call_output",
   call_id: callId,
-  output: JSON.stringify({ ok: true, forCall: callId }),
+  output,
 });
 
 const functionCall = (callId: string): FunctionCallItem => ({
@@ -171,5 +178,56 @@ describe("buildThread (turnKey assignment)", () => {
     const entries = buildThread(null, active);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.turnKey).toBe("__optimistic__");
+  });
+});
+
+describe("Thread rendering (end-to-end call_id scoping)", () => {
+  it("does not let a later turn's output leak onto an earlier turn's same-id call", () => {
+    // Reproduces the exact bug named in issue #31 ("earlier calls can
+    // display later outputs") at the actual JSX call site
+    // (`pairedOutputs.get(entry.turnKey, call.call_id)` in
+    // `thread.tsx`'s render), not just in the extracted pure functions:
+    // turn_a's call_1 has no output of its own; turn_b's call_1 does. A
+    // `call.call_id`-only (unscoped) lookup would incorrectly show
+    // turn_a's card as "Completed" with turn_b's output leaking in. A
+    // future refactor that accidentally drops `entry.turnKey` from that
+    // lookup would make this test fail.
+    //
+    // Radix's Collapsible omits its (closed-by-default) content from SSR
+    // markup, so this asserts on the always-rendered header state badge
+    // ("Pending" vs "Completed") rather than the collapsed output body.
+    const entries: ThreadEntry[] = [
+      {
+        key: "call_a",
+        item: functionCall("call_1"),
+        source: "agent",
+        turnKey: "turn_a",
+      },
+      {
+        key: "call_b",
+        item: functionCall("call_1"),
+        source: "agent",
+        turnKey: "turn_b",
+      },
+      {
+        key: "output_b",
+        item: functionCallOutput("call_1"),
+        source: "agent",
+        turnKey: "turn_b",
+      },
+    ];
+
+    const markup = renderToStaticMarkup(
+      createElement(Thread, { entries, active: undefined }),
+    );
+
+    const pendingIndex = markup.indexOf(">Pending<");
+    const completedIndex = markup.indexOf(">Completed<");
+    expect(pendingIndex).toBeGreaterThan(-1);
+    expect(completedIndex).toBeGreaterThan(-1);
+    // turn_a's card (rendered first, entries order) must show "Pending",
+    // not "Completed" with turn_b's output — i.e. its badge appears
+    // before turn_b's in the markup.
+    expect(pendingIndex).toBeLessThan(completedIndex);
   });
 });

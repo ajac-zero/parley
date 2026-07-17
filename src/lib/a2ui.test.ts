@@ -1485,17 +1485,6 @@ describe("ScopedCallMap", () => {
       ]),
     );
   });
-
-  it("size counts every stored value across all turns", () => {
-    const map = new ScopedCallMap<string>();
-    expect(map.size).toBe(0);
-    map.set("turn_a", "call_1", "a1");
-    map.set("turn_a", "call_2", "a2");
-    map.set("turn_b", "call_1", "b1");
-    expect(map.size).toBe(3);
-    map.set("turn_a", "call_1", "overwritten");
-    expect(map.size).toBe(3);
-  });
 });
 
 describe("call_id uniqueness scope", () => {

@@ -881,16 +881,15 @@ export class ScopedCallMap<V> {
       }
     }
   }
-
-  get size(): number {
-    let total = 0;
-    for (const inner of this.#inner.values()) total += inner.size;
-    return total;
-  }
 }
 
-/** One trajectory item paired with the turn (response) that produced it. */
-export interface A2uiTrajectoryItem {
+/**
+ * One trajectory item paired with the turn (response) that produced it.
+ * Not exported: callers (e.g. `chat.$conversationId.tsx`) only ever build
+ * these as inline object literals when calling `collectA2uiOutputs`, so
+ * there's no external consumer of the type name itself.
+ */
+interface A2uiTrajectoryItem {
   item: ORItem;
   turnKey: TurnKey;
 }
@@ -905,8 +904,10 @@ export interface A2uiOutputRef {
 /**
  * A sidecar's own linkage, before it's known to be eligible (that requires
  * trajectory-wide context — see `collectA2uiOutputs`) or scoped to a turn.
+ * Not exported: only `a2uiPresentationOutput`'s own callers within this
+ * module consume it, by reading `.callId`/`.output` structurally.
  */
-export interface A2uiSidecarOutput {
+interface A2uiSidecarOutput {
   callId: string;
   output: ContentPart[];
 }
