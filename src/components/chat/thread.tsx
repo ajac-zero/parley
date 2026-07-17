@@ -44,8 +44,19 @@ export interface ThreadEntry {
    * produced them — `call_id` is only unique within a single turn, so an
    * agent may legitimately reuse the same id in a later, unrelated turn.
    * Falls back to something unique per-entry when no turn id is available
-   * (e.g. an item orphaned by turn deletion), so it never accidentally
+   * (e.g. an item orphaned by a deleted turn row — `turnId` is
+   * `ON DELETE SET NULL`, see `schema.ts`), so it never accidentally
    * groups with an unrelated entry. See `~/lib/a2ui`'s `ScopedCallMap`.
+   *
+   * Trade-off: this means two orphaned items that genuinely belonged to
+   * the *same* deleted turn also stop pairing with each other (each gets
+   * its own scope). That's intentional, not just accepted collateral —
+   * once `turnId` is null, nothing distinguishes items from that deleted
+   * turn from items belonging to a *different* deleted turn, so grouping
+   * orphans together by any shared fallback key would risk exactly the
+   * cross-turn `call_id` collision this scoping exists to prevent. No
+   * code currently deletes `turns` rows (only turn *items*, during
+   * regenerate), so this path is dormant today.
    */
   turnKey: string;
 }

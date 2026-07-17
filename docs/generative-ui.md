@@ -76,10 +76,10 @@ How it works today:
   precedence.
 - `call_id` uniqueness scope: `call_id` is defined by the agent/model (Open
   Responses does not itself guarantee it), and **Parley only requires it to
-  be unique within the single turn (response) that produced it** — a `id`
-  attribution model, `function_call` <-> `function_call_output` <->
-  presentation-sidecar linkage, and tool-call ↔ output pairing in the
-  thread are all scoped by `(turn, call_id)`, never by `call_id` alone.
+  be unique within the single turn (response) that produced it**.
+  `function_call` <-> `function_call_output` <-> presentation-sidecar
+  linkage, and tool-call ↔ output pairing in the thread, are all scoped by
+  `(turn, call_id)`, never by `call_id` alone.
   Reusing the same `call_id` string in a later, unrelated turn is expected
   and supported: agents and MCP servers commonly assign short or
   sequential ids, and requiring conversation-wide uniqueness would be an

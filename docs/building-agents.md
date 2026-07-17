@@ -137,12 +137,18 @@ single response (turn) it belongs to — Parley scopes every
 `function_call` ↔ `function_call_output` (and, if you use them, A2UI
 presentation sidecar) pairing by `(turn, call_id)`, never by `call_id`
 alone. Reusing a short or sequential id scheme across turns is fine and
-expected. What Parley does *not* support is reusing the same `call_id` for
-more than one `function_call`/`function_call_output` within the *same*
-response — that's ambiguous, and Parley degrades deterministically (no
-output is paired to those calls) rather than guessing which one you meant.
-See "call_id uniqueness scope" in [generative-ui.md](./generative-ui.md)
-for how this interacts with A2UI surfaces specifically.
+expected. Within a *single* response, don't reuse the same `call_id` for
+more than one `function_call_output` — that's ambiguous, and Parley
+degrades deterministically (no output paired to any of them, rather than
+guessing which one you meant) instead of silently keeping whichever
+arrived last. Reusing a `call_id` across more than one `function_call` in
+the same response is not recommended either (each such call ends up paired
+with whatever single output shares that id, which is unlikely to be what
+you want), but Parley doesn't specifically detect or flag it — treat
+`call_id` as if it uniquely names one call within the response, not just
+one output. See "call_id uniqueness scope" in
+[generative-ui.md](./generative-ui.md) for how this interacts with A2UI
+surfaces specifically.
 
 ### Downloadable artifacts
 

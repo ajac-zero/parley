@@ -838,7 +838,7 @@ export function extractA2uiResources(
  * `turnKey` that scopes it, or it risks conflating two unrelated calls that
  * happen to share an id. `turnKey` is typically the persisted `turnId`
  * (falling back to something unique per-entry when unavailable, e.g. an
- * orphaned item with no turn) — see `ThreadEntry.turnId` in `thread.tsx`.
+ * orphaned item with no turn) — see `ThreadEntry.turnKey` in `thread.tsx`.
  */
 export type TurnKey = string;
 
