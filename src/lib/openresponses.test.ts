@@ -394,7 +394,7 @@ describe("helpers", () => {
     expect(isMessageItem({ type: "reasoning" } as never)).toBe(false);
   });
 
-  it("removes known presentation parts without changing assistant output", () => {
+  it("preserves client action parts and assistant output for replay", () => {
     const user: MessageItem = {
       type: "message",
       role: "user",
@@ -409,10 +409,7 @@ describe("helpers", () => {
       content: [{ type: "output_text", text: "Keep me" }],
     };
 
-    expect(portableInputItem(user)).toEqual({
-      ...user,
-      content: [{ type: "input_text", text: "UI action fallback" }],
-    });
+    expect(portableInputItem(user)).toBe(user);
     expect(portableInputItem(assistant)).toBe(assistant);
   });
 

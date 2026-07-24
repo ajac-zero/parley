@@ -194,7 +194,7 @@ export function reasoningSummaryText(item: ReasoningItem): string {
   return (item.content ?? []).map((p) => p.text ?? "").join("\n\n");
 }
 
-/** Removes platform presentation items and parts from provider replay. */
+/** Removes platform-only presentation items from provider replay. */
 export function portableInputItem(item: ORItem): ORItem | null {
   if (
     item.type === "parley:attachment" ||
@@ -203,17 +203,7 @@ export function portableInputItem(item: ORItem): ORItem | null {
   ) {
     return null;
   }
-  if (
-    !isMessageItem(item) ||
-    item.role !== "user" ||
-    !Array.isArray(item.content)
-  ) {
-    return item;
-  }
-  return {
-    ...item,
-    content: item.content.filter((part) => part.type !== "a2ui"),
-  };
+  return item;
 }
 
 /* ------------------------------ stream events ---------------------------- */
