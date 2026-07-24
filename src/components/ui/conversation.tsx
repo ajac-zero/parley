@@ -12,7 +12,9 @@ import { cn } from "~/lib/utils";
  * (https://ai-sdk.dev/elements/components/conversation). Wraps
  * `use-stick-to-bottom` so the thread auto-scrolls while streaming, but
  * releases the lock as soon as the user scrolls away, and exposes a
- * "scroll to bottom" button when not pinned to the bottom.
+ * "scroll to bottom" button when not pinned to the bottom. Resize tracking
+ * is instant: large tool surfaces and several streamed items can otherwise
+ * retarget the same spring before it settles and visibly stutter.
  */
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
@@ -21,7 +23,7 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
     className={cn("relative flex-1 overflow-y-hidden", className)}
     initial="smooth"
-    resize="smooth"
+    resize="instant"
     role="log"
     {...props}
   />

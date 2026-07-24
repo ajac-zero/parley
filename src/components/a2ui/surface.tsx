@@ -228,7 +228,7 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   return (
     <A2uiSurfaceContext.Provider value={contextValue}>
       <div
-        className="group/surface relative w-full max-w-2xl"
+        className="a2ui-surface-enter group/surface relative w-full max-w-2xl"
         data-a2ui-surface={surface.surfaceId}
       >
         {/* Pin affordance only: a pinned surface renders in the canvas,

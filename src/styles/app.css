@@ -137,6 +137,28 @@
 
 /* Thin, unobtrusive scrollbars like ChatGPT */
 @layer utilities {
+  @keyframes a2ui-surface-enter {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .a2ui-surface-enter {
+    animation: a2ui-surface-enter 180ms ease-out both;
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .a2ui-surface-enter {
+      animation: none;
+    }
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent)
