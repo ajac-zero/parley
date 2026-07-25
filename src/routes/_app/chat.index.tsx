@@ -89,7 +89,7 @@ function NewChatPage() {
            * stays fully visible and sharp scrolling underneath, instead of
            * being hidden or blurred behind anything. */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
-            <header className="pointer-events-auto flex h-13 items-center gap-1 px-14 md:px-12">
+            <header className="pointer-events-auto flex h-13 items-center gap-1 px-14 md:px-4">
               <AgentPicker
                 agents={agents}
                 selectedId={selectedAgentId}
@@ -139,7 +139,7 @@ function NewChatPage() {
           {/* No active thread yet: still show the picker header (not
            * floating — there's no scrollable content underneath it to
            * fade). */}
-          <header className="flex h-13 shrink-0 items-center gap-1 px-14 md:px-12">
+          <header className="flex h-13 shrink-0 items-center gap-1 px-14 md:px-4">
             <AgentPicker
               agents={agents}
               selectedId={selectedAgentId}

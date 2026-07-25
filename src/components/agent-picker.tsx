@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, Check, ChevronDown, Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,29 @@ export function AgentAvatar({
   );
 }
 
+export function AgentTitle({
+  agent,
+  children,
+  className,
+}: {
+  agent: Pick<PublicAgent, "avatar" | "name">;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex h-9 min-w-0 items-center gap-1.5 px-2.5 font-medium text-[15px]",
+        className,
+      )}
+    >
+      <AgentAvatar agent={agent} className="size-5 text-xs" />
+      <span className="max-w-44 truncate">{agent.name}</span>
+      {children}
+    </span>
+  );
+}
+
 export function AgentPicker({
   agents,
   selectedId,
@@ -54,17 +78,16 @@ export function AgentPicker({
       <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
           variant="ghost"
-          className="h-9 gap-1.5 px-2.5 font-medium text-[15px]"
+          className="h-9 gap-1.5 rounded-full border bg-background p-0 shadow-sm has-[>svg]:px-0"
         >
           {selected ? (
-            <>
-              <AgentAvatar agent={selected} className="size-5 text-xs" />
-              <span className="max-w-44 truncate">{selected.name}</span>
-            </>
+            <AgentTitle agent={selected} className="pr-0" />
           ) : (
-            <span className="text-muted-foreground">Choose an agent</span>
+            <span className="px-2.5 font-medium text-[15px] text-muted-foreground">
+              Choose an agent
+            </span>
           )}
-          <ChevronDown className="size-4 text-muted-foreground" />
+          <ChevronDown className="mr-2.5 size-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
