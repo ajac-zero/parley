@@ -213,7 +213,7 @@ export function AppSidebar({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search chats"
-              className="h-8 border-transparent bg-sidebar-accent/60 pl-8 text-sm focus-visible:border-input focus-visible:bg-background"
+              className="h-8 border-transparent bg-sidebar-accent/60 pl-8 text-sm shadow-none focus-visible:border-sidebar-border focus-visible:bg-sidebar-accent/60 focus-visible:ring-0"
             />
           </div>
         </div>
