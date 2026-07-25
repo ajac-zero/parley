@@ -61,6 +61,7 @@ function ComposerInner({
   const attachments = useProviderAttachments();
   const controller = usePromptInputController();
   const inputId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const seenRef = useRef(new Set<string>());
   const fileIdMapRef = useRef(new Map<string, string>());
@@ -124,6 +125,7 @@ function ComposerInner({
       return id ? [id] : [];
     });
     onSend(message.text, fileIds);
+    queueMicrotask(() => textareaRef.current?.focus());
   };
 
   const status = busy ? "streaming" : "ready";
@@ -196,6 +198,7 @@ function ComposerInner({
           )}
 
           <PromptInputTextarea
+            ref={textareaRef}
             id={inputId}
             placeholder={placeholder}
             disabled={disabled}
