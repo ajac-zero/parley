@@ -129,12 +129,7 @@ export function AppSidebar({
     <TooltipProvider delayDuration={0}>
       <div className="flex h-full w-full flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
         {/* Header */}
-        <div
-          className={cn(
-            "flex items-center gap-1 px-3 pt-3 pb-1",
-            collapsed && "justify-center gap-0 px-0",
-          )}
-        >
+        <div className="flex items-center gap-1 px-3 pt-3 pb-1">
           <SidebarLogoToggle
             config={config}
             collapsed={collapsed}
@@ -174,12 +169,7 @@ export function AppSidebar({
         </div>
 
         {/* Actions */}
-        <div
-          className={cn(
-            "space-y-0.5 px-3 py-2",
-            collapsed && "flex flex-col items-center px-0",
-          )}
-        >
+        <div className="space-y-0.5 px-3 py-2">
           <SidebarNavItem
             to="/chat"
             icon={<SquarePen className="size-4.5 shrink-0" />}
@@ -195,13 +185,19 @@ export function AppSidebar({
             onNavigate={onNavigate}
             activeProps={{ className: "bg-sidebar-accent" }}
           />
-          {collapsed && (
+          <div
+            className={cn(
+              "max-h-0 overflow-hidden opacity-0 transition-[max-height,opacity] duration-0",
+              collapsed &&
+                "max-h-9 opacity-100 delay-200 duration-150 ease-out",
+            )}
+          >
             <CollapsedChatsMenu
               groups={conversationGroups}
               activeId={activeId}
               onNavigate={onNavigate}
             />
-          )}
+          </div>
         </div>
 
         {/* Search */}
@@ -281,7 +277,7 @@ function CollapsedChatsMenu({
   const trigger = (
     <button
       type="button"
-      className="flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-sidebar-accent"
+      className="flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors hover:bg-sidebar-accent"
       aria-label="Chats"
     >
       <MessageCircle className="size-4.5" />
@@ -363,12 +359,14 @@ function SidebarNavItem({
       onClick={onNavigate}
       activeProps={activeProps}
       className={cn(
-        "flex items-center overflow-hidden rounded-lg text-sm transition-colors hover:bg-sidebar-accent",
-        collapsed ? "size-9 shrink-0 justify-center" : "gap-2.5 px-2 py-2",
+        "flex h-9 w-full items-center overflow-hidden rounded-lg text-sm transition-colors hover:bg-sidebar-accent",
+        !collapsed && "gap-2.5",
       )}
       aria-label={label}
     >
-      {icon}
+      <span className="flex h-9 w-10 shrink-0 items-center justify-center">
+        {icon}
+      </span>
       <span
         className={cn(
           "truncate transition-[max-width,opacity] duration-200",
@@ -420,14 +418,12 @@ function SidebarLogoToggle({
         }
       }}
       className={cn(
-        "group flex items-center overflow-hidden rounded-lg transition-colors hover:bg-sidebar-accent",
-        collapsed
-          ? "size-9 shrink-0 justify-center"
-          : "min-w-0 flex-1 gap-2 py-1.5 pl-2",
+        "group flex h-9 min-w-0 flex-1 items-center overflow-hidden rounded-lg transition-colors hover:bg-sidebar-accent",
+        !collapsed && "gap-2",
       )}
       aria-label={collapsed ? "Expand sidebar" : config.appName}
     >
-      <span className="relative flex size-6 shrink-0 items-center justify-center">
+      <span className="relative flex h-9 w-10 shrink-0 items-center justify-center">
         <span
           className={cn(
             "flex items-center justify-center transition-opacity",
