@@ -6,7 +6,7 @@ import {
   A2uiHostContext,
   type A2uiHostContextValue,
 } from "~/components/a2ui/context";
-import { AgentAvatar } from "~/components/agent-picker";
+import { AgentTitle } from "~/components/agent-picker";
 import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
 import { Button } from "~/components/ui/button";
@@ -204,19 +204,18 @@ function ConversationPage() {
            * fully visible and sharp scrolling underneath, instead of being
            * hidden or blurred behind anything. */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
-            <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-12">
+            <header className="pointer-events-auto flex h-13 items-center gap-2 px-14 md:px-4">
               {agent ? (
-                <div className="flex min-w-0 items-center gap-2">
-                  <AgentAvatar agent={agent} className="size-5 text-xs" />
-                  <span className="truncate font-medium text-[15px]">
-                    {agent.name}
-                  </span>
+                <AgentTitle
+                  agent={agent}
+                  className="rounded-full border bg-background shadow-sm"
+                >
                   {!agent.isEnabled && (
                     <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
                       disabled
                     </span>
                   )}
-                </div>
+                </AgentTitle>
               ) : (
                 <span className="text-muted-foreground text-sm">
                   Agent unavailable
