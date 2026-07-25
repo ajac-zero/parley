@@ -129,6 +129,7 @@ function NewChatPage() {
                   selectedAgent?.supportsImages || selectedAgent?.supportsFiles
                 }
                 fileMaxMb={config.fileMaxMb}
+                autoFocus
               />
             </div>
           </div>

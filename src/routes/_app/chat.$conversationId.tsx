@@ -258,6 +258,7 @@ function ConversationPage() {
                 }
                 disclaimer={config.chatDisclaimer}
                 fileMaxMb={config.fileMaxMb}
+                autoFocus
               />
             </div>
           </div>
