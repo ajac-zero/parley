@@ -4,7 +4,7 @@ import {
   Bot,
   Check,
   LogOut,
-  MessageSquarePlus,
+  MessageCircle,
   Monitor,
   Moon,
   MoreHorizontal,
@@ -13,6 +13,7 @@ import {
   Search,
   Settings,
   Shield,
+  SquarePen,
   Sun,
   Trash2,
   X,
@@ -26,6 +27,7 @@ import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -78,6 +80,9 @@ const GROUP_ORDER = [
   "Older",
 ];
 
+const SIDEBAR_TOOLTIP_CLASS =
+  "rounded-md border border-sidebar-border bg-sidebar px-2.5 py-1.5 font-normal text-xs text-sidebar-foreground shadow-md";
+
 export function AppSidebar({
   config,
   user,
@@ -96,12 +101,9 @@ export function AppSidebar({
   const params = useParams({ strict: false }) as { conversationId?: string };
   const activeId = params.conversationId;
 
-  const groups = useMemo(() => {
-    const filtered = (conversations ?? []).filter((c) =>
-      c.title.toLowerCase().includes(search.toLowerCase()),
-    );
-    const map = new Map<string, typeof filtered>();
-    for (const conversation of filtered) {
+  const conversationGroups = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof conversations>>();
+    for (const conversation of conversations ?? []) {
       const label = groupLabel(conversation.updatedAt);
       const list = map.get(label) ?? [];
       list.push(conversation);
@@ -111,13 +113,28 @@ export function AppSidebar({
       const list = map.get(label);
       return list ? [{ label, list }] : [];
     });
-  }, [conversations, search]);
+  }, [conversations]);
+  const groups = useMemo(
+    () =>
+      conversationGroups.flatMap((group) => {
+        const list = group.list.filter((conversation) =>
+          conversation.title.toLowerCase().includes(search.toLowerCase()),
+        );
+        return list.length > 0 ? [{ ...group, list }] : [];
+      }),
+    [conversationGroups, search],
+  );
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={0}>
       <div className="flex h-full w-full flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
         {/* Header */}
-        <div className="flex items-center gap-1 px-3 pt-3 pb-1">
+        <div
+          className={cn(
+            "flex items-center gap-1 px-3 pt-3 pb-1",
+            collapsed && "justify-center gap-0 px-0",
+          )}
+        >
           <SidebarLogoToggle
             config={config}
             collapsed={collapsed}
@@ -143,17 +160,29 @@ export function AppSidebar({
                     <PanelLeft className="size-4.5" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">Collapse sidebar</TooltipContent>
+                <TooltipContent
+                  side="right"
+                  sideOffset={20}
+                  showArrow={false}
+                  className={SIDEBAR_TOOLTIP_CLASS}
+                >
+                  Collapse sidebar
+                </TooltipContent>
               </Tooltip>
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div className="space-y-0.5 px-3 py-2">
+        <div
+          className={cn(
+            "space-y-0.5 px-3 py-2",
+            collapsed && "flex flex-col items-center px-0",
+          )}
+        >
           <SidebarNavItem
             to="/chat"
-            icon={<MessageSquarePlus className="size-4.5 shrink-0" />}
+            icon={<SquarePen className="size-4.5 shrink-0" />}
             label="New chat"
             collapsed={collapsed}
             onNavigate={onNavigate}
@@ -166,6 +195,13 @@ export function AppSidebar({
             onNavigate={onNavigate}
             activeProps={{ className: "bg-sidebar-accent" }}
           />
+          {collapsed && (
+            <CollapsedChatsMenu
+              groups={conversationGroups}
+              activeId={activeId}
+              onNavigate={onNavigate}
+            />
+          )}
         </div>
 
         {/* Search */}
@@ -229,6 +265,83 @@ export function AppSidebar({
   );
 }
 
+function CollapsedChatsMenu({
+  groups,
+  activeId,
+  onNavigate,
+}: {
+  groups: Array<{
+    label: string;
+    list: Array<{ id: string; title: string }>;
+  }>;
+  activeId?: string;
+  onNavigate?: () => void;
+}) {
+  const navigate = useNavigate();
+  const trigger = (
+    <button
+      type="button"
+      className="flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-sidebar-accent"
+      aria-label="Chats"
+    >
+      <MessageCircle className="size-4.5" />
+    </button>
+  );
+
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          sideOffset={20}
+          showArrow={false}
+          className={SIDEBAR_TOOLTIP_CLASS}
+        >
+          Chats
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        side="right"
+        className="max-h-[min(28rem,var(--radix-dropdown-menu-content-available-height))] w-64"
+      >
+        {groups.length === 0 ? (
+          <DropdownMenuItem disabled>No chats yet</DropdownMenuItem>
+        ) : (
+          groups.map((group) => (
+            <DropdownMenuGroup key={group.label}>
+              <DropdownMenuLabel className="text-muted-foreground text-xs">
+                {group.label}
+              </DropdownMenuLabel>
+              {group.list.map((conversation) => (
+                <DropdownMenuItem
+                  key={conversation.id}
+                  className={cn(
+                    "cursor-pointer truncate",
+                    conversation.id === activeId && "bg-accent",
+                  )}
+                  onSelect={() => {
+                    navigate({
+                      to: "/chat/$conversationId",
+                      params: { conversationId: conversation.id },
+                    });
+                    onNavigate?.();
+                  }}
+                >
+                  <span className="truncate">{conversation.title}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function SidebarNavItem({
   to,
   icon,
@@ -272,7 +385,14 @@ function SidebarNavItem({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent
+        side="right"
+        sideOffset={20}
+        showArrow={false}
+        className={SIDEBAR_TOOLTIP_CLASS}
+      >
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -344,7 +464,14 @@ function SidebarLogoToggle({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent side="right">Expand sidebar</TooltipContent>
+      <TooltipContent
+        side="right"
+        sideOffset={20}
+        showArrow={false}
+        className={SIDEBAR_TOOLTIP_CLASS}
+      >
+        Expand sidebar
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -526,7 +653,14 @@ function UserMenu({
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="right">{user.name}</TooltipContent>
+          <TooltipContent
+            side="right"
+            sideOffset={20}
+            showArrow={false}
+            className={SIDEBAR_TOOLTIP_CLASS}
+          >
+            {user.name}
+          </TooltipContent>
         </Tooltip>
       ) : (
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
