@@ -494,7 +494,10 @@ function UserMenu({
   const trigger = (
     <button
       type="button"
-      className="flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-2 py-2 text-left transition-colors hover:bg-sidebar-accent"
+      className={cn(
+        "flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-2 py-2 text-left transition-colors hover:bg-sidebar-accent",
+        collapsed && "mx-auto size-10 justify-center gap-0 p-0",
+      )}
       aria-label={user.name}
     >
       <Avatar className="size-7 shrink-0">
@@ -518,21 +521,17 @@ function UserMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-            <TooltipContent side="right">{user.name}</TooltipContent>
-          </Tooltip>
-        ) : (
-          trigger
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side={collapsed ? "right" : "top"}
-        className="w-56"
-      >
+      {collapsed ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">{user.name}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      )}
+      <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-muted-foreground text-xs">
           Theme
         </DropdownMenuLabel>
