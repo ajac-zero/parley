@@ -366,6 +366,7 @@ export function ChartView({ component, base }: ViewProps) {
     480,
   );
   const sort = toDisplayString(component.sort) || "data";
+  const normalize = toDisplayString(component.normalize) || "none";
 
   const xAxisSpec = parseXAxis(component.x);
   const xKey = xAxisSpec?.key ?? null;
@@ -415,6 +416,25 @@ export function ChartView({ component, base }: ViewProps) {
       return sort === "ascending" ? delta : -delta;
     });
   }, [rawRows, series, sort]);
+  const normalizedRows = useMemo(() => {
+    if (normalize !== "percent" && normalize !== "stackedPercent") return rows;
+    return rows.map((row) => {
+      const total = series.reduce(
+        (sum, spec) => sum + Math.max(0, toNumber(row[spec.key]) ?? 0),
+        0,
+      );
+      if (total === 0) return row;
+      return {
+        ...row,
+        ...Object.fromEntries(
+          series.map((spec) => [
+            spec.key,
+            (toNumber(row[spec.key]) ?? 0) / total,
+          ]),
+        ),
+      };
+    });
+  }, [normalize, rows, series]);
 
   const config = useMemo(() => {
     const entries: ChartConfig = {};
@@ -559,7 +579,7 @@ export function ChartView({ component, base }: ViewProps) {
 
   const shared = {
     accessibilityLayer: true,
-    data: rows,
+    data: normalizedRows,
     onClick: selectPoint,
     ...dragHandlers,
   } as const;
@@ -728,7 +748,8 @@ export function ChartView({ component, base }: ViewProps) {
   const seriesType = (spec: SeriesSpec): NonNullable<SeriesSpec["type"]> =>
     spec.type ?? (variant === "bar" || variant === "area" ? variant : "line");
   const stackId = (spec: SeriesSpec) =>
-    spec.stack ?? (stacked ? "stack" : undefined);
+    spec.stack ??
+    (stacked || normalize === "stackedPercent" ? "stack" : undefined);
   const renderSeries = (spec: SeriesSpec) => {
     if (hiddenSeries.has(spec.key)) return null;
     const type = seriesType(spec);

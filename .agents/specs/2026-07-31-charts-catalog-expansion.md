@@ -69,6 +69,7 @@ Implemented:
 - [x] Optional Y-axis domain bounds.
 - [x] ISO-8601 time-axis tick and tooltip formatting.
 - [x] Legend visibility binding and expandable data-table fallback.
+- [x] Percent and stacked-percent row-total normalization.
 
 Remaining:
 
@@ -79,8 +80,8 @@ Remaining:
 - The `y` field remains a left-axis shorthand.
 - Numeric X-axis scaling and interval-aware time ticks. Time values use
   ISO-8601 with explicit compact date formatting.
-- Normalization and ordering: add percent/stacked-percent normalization and
-  deterministic category ordering for composition and bar charts.
+- Deterministic category ordering for composition and bar charts is available
+  through `sort`.
 - Series-selection mode and additional chart description fields.
 
 #### 2. Add composition charts

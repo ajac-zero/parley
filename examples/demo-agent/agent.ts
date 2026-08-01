@@ -673,6 +673,21 @@ function revenueMixMessages(): Array<Record<string, unknown>> {
   ];
 }
 
+function channelShareMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_channel_share";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Channel share" },
+    { id: "chart", component: "Chart", variant: "bar", title: "Revenue share by quarter", data: { path: "/share" }, x: { key: "quarter", label: "Quarter" }, y: { format: "percent", includeZero: true }, series: [{ key: "enterprise", label: "Enterprise", color: "chart-1" }, { key: "selfServe", label: "Self-serve", color: "chart-2" }, { key: "partners", label: "Partners", color: "chart-3" }], normalize: "stackedPercent", height: 260 },
+  ];
+  return [
+    { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/share", value: [{ quarter: "Q1", enterprise: 520, selfServe: 270, partners: 110 }, { quarter: "Q2", enterprise: 560, selfServe: 330, partners: 125 }, { quarter: "Q3", enterprise: 610, selfServe: 370, partners: 155 }] } },
+  ];
+}
+
 function accountOpportunityMessages(): Array<Record<string, unknown>> {
   const surfaceId = "demo_account_opportunity";
   const components = [
@@ -1239,6 +1254,14 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
           revenueMixMessages(),
         ),
       },
+    };
+  }
+
+  if (/\b(channel share|stacked percent|share chart)\b/.test(lower)) {
+    return {
+      reasoning: "The user wants normalized composition. I'll return the stacked-percent channel-share chart.",
+      reply: "I called `get_channel_share` to show a **stacked-percent** chart, where every quarter sums to 100%.",
+      tool: { name: "get_channel_share", args: JSON.stringify({ metric: "revenue share" }), output: a2uiToolOutput("a2ui://demo/channel-share", "Channel revenue share by quarter.", channelShareMessages()) },
     };
   }
 

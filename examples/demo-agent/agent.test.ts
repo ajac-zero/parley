@@ -563,6 +563,15 @@ describe("handleDemoResponses", () => {
     });
   });
 
+  it("returns a stacked-percent chart for channel share asks", async () => {
+    const { state } = await streamAndReduce({ input: [userMessage("show channel share")] });
+    const output = state.items.find((item) => item.type === "function_call_output") as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart", variant: "bar", normalize: "stackedPercent",
+    });
+  });
+
   it("returns a numeric bubble chart for opportunity asks", async () => {
     const { state } = await streamAndReduce({
       input: [userMessage("show account opportunity")],
