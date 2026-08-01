@@ -345,6 +345,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   onRegenerate?: () => void;
   isLast?: boolean;
 }) {
+  const { t } = useI18n();
   const text = messageText(item);
   const { copied, copy } = useCopy(text);
 
@@ -374,7 +375,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={copy}
-            aria-label="Copy response"
+            aria-label={t("copyResponse")}
           >
             {copied ? (
               <Check className="size-3.5" />
@@ -387,7 +388,7 @@ export const AssistantMessage = memo(function AssistantMessage({
               size="icon"
               className="size-7 text-muted-foreground"
               onClick={onRegenerate}
-              aria-label="Regenerate response"
+              aria-label={t("regenerateResponse")}
             >
               <RefreshCw className="size-3.5" />
             </Action>

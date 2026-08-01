@@ -363,6 +363,7 @@ function TabsView({ component, base }: ViewProps) {
 }
 
 function ModalView({ component, base }: ViewProps) {
+  const { t } = useI18n();
   const { surface } = useA2uiSurface();
   const [open, setOpen] = useState(false);
   const triggerId =
@@ -386,7 +387,7 @@ function ModalView({ component, base }: ViewProps) {
         </DialogTrigger>
       )}
       <DialogContent className="max-h-[80vh] overflow-y-auto">
-        <DialogTitle className="sr-only">Dialog</DialogTitle>
+        <DialogTitle className="sr-only">{t("dialog")}</DialogTitle>
         {contentId && <CatalogNode id={contentId} base={base} />}
       </DialogContent>
     </Dialog>

@@ -290,7 +290,7 @@ export function AgentDialog({
                 id="agent-name"
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
-                placeholder="My Research Agent"
+                placeholder={t("agentNameExample")}
                 required
               />
             </div>
@@ -312,7 +312,7 @@ export function AgentDialog({
               id="agent-description"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
-              placeholder="What is this agent good at?"
+              placeholder={t("agentDescriptionExample")}
             />
           </div>
 
@@ -348,7 +348,7 @@ export function AgentDialog({
               autoComplete="off"
             />
             <p className="text-muted-foreground text-xs">
-              Sent as <code>Authorization: Bearer …</code> and stored encrypted.
+              {t("apiKeyStorageDescription")}
             </p>
           </div>
 
@@ -415,7 +415,7 @@ export function AgentDialog({
               id="agent-instructions"
               value={form.instructions}
               onChange={(e) => set("instructions", e.target.value)}
-              placeholder="Optional system instructions sent with every request"
+              placeholder={t("optionalInstructions")}
               className="min-h-20"
             />
           </div>

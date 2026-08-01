@@ -9,6 +9,7 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import { cn } from "~/lib/utils";
+import { useI18n } from "~/components/i18n";
 
 /**
  * Adapted from AI Elements' Reasoning
@@ -124,31 +125,29 @@ export type ReasoningTriggerProps = ComponentProps<
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode;
 };
 
-const defaultGetThinkingMessage = (
-  isStreaming: boolean,
-  duration?: number,
-) => {
-  if (isStreaming || duration === 0) {
-    return <span className="animate-pulse">Thinking…</span>;
-  }
-  if (duration === undefined) {
-    return <span>Thought process</span>;
-  }
-  return (
-    <span>
-      Thought for {duration} second{duration === 1 ? "" : "s"}
-    </span>
-  );
-};
-
 export const ReasoningTrigger = memo(
   ({
     className,
     children,
-    getThinkingMessage = defaultGetThinkingMessage,
+    getThinkingMessage,
     ...props
   }: ReasoningTriggerProps) => {
+    const { t } = useI18n();
     const { isStreaming, isOpen, duration } = useReasoning();
+    const defaultThinkingMessage = (streaming: boolean, elapsed?: number) => {
+      if (streaming || elapsed === 0) {
+        return <span className="animate-pulse">{t("thinking")}</span>;
+      }
+      if (elapsed === undefined) return <span>{t("thoughtProcess")}</span>;
+      return (
+        <span>
+          {t("thoughtForSeconds", {
+            duration: elapsed,
+            suffix: elapsed === 1 ? "" : "s",
+          })}
+        </span>
+      );
+    };
 
     return (
       <CollapsibleTrigger
@@ -161,7 +160,10 @@ export const ReasoningTrigger = memo(
         {children ?? (
           <>
             <BrainIcon className="size-3.5" />
-            {getThinkingMessage(isStreaming, duration)}
+            {(getThinkingMessage ?? defaultThinkingMessage)(
+              isStreaming,
+              duration,
+            )}
             <ChevronDownIcon
               className={cn(
                 "size-3.5 transition-transform",

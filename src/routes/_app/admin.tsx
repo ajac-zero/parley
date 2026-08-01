@@ -364,7 +364,7 @@ function BrandingTab() {
             id="app-logo"
             value={form.appLogoUrl}
             onChange={(e) => setForm({ ...form, appLogoUrl: e.target.value })}
-            placeholder="https://…/logo.svg (leave empty for the default mark)"
+            placeholder={t("logoUrlPlaceholder")}
           />
         </div>
         <div className="space-y-1.5">
@@ -375,7 +375,7 @@ function BrandingTab() {
             onChange={(e) =>
               setForm({ ...form, chatDisclaimer: e.target.value })
             }
-            placeholder="Agents can make mistakes. Verify important information."
+            placeholder={t("agentsCanMakeMistakes")}
           />
         </div>
         <div className="space-y-1.5">

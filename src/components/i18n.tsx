@@ -205,6 +205,23 @@ const translations = {
     deleteAccount: "Delete account",
     deleteUserConfirmation:
       "Delete {email} and all their data? This cannot be undone.",
+    copied: "Copied",
+    copy: "Copy",
+    pending: "Pending",
+    running: "Running",
+    completed: "Completed",
+    arguments: "Arguments",
+    result: "Result",
+    dialog: "Dialog",
+    agentNameExample: "My Research Agent",
+    agentDescriptionExample: "What is this agent good at?",
+    optionalInstructions:
+      "Optional system instructions sent with every request",
+    apiKeyStorageDescription:
+      "Sent as Authorization: Bearer ... and stored encrypted.",
+    logoUrlPlaceholder:
+      "https://.../logo.svg (leave empty for the default mark)",
+    thoughtForSeconds: "Thought for {duration} second{suffix}",
   },
   es: {
     language: "Idioma",
@@ -405,6 +422,23 @@ const translations = {
     deleteAccount: "Eliminar cuenta",
     deleteUserConfirmation:
       "¿Eliminar {email} y todos sus datos? Esta acción no se puede deshacer.",
+    copied: "Copiado",
+    copy: "Copiar",
+    pending: "Pendiente",
+    running: "En ejecución",
+    completed: "Completado",
+    arguments: "Argumentos",
+    result: "Resultado",
+    dialog: "Diálogo",
+    agentNameExample: "Mi agente de investigación",
+    agentDescriptionExample: "¿Para qué sirve este agente?",
+    optionalInstructions:
+      "Instrucciones opcionales del sistema enviadas con cada solicitud",
+    apiKeyStorageDescription:
+      "Se envía como Authorization: Bearer ... y se almacena cifrada.",
+    logoUrlPlaceholder:
+      "https://.../logo.svg (déjalo vacío para usar la marca predeterminada)",
+    thoughtForSeconds: "Razonó durante {duration} segundo{suffix}",
   },
 } as const;
 

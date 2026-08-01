@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { ComponentProps } from "react";
 import { Badge } from "~/components/ui/badge";
+import { useI18n } from "~/components/i18n";
 import {
   Collapsible,
   CollapsibleContent,
@@ -50,23 +51,27 @@ export type ToolHeaderProps = {
   className?: string;
 };
 
-const stateBadge: Record<ToolState, { label: string; icon: React.ReactNode }> =
+const stateBadge: Record<
+  ToolState,
+  { labelKey: "pending" | "running" | "completed"; icon: React.ReactNode }
+> =
   {
     pending: {
-      label: "Pending",
+      labelKey: "pending",
       icon: <ClockIcon className="size-3.5" />,
     },
     running: {
-      label: "Running",
+      labelKey: "running",
       icon: <ClockIcon className="size-3.5 animate-pulse" />,
     },
     completed: {
-      label: "Completed",
+      labelKey: "completed",
       icon: <CheckCircleIcon className="size-3.5 text-green-600" />,
     },
   };
 
 export const ToolHeader = ({ className, title, state }: ToolHeaderProps) => {
+  const { t } = useI18n();
   const badge = stateBadge[state];
   return (
     <CollapsibleTrigger
@@ -84,7 +89,7 @@ export const ToolHeader = ({ className, title, state }: ToolHeaderProps) => {
       <span className="font-mono font-medium">{title}</span>
       <Badge className="gap-1 rounded-full text-xs" variant="secondary">
         {badge.icon}
-        {badge.label}
+        {t(badge.labelKey)}
       </Badge>
       <ChevronDownIcon className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
@@ -108,16 +113,19 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: string;
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn(className)} {...props}>
-    <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Arguments
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const { t } = useI18n();
+  return (
+    <div className={cn(className)} {...props}>
+      <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        {t("arguments")}
+      </div>
+      <div className="overflow-hidden rounded-lg bg-muted">
+        <CodeBlock code={input} language="json" />
+      </div>
     </div>
-    <div className="overflow-hidden rounded-lg bg-muted">
-      <CodeBlock code={input} language="json" />
-    </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: string | null;
@@ -128,12 +136,13 @@ export const ToolOutput = ({
   output,
   ...props
 }: ToolOutputProps) => {
+  const { t } = useI18n();
   if (output === null) return null;
 
   return (
     <div className={cn(className)} {...props}>
       <div className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-        Result
+        {t("result")}
       </div>
       <div className="max-h-64 overflow-auto rounded-lg bg-muted">
         <CodeBlock code={output} language="json" />

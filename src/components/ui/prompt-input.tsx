@@ -628,9 +628,21 @@ export const PromptInputActionMenuTrigger = ({
   children,
   ...props
 }: PromptInputActionMenuTriggerProps) => (
-  <DropdownMenuTrigger asChild>
-    <Button
-      aria-label="More actions"
+  <PromptInputActionMenuTriggerInner className={className} {...props}>
+    {children}
+  </PromptInputActionMenuTriggerInner>
+);
+
+function PromptInputActionMenuTriggerInner({
+  className,
+  children,
+  ...props
+}: PromptInputActionMenuTriggerProps) {
+  const { t } = useI18n();
+  return (
+    <DropdownMenuTrigger asChild>
+      <Button
+        aria-label={t("moreActions")}
       className={cn(
         "size-9 shrink-0 rounded-full text-muted-foreground",
         className,
@@ -639,11 +651,12 @@ export const PromptInputActionMenuTrigger = ({
       type="button"
       variant="ghost"
       {...props}
-    >
-      {children ?? <Plus className="size-4.5" />}
-    </Button>
-  </DropdownMenuTrigger>
-);
+      >
+        {children ?? <Plus className="size-4.5" />}
+      </Button>
+    </DropdownMenuTrigger>
+  );
+}
 
 export type PromptInputActionMenuContentProps = ComponentProps<
   typeof DropdownMenuContent
