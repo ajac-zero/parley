@@ -32,15 +32,20 @@ export const Route = createFileRoute("/_app/chat/$conversationId")({
     if (!detail) throw notFound();
   },
   component: ConversationPage,
-  notFoundComponent: () => (
+  notFoundComponent: ConversationNotFound,
+});
+
+function ConversationNotFound() {
+  const { t } = useI18n();
+  return (
     <main className="flex h-full flex-1 flex-col items-center justify-center gap-3">
-      <p className="text-muted-foreground">This conversation doesn't exist.</p>
+      <p className="text-muted-foreground">{t("conversationNotFound")}</p>
       <Button asChild variant="outline">
-        <Link to="/chat">Start a new chat</Link>
+        <Link to="/chat">{t("startNewChat")}</Link>
       </Button>
     </main>
-  ),
-});
+  );
+}
 
 function ConversationPage() {
   const { t } = useI18n();

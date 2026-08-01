@@ -149,7 +149,7 @@ export function AppSidebar({
                     type="button"
                     className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent"
                     onClick={onToggleCollapse}
-                    aria-label="Collapse sidebar"
+                    aria-label={t("collapseSidebar")}
                     tabIndex={collapsed ? -1 : 0}
                   >
                     <PanelLeft className="size-4.5" />
@@ -161,7 +161,7 @@ export function AppSidebar({
                   showArrow={false}
                   className={SIDEBAR_TOOLTIP_CLASS}
                 >
-                  Collapse sidebar
+                  {t("collapseSidebar")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -407,6 +407,7 @@ function SidebarLogoToggle({
   onNavigate?: () => void;
   onToggleCollapse?: () => void;
 }) {
+  const { t } = useI18n();
   const content = (
     <Link
       to="/chat"
@@ -422,7 +423,7 @@ function SidebarLogoToggle({
         "group flex h-9 min-w-0 flex-1 items-center overflow-hidden rounded-lg transition-colors hover:bg-sidebar-accent",
         !collapsed && "gap-2",
       )}
-      aria-label={collapsed ? "Expand sidebar" : config.appName}
+      aria-label={collapsed ? t("expandSidebar") : config.appName}
     >
       <span className="relative flex h-9 w-10 shrink-0 items-center justify-center">
         <span
@@ -467,7 +468,7 @@ function SidebarLogoToggle({
         showArrow={false}
         className={SIDEBAR_TOOLTIP_CLASS}
       >
-        Expand sidebar
+        {t("expandSidebar")}
       </TooltipContent>
     </Tooltip>
   );
@@ -484,6 +485,7 @@ function ConversationRow({
   active: boolean;
   onNavigate?: () => void;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
@@ -533,7 +535,7 @@ function ConversationRow({
             if (draft.trim()) renameMutation.mutate(draft.trim());
             setRenaming(false);
           }}
-          aria-label="Save name"
+          aria-label={t("saveName")}
         >
           <Check className="size-3.5" />
         </Button>
@@ -542,7 +544,7 @@ function ConversationRow({
           size="icon"
           className="size-7 shrink-0"
           onClick={() => setRenaming(false)}
-          aria-label="Cancel rename"
+          aria-label={t("cancelRename")}
         >
           <X className="size-3.5" />
         </Button>
@@ -571,7 +573,7 @@ function ConversationRow({
               "-translate-y-1/2 absolute top-1/2 right-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-foreground focus:opacity-100 group-hover/row:opacity-100",
               active && "opacity-100",
             )}
-            aria-label="Chat options"
+            aria-label={t("chatOptions")}
           >
             <MoreHorizontal className="size-4" />
           </button>
