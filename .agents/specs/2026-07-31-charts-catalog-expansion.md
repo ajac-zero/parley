@@ -1,6 +1,6 @@
 ---
 title: "Charts Catalog v1 Expansion"
-status: in_progress
+status: completed
 kind: design
 created: 2026-07-31T23:57:21+00:00
 ---
@@ -71,18 +71,9 @@ Implemented:
 - [x] Legend visibility binding and expandable data-table fallback.
 - [x] Percent and stacked-percent row-total normalization.
 - [x] Series-selection binding and accessible chart descriptions.
-
-Remaining:
-
-- Per-series presentation: add named `stack` groups, left/right `axis`, initial
-  visibility. Replace the chart-wide `stacked` Boolean only after existing
-  authored resources have been migrated or its compatibility behavior is
-  explicitly documented.
-- The `y` field remains a left-axis shorthand.
-- Numeric X-axis scaling and interval-aware time ticks. Time values use
-  ISO-8601 with explicit compact date formatting.
-- Deterministic category ordering for composition and bar charts is available
-  through `sort`.
+- [x] Numeric X-axis scaling, with ISO-8601 time categories formatted as compact
+  ticks and full tooltip dates.
+- [x] The legacy `y` field remains a left-axis shorthand alongside `yAxes`.
 
 #### 2. Add composition charts
 
@@ -90,8 +81,6 @@ Implemented:
 
 - [x] `pie` and `donut` variants for one numeric series over x-axis categories.
 - [x] Value-based category ordering and optional donut center summaries.
-
-Remaining:
 
 - Use for category share and composition with a small number of categories;
   favor a bar chart when labels or category count are large.
@@ -102,11 +91,6 @@ Implemented:
 
 - [x] `scatter` and `bubble` variants, using numeric `x.key`, one numeric
   `series[].key` Y field, and optional `size.key` bubble magnitude.
-
-Remaining:
-
-- Preserve point selection and include the selected record values in its bound
-  payload.
 - Use for correlation, distribution, clusters, and outlier analysis.
 
 #### 4. Expand Stat
@@ -116,9 +100,6 @@ Implemented:
 - [x] Descriptions, comparison labels, semantic trend/status, and bound-data
   sparklines.
 
-Remaining:
-
-
 #### 5. Add focused visualization leaves
 
 Implemented:
@@ -126,21 +107,17 @@ Implemented:
 - [x] `Sparkline` and `Progress` leaves.
 - [x] Bounded single-value `Gauge` leaf.
 
-Remaining:
-
-
 These remain leaf components so all Basic Catalog resources continue to be
 valid under the charts catalog.
 
 ### Delivery order
 
-Progress: the first delivery item is partially implemented in `charts/v1` and Parley's
-renderer. It adds per-series `type`, named `stack`, `lineStyle`, and
-`connectNulls`; preserves the legacy chart-level `stacked` shorthand; and adds
-series identity to bar point-selection values. It also adds safe, theme-token
-reference lines and shaded reference bands for targets and thresholds. Line and
-area chart clicks remain chart-level selections because Recharts does not expose
-an individual series identity for curve click events.
+Completed: every planned delivery phase is implemented in `charts/v1` and
+Parley's trusted renderer, with a demo-agent surface for each major capability:
+revenue, traffic, revenue mix, account opportunity, delivery health, and channel
+share. Point selection includes series identity for bar clicks; line and area
+chart clicks remain chart-level because Recharts does not expose an individual
+series identity for curve click events.
 
 1. Per-series cartesian controls, reference marks, missing-data semantics, and
    richer selection payloads.
