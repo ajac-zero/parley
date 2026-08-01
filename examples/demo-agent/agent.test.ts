@@ -396,13 +396,25 @@ describe("handleDemoResponses", () => {
     /* The extension components, wired for the selection loop. */
     const chart = surface.components.report_chart;
     expect(chart?.component).toBe("Chart");
-    expect(chart?.series).toHaveLength(2);
+    expect(chart?.series).toEqual([
+      expect.objectContaining({ key: "revenue", type: "bar" }),
+      expect.objectContaining({ key: "expenses", type: "bar" }),
+      expect.objectContaining({
+        key: "forecast",
+        type: "line",
+        lineStyle: "dashed",
+        connectNulls: false,
+      }),
+    ]);
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
     expect(surface.components.stat_margin?.component).toBe("Stat");
 
     /* Server-seeded data: rows plus a preselected latest month. */
     const monthly = pointerGet(surface.dataModel, "/report/monthly");
     expect(Array.isArray(monthly) && monthly.length).toBe(8);
+    expect((monthly as Array<{ forecast: number | null }>).at(-1)?.forecast).toBe(
+      null,
+    );
     expect(pointerGet(surface.dataModel, "/selection/x")).toBe("Aug");
   });
 

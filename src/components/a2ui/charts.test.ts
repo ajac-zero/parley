@@ -1,5 +1,64 @@
 import { describe, expect, it } from "vitest";
-import { formatChartValue, parseYAxis } from "~/components/a2ui/charts";
+import {
+  formatChartValue,
+  parseSeries,
+  parseYAxis,
+} from "~/components/a2ui/charts";
+
+/* -------------------------------- parseSeries ------------------------------ */
+
+describe("parseSeries", () => {
+  it("reads safe composed-series display options", () => {
+    expect(
+      parseSeries([
+        {
+          key: "actual",
+          label: "Actual revenue",
+          color: "chart-2",
+          type: "bar",
+          stack: "revenue",
+          lineStyle: "dashed",
+          connectNulls: true,
+        },
+      ]),
+    ).toEqual([
+      {
+        key: "actual",
+        label: "Actual revenue",
+        color: "chart-2",
+        type: "bar",
+        stack: "revenue",
+        lineStyle: "dashed",
+        connectNulls: true,
+      },
+    ]);
+  });
+
+  it("defaults and rejects malformed, duplicate, or unsafe options", () => {
+    expect(
+      parseSeries([
+        {
+          key: "forecast",
+          type: "invalid",
+          stack: "not safe!",
+          lineStyle: "wiggle",
+        },
+        { key: "forecast" },
+        { key: "bad key" },
+      ]),
+    ).toEqual([
+      {
+        key: "forecast",
+        label: "forecast",
+        color: "chart-1",
+        type: null,
+        stack: null,
+        lineStyle: "solid",
+        connectNulls: false,
+      },
+    ]);
+  });
+});
 
 /* -------------------------------- parseYAxis ------------------------------- */
 

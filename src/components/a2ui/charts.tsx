@@ -27,6 +27,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
   ReferenceArea,
@@ -98,14 +99,22 @@ interface SeriesSpec {
   label: string;
   /** One of the `chart-N` theme tokens. */
   color: string;
+  type: "line" | "bar" | "area" | null;
+  stack: string | null;
+  lineStyle: "solid" | "dashed" | "dotted";
+  connectNulls: boolean;
 }
 
-function parseSeries(value: unknown): SeriesSpec[] {
+export function parseSeries(value: unknown): SeriesSpec[] {
   if (!Array.isArray(value)) return [];
   const series: SeriesSpec[] = [];
   for (const entry of value) {
     const record = asRecord(entry);
-    if (typeof record?.key !== "string" || !SAFE_SERIES_KEY.test(record.key)) {
+    if (
+      typeof record?.key !== "string" ||
+      !SAFE_SERIES_KEY.test(record.key) ||
+      series.some((spec) => spec.key === record.key)
+    ) {
       continue;
     }
     series.push({
@@ -118,9 +127,30 @@ function parseSeries(value: unknown): SeriesSpec[] {
         typeof record.color === "string" && CHART_COLOR_TOKENS.has(record.color)
           ? record.color
           : `chart-${(series.length % 5) + 1}`,
+      type:
+        record.type === "line" ||
+        record.type === "bar" ||
+        record.type === "area"
+          ? record.type
+          : null,
+      stack:
+        typeof record.stack === "string" && SAFE_SERIES_KEY.test(record.stack)
+          ? record.stack
+          : null,
+      lineStyle:
+        record.lineStyle === "dashed" || record.lineStyle === "dotted"
+          ? record.lineStyle
+          : "solid",
+      connectNulls: record.connectNulls === true,
     });
   }
   return series;
+}
+
+function strokeDasharray(style: SeriesSpec["lineStyle"]): string | undefined {
+  if (style === "dashed") return "6 4";
+  if (style === "dotted") return "2 3";
+  return undefined;
 }
 
 interface SelectionSpec {
@@ -263,7 +293,7 @@ export function ChartView({ component, base }: ViewProps) {
     return <ChartPlaceholder />;
   }
 
-  const selectPointAt = (index: number | null) => {
+  const selectPointAt = (index: number | null, spec?: SeriesSpec) => {
     if (disabled || !selection || selection.mode !== "point") return;
     const row = index !== null ? rows[index] : undefined;
     if (index === null || !row) return;
@@ -274,6 +304,7 @@ export function ChartView({ component, base }: ViewProps) {
       index,
       x: row[xKey],
       values,
+      ...(spec ? { seriesKey: spec.key, seriesLabel: spec.label } : {}),
     });
   };
 
@@ -285,9 +316,10 @@ export function ChartView({ component, base }: ViewProps) {
     selectPointAt(activeTooltipIndexOf(state));
   };
 
-  const selectBar = (_entry: unknown, index: number) => {
-    selectPointAt(Number.isInteger(index) ? index : null);
-  };
+  const selectSeries =
+    (spec: SeriesSpec) => (_entry: unknown, index: number) => {
+      selectPointAt(Number.isInteger(index) ? index : null, spec);
+    };
 
   const commitDrag = () => {
     setDrag(null);
@@ -459,6 +491,60 @@ export function ChartView({ component, base }: ViewProps) {
         ))
       : null;
 
+  const seriesType = (spec: SeriesSpec): NonNullable<SeriesSpec["type"]> =>
+    spec.type ?? (variant === "bar" || variant === "area" ? variant : "line");
+  const stackId = (spec: SeriesSpec) =>
+    spec.stack ?? (stacked ? "stack" : undefined);
+  const renderSeries = (spec: SeriesSpec) => {
+    const type = seriesType(spec);
+    if (type === "bar") {
+      return (
+        <Bar
+          key={spec.key}
+          dataKey={spec.key}
+          fill={`var(--color-${spec.key})`}
+          radius={4}
+          stackId={stackId(spec)}
+          onClick={selectSeries(spec)}
+          isAnimationActive={false}
+        >
+          {cells(spec)}
+        </Bar>
+      );
+    }
+    if (type === "area") {
+      return (
+        <Area
+          key={spec.key}
+          type="monotone"
+          dataKey={spec.key}
+          stroke={`var(--color-${spec.key})`}
+          strokeDasharray={strokeDasharray(spec.lineStyle)}
+          fill={`var(--color-${spec.key})`}
+          fillOpacity={0.25}
+          strokeWidth={2}
+          stackId={stackId(spec)}
+          connectNulls={spec.connectNulls}
+          isAnimationActive={false}
+        />
+      );
+    }
+    return (
+      <Line
+        key={spec.key}
+        type="monotone"
+        dataKey={spec.key}
+        stroke={`var(--color-${spec.key})`}
+        strokeDasharray={strokeDasharray(spec.lineStyle)}
+        strokeWidth={2}
+        dot={false}
+        connectNulls={spec.connectNulls}
+        isAnimationActive={false}
+      />
+    );
+  };
+  const composed = series.some((spec) => spec.type !== null);
+
   return (
     <div className="flex w-full flex-col gap-2">
       {title.length > 0 && <div className="font-medium text-sm">{title}</div>}
@@ -474,7 +560,17 @@ export function ChartView({ component, base }: ViewProps) {
         )}
         aria-label={xLabel ? `${title || "Chart"} by ${xLabel}` : undefined}
       >
-        {variant === "bar" ? (
+        {composed ? (
+          <ComposedChart {...shared}>
+            {grid}
+            {xAxis}
+            {yAxis}
+            {tooltip}
+            {legend}
+            {rangeArea}
+            {series.map(renderSeries)}
+          </ComposedChart>
+        ) : variant === "bar" ? (
           <BarChart {...shared}>
             {grid}
             {xAxis}
@@ -488,8 +584,8 @@ export function ChartView({ component, base }: ViewProps) {
                 dataKey={spec.key}
                 fill={`var(--color-${spec.key})`}
                 radius={4}
-                stackId={stacked ? "stack" : undefined}
-                onClick={selectBar}
+                stackId={stackId(spec)}
+                onClick={selectSeries(spec)}
                 isAnimationActive={false}
               >
                 {cells(spec)}
@@ -513,7 +609,8 @@ export function ChartView({ component, base }: ViewProps) {
                 fill={`var(--color-${spec.key})`}
                 fillOpacity={0.25}
                 strokeWidth={2}
-                stackId={stacked ? "stack" : undefined}
+                stackId={stackId(spec)}
+                connectNulls={spec.connectNulls}
                 isAnimationActive={false}
               />
             ))}
@@ -534,6 +631,7 @@ export function ChartView({ component, base }: ViewProps) {
                 stroke={`var(--color-${spec.key})`}
                 strokeWidth={2}
                 dot={false}
+                connectNulls={spec.connectNulls}
                 isAnimationActive={false}
               />
             ))}

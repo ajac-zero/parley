@@ -371,15 +371,20 @@ function confirmationUpdateMessages(
 /* ------------------------- A2UI charts showcase --------------------------- */
 
 /** The fabricated monthly figures behind the demo revenue report. */
-const REVENUE_MONTHS = [
-  { month: "Jan", revenue: 186_000, expenses: 152_000 },
-  { month: "Feb", revenue: 198_500, expenses: 156_400 },
-  { month: "Mar", revenue: 224_300, expenses: 161_200 },
-  { month: "Apr", revenue: 209_800, expenses: 173_900 },
-  { month: "May", revenue: 241_600, expenses: 178_300 },
-  { month: "Jun", revenue: 253_100, expenses: 182_700 },
-  { month: "Jul", revenue: 275_400, expenses: 189_500 },
-  { month: "Aug", revenue: 291_200, expenses: 196_800 },
+const REVENUE_MONTHS: ReadonlyArray<{
+  month: string;
+  revenue: number;
+  expenses: number;
+  forecast: number | null;
+}> = [
+  { month: "Jan", revenue: 186_000, expenses: 152_000, forecast: 190_000 },
+  { month: "Feb", revenue: 198_500, expenses: 156_400, forecast: 201_000 },
+  { month: "Mar", revenue: 224_300, expenses: 161_200, forecast: 218_000 },
+  { month: "Apr", revenue: 209_800, expenses: 173_900, forecast: 228_000 },
+  { month: "May", revenue: 241_600, expenses: 178_300, forecast: 240_000 },
+  { month: "Jun", revenue: 253_100, expenses: 182_700, forecast: 252_000 },
+  { month: "Jul", revenue: 275_400, expenses: 189_500, forecast: 268_000 },
+  { month: "Aug", revenue: 291_200, expenses: 196_800, forecast: null },
 ] as const;
 
 type RevenueMonth = (typeof REVENUE_MONTHS)[number];
@@ -427,7 +432,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Rendered from Parley's first-party charts catalog: the A2UI Basic Catalog extended with native Chart and Stat components.",
+       text: "A composed chart: actuals are bars and the dashed plan line deliberately stops where the forecast is missing.",
     },
     {
       id: "report_stats",
@@ -465,12 +470,20 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_chart",
       component: "Chart",
       variant: "bar",
-      title: "Revenue vs expenses by month",
+       title: "Revenue actuals, expenses, and plan by month",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
       series: [
-        { key: "revenue", label: "Revenue", color: "chart-1" },
-        { key: "expenses", label: "Expenses", color: "chart-5" },
+        { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
+        { key: "expenses", label: "Expenses", color: "chart-5", type: "bar" },
+        {
+          key: "forecast",
+          label: "Revenue plan",
+          color: "chart-2",
+          type: "line",
+          lineStyle: "dashed",
+          connectNulls: false,
+        },
       ],
       height: 260,
       selection: { path: "/selection", mode: "point" },
@@ -544,6 +557,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
           values: {
             revenue: REVENUE_LAST.revenue,
             expenses: REVENUE_LAST.expenses,
+            forecast: REVENUE_LAST.forecast,
           },
         },
       },
