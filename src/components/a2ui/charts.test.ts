@@ -110,6 +110,8 @@ describe("parseYAxis", () => {
       currency: "USD",
       maximumFractionDigits: 2,
       includeZero: false,
+      min: null,
+      max: null,
     });
   });
 
@@ -146,6 +148,22 @@ describe("parseYAxis", () => {
     expect(parseYAxis({ label: "Revenue" })?.label).toBe("Revenue");
     expect(parseYAxis({ label: 42 })?.label).toBe("");
   });
+
+  it("accepts ordered finite domain bounds and drops invalid pairs", () => {
+    expect(parseYAxis({ min: 0, max: 1 })).toMatchObject({ min: 0, max: 1 });
+    expect(parseYAxis({ min: 1, max: 1 })).toMatchObject({
+      min: null,
+      max: null,
+    });
+    expect(parseYAxis({ min: 2, max: 1 })).toMatchObject({
+      min: null,
+      max: null,
+    });
+    expect(parseYAxis({ min: "nope", max: 1 })).toMatchObject({
+      min: null,
+      max: 1,
+    });
+  });
 });
 
 /* ----------------------------- formatChartValue ---------------------------- */
@@ -157,6 +175,8 @@ describe("formatChartValue", () => {
     currency: "USD",
     maximumFractionDigits: 2,
     includeZero: false,
+    min: null,
+    max: null,
   };
 
   it("formats plain numbers with the given fraction digits", () => {

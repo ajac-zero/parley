@@ -486,6 +486,8 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
           format: "percent",
           maximumFractionDigits: 0,
           includeZero: true,
+          min: 0,
+          max: 0.4,
         },
       },
       // Recharts presents legend entries in reverse rendering order.

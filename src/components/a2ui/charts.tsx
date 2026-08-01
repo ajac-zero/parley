@@ -222,6 +222,8 @@ interface YAxisSpec {
   currency: string;
   maximumFractionDigits: number;
   includeZero: boolean;
+  min: number | null;
+  max: number | null;
 }
 
 interface XAxisSpec {
@@ -267,6 +269,8 @@ export function parseYAxis(value: unknown): YAxisSpec | null {
   const record = asRecord(value);
   if (!record) return null;
   const digits = toNumber(record.maximumFractionDigits);
+  const min = toNumber(record.min);
+  const max = toNumber(record.max);
   return {
     label: typeof record.label === "string" ? record.label : "",
     format:
@@ -280,6 +284,8 @@ export function parseYAxis(value: unknown): YAxisSpec | null {
     maximumFractionDigits:
       digits !== null ? Math.min(6, Math.max(0, Math.floor(digits))) : 2,
     includeZero: record.includeZero === true,
+    min: min !== null && (max === null || min < max) ? min : null,
+    max: max !== null && (min === null || min < max) ? max : null,
   };
 }
 
@@ -536,12 +542,14 @@ export function ChartView({ component, base }: ViewProps) {
       tickMargin={8}
       width={spec.format === "currency" ? 88 : 64}
       domain={
-        spec.includeZero
-          ? [
-              (minimum: number) => Math.min(0, minimum),
-              (maximum: number) => Math.max(0, maximum),
-            ]
-          : undefined
+        spec.min !== null || spec.max !== null
+          ? [spec.min ?? "auto", spec.max ?? "auto"]
+          : spec.includeZero
+            ? [
+                (minimum: number) => Math.min(0, minimum),
+                (maximum: number) => Math.max(0, maximum),
+              ]
+            : undefined
       }
       tickFormatter={(value: number) => formatChartValue(value, spec)}
       label={

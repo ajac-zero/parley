@@ -66,6 +66,7 @@ Implemented:
 - [x] Reference lines and shaded bands using approved theme tokens.
 - [x] Bar selections include `seriesKey` and `seriesLabel`.
 - [x] Independent left and right Y axes with per-series axis assignment.
+- [x] Optional Y-axis domain bounds.
 - [x] ISO-8601 time-axis tick and tooltip formatting.
 
 Remaining:
@@ -74,8 +75,7 @@ Remaining:
   visibility. Replace the chart-wide `stacked` Boolean only after existing
   authored resources have been migrated or its compatibility behavior is
   explicitly documented.
-- Optional domain bounds for independently configured Y axes. The `y` field
-  remains a left-axis shorthand.
+- The `y` field remains a left-axis shorthand.
 - Numeric X-axis scaling and interval-aware time ticks. Time values use
   ISO-8601 with explicit compact date formatting.
 - Normalization and ordering: add percent/stacked-percent normalization and

@@ -409,7 +409,13 @@ describe("handleDemoResponses", () => {
     ]);
     expect(chart?.yAxes).toMatchObject({
       left: { format: "currency", maximumFractionDigits: 0, includeZero: true },
-      right: { format: "percent", maximumFractionDigits: 0, includeZero: true },
+      right: {
+        format: "percent",
+        maximumFractionDigits: 0,
+        includeZero: true,
+        min: 0,
+        max: 0.4,
+      },
     });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
     expect(chart?.referenceBands).toEqual([
