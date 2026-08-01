@@ -407,6 +407,12 @@ describe("handleDemoResponses", () => {
       }),
     ]);
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
+    expect(chart?.referenceBands).toEqual([
+      expect.objectContaining({ from: 230_000, to: 260_000 }),
+    ]);
+    expect(chart?.referenceLines).toEqual([
+      expect.objectContaining({ value: 250_000, label: "Plan" }),
+    ]);
     expect(surface.components.stat_margin?.component).toBe("Stat");
 
     /* Server-seeded data: rows plus a preselected latest month. */

@@ -127,9 +127,10 @@ valid under the charts catalog.
 Progress: the first delivery item is implemented in `charts/v1` and Parley's
 renderer. It adds per-series `type`, named `stack`, `lineStyle`, and
 `connectNulls`; preserves the legacy chart-level `stacked` shorthand; and adds
-series identity to bar point-selection values. Line and area chart clicks remain
-chart-level selections because Recharts does not expose an individual series
-identity for curve click events.
+series identity to bar point-selection values. It also adds safe, theme-token
+reference lines and shaded reference bands for targets and thresholds. Line and
+area chart clicks remain chart-level selections because Recharts does not expose
+an individual series identity for curve click events.
 
 1. Per-series cartesian controls, reference marks, missing-data semantics, and
    richer selection payloads.

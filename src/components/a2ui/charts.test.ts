@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatChartValue,
+  parseReferenceBands,
+  parseReferenceLines,
   parseSeries,
   parseYAxis,
 } from "~/components/a2ui/charts";
@@ -56,6 +58,35 @@ describe("parseSeries", () => {
         lineStyle: "solid",
         connectNulls: false,
       },
+    ]);
+  });
+});
+
+/* ----------------------------- reference marks ---------------------------- */
+
+describe("reference marks", () => {
+  it("reads finite reference lines with safe color tokens", () => {
+    expect(
+      parseReferenceLines([
+        { value: 250_000, label: "Plan", color: "chart-2" },
+        { value: 0, color: "not-a-token" },
+        { value: "nope" },
+      ]),
+    ).toEqual([
+      { value: 250_000, label: "Plan", color: "chart-2" },
+      { value: 0, label: "", color: "chart-3" },
+    ]);
+  });
+
+  it("normalizes bands and drops zero-width or malformed ranges", () => {
+    expect(
+      parseReferenceBands([
+        { from: 260_000, to: 230_000, label: "Target zone", color: "chart-1" },
+        { from: 1, to: 1 },
+        { from: 1, to: "nope" },
+      ]),
+    ).toEqual([
+      { from: 230_000, to: 260_000, label: "Target zone", color: "chart-1" },
     ]);
   });
 });

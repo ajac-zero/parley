@@ -31,6 +31,7 @@ import {
   Line,
   LineChart,
   ReferenceArea,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from "recharts";
@@ -158,6 +159,61 @@ interface SelectionSpec {
   mode: "point" | "range";
 }
 
+interface ReferenceLineSpec {
+  value: number;
+  label: string;
+  color: string;
+}
+
+interface ReferenceBandSpec {
+  from: number;
+  to: number;
+  label: string;
+  color: string;
+}
+
+export function parseReferenceLines(value: unknown): ReferenceLineSpec[] {
+  if (!Array.isArray(value)) return [];
+  const lines: ReferenceLineSpec[] = [];
+  for (const entry of value) {
+    const record = asRecord(entry);
+    const lineValue = toNumber(record?.value);
+    if (lineValue === null) continue;
+    lines.push({
+      value: lineValue,
+      label: typeof record?.label === "string" ? record.label : "",
+      color:
+        typeof record?.color === "string" &&
+        CHART_COLOR_TOKENS.has(record.color)
+          ? record.color
+          : "chart-3",
+    });
+  }
+  return lines;
+}
+
+export function parseReferenceBands(value: unknown): ReferenceBandSpec[] {
+  if (!Array.isArray(value)) return [];
+  const bands: ReferenceBandSpec[] = [];
+  for (const entry of value) {
+    const record = asRecord(entry);
+    const from = toNumber(record?.from);
+    const to = toNumber(record?.to);
+    if (from === null || to === null || from === to) continue;
+    bands.push({
+      from: Math.min(from, to),
+      to: Math.max(from, to),
+      label: typeof record?.label === "string" ? record.label : "",
+      color:
+        typeof record?.color === "string" &&
+        CHART_COLOR_TOKENS.has(record.color)
+          ? record.color
+          : "chart-3",
+    });
+  }
+  return bands;
+}
+
 interface YAxisSpec {
   label: string;
   format: "number" | "currency" | "percent";
@@ -240,6 +296,14 @@ export function ChartView({ component, base }: ViewProps) {
     [component.series],
   );
   const selection = parseSelection(component.selection, base);
+  const referenceLines = useMemo(
+    () => parseReferenceLines(component.referenceLines),
+    [component.referenceLines],
+  );
+  const referenceBands = useMemo(
+    () => parseReferenceBands(component.referenceBands),
+    [component.referenceBands],
+  );
 
   const rawRows = resolveDynamic(component.data, dataModel, base);
   const rows = useMemo(
@@ -477,6 +541,29 @@ export function ChartView({ component, base }: ViewProps) {
       ifOverflow="visible"
     />
   ) : null;
+  const referenceAreas = referenceBands.map((band, index) => (
+    <ReferenceArea
+      // biome-ignore lint/suspicious/noArrayIndexKey: static resource order
+      key={index}
+      y1={band.from}
+      y2={band.to}
+      fill={`var(--${band.color})`}
+      fillOpacity={0.12}
+      label={band.label || undefined}
+      ifOverflow="extendDomain"
+    />
+  ));
+  const referenceLineMarks = referenceLines.map((line, index) => (
+    <ReferenceLine
+      // biome-ignore lint/suspicious/noArrayIndexKey: static resource order
+      key={index}
+      y={line.value}
+      stroke={`var(--${line.color})`}
+      strokeDasharray="4 4"
+      label={line.label || undefined}
+      ifOverflow="extendDomain"
+    />
+  ));
   /* Non-selected points dim once a point is picked (bar charts only —
    * recharts Cells are per-bar). */
   const cells = (spec: SeriesSpec) =>
@@ -568,6 +655,8 @@ export function ChartView({ component, base }: ViewProps) {
             {tooltip}
             {legend}
             {rangeArea}
+            {referenceAreas}
+            {referenceLineMarks}
             {series.map(renderSeries)}
           </ComposedChart>
         ) : variant === "bar" ? (
@@ -578,6 +667,8 @@ export function ChartView({ component, base }: ViewProps) {
             {tooltip}
             {legend}
             {rangeArea}
+            {referenceAreas}
+            {referenceLineMarks}
             {series.map((spec) => (
               <Bar
                 key={spec.key}
@@ -600,6 +691,8 @@ export function ChartView({ component, base }: ViewProps) {
             {tooltip}
             {legend}
             {rangeArea}
+            {referenceAreas}
+            {referenceLineMarks}
             {series.map((spec) => (
               <Area
                 key={spec.key}
@@ -623,6 +716,8 @@ export function ChartView({ component, base }: ViewProps) {
             {tooltip}
             {legend}
             {rangeArea}
+            {referenceAreas}
+            {referenceLineMarks}
             {series.map((spec) => (
               <Line
                 key={spec.key}

@@ -473,7 +473,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
        title: "Revenue actuals, expenses, and plan by month",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
-      series: [
+       series: [
         { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
         { key: "expenses", label: "Expenses", color: "chart-5", type: "bar" },
         {
@@ -482,8 +482,19 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
           color: "chart-2",
           type: "line",
           lineStyle: "dashed",
-          connectNulls: false,
+         connectNulls: false,
         },
+      ],
+      referenceBands: [
+        {
+          from: 230_000,
+          to: 260_000,
+          label: "Monthly target zone",
+          color: "chart-2",
+        },
+      ],
+      referenceLines: [
+        { value: 250_000, label: "Plan", color: "chart-2" },
       ],
       height: 260,
       selection: { path: "/selection", mode: "point" },
