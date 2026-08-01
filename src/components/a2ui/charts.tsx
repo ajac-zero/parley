@@ -104,6 +104,7 @@ interface SeriesSpec {
   stack: string | null;
   lineStyle: "solid" | "dashed" | "dotted";
   connectNulls: boolean;
+  axis: "left" | "right";
 }
 
 export function parseSeries(value: unknown): SeriesSpec[] {
@@ -143,6 +144,7 @@ export function parseSeries(value: unknown): SeriesSpec[] {
           ? record.lineStyle
           : "solid",
       connectNulls: record.connectNulls === true,
+      axis: record.axis === "right" ? "right" : "left",
     });
   }
   return series;
@@ -242,6 +244,21 @@ export function parseYAxis(value: unknown): YAxisSpec | null {
   };
 }
 
+function parseYAxes(
+  value: unknown,
+  legacy: unknown,
+): { left: YAxisSpec | null; right: YAxisSpec | null; configured: boolean } {
+  const record = asRecord(value);
+  if (!record) {
+    return { left: parseYAxis(legacy), right: null, configured: false };
+  }
+  return {
+    left: parseYAxis(record.left) ?? parseYAxis(legacy),
+    right: parseYAxis(record.right),
+    configured: true,
+  };
+}
+
 export function formatChartValue(value: number, spec: YAxisSpec): string {
   try {
     return new Intl.NumberFormat(undefined, {
@@ -290,7 +307,7 @@ export function ChartView({ component, base }: ViewProps) {
   const xRecord = asRecord(component.x);
   const xKey = typeof xRecord?.key === "string" ? xRecord.key : null;
   const xLabel = typeof xRecord?.label === "string" ? xRecord.label : null;
-  const yAxisSpec = parseYAxis(component.y);
+  const yAxes = parseYAxes(component.yAxes, component.y);
   const series = useMemo(
     () => parseSeries(component.series),
     [component.series],
@@ -461,33 +478,41 @@ export function ChartView({ component, base }: ViewProps) {
   const xAxis = (
     <XAxis dataKey={xKey} tickLine={false} axisLine={false} tickMargin={8} />
   );
-  const yAxis = yAxisSpec ? (
+  const yAxis = (spec: YAxisSpec, side: "left" | "right") => (
     <YAxis
+      yAxisId={yAxes.configured ? side : undefined}
+      orientation={side === "right" ? "right" : undefined}
       tickLine={false}
       axisLine={false}
       tickMargin={8}
-      width={yAxisSpec.format === "currency" ? 88 : 64}
+      width={spec.format === "currency" ? 88 : 64}
       domain={
-        yAxisSpec.includeZero
+        spec.includeZero
           ? [
               (minimum: number) => Math.min(0, minimum),
               (maximum: number) => Math.max(0, maximum),
             ]
           : undefined
       }
-      tickFormatter={(value: number) => formatChartValue(value, yAxisSpec)}
+      tickFormatter={(value: number) => formatChartValue(value, spec)}
       label={
-        yAxisSpec.label
+        spec.label
           ? {
-              value: yAxisSpec.label,
-              angle: -90,
-              position: "insideLeft",
+              value: spec.label,
+              angle: side === "right" ? 90 : -90,
+              position: side === "right" ? "insideRight" : "insideLeft",
               style: { fill: "var(--muted-foreground)", fontSize: 11 },
             }
           : undefined
       }
     />
-  ) : null;
+  );
+  const yAxisViews = (
+    <>
+      {yAxes.left ? yAxis(yAxes.left, "left") : null}
+      {yAxes.right ? yAxis(yAxes.right, "right") : null}
+    </>
+  );
   const tooltip = (
     <ChartTooltip
       cursor
@@ -495,10 +520,14 @@ export function ChartView({ component, base }: ViewProps) {
         <ChartTooltipContent
           indicator="dot"
           formatter={
-            yAxisSpec
+            yAxes.left || yAxes.right
               ? (value, name) => {
                   const key = String(name);
                   const indicatorColor = config[key]?.color;
+                  const spec =
+                    series.find((entry) => entry.key === key)?.axis === "right"
+                      ? yAxes.right
+                      : yAxes.left;
                   return (
                     <>
                       <div
@@ -515,8 +544,8 @@ export function ChartView({ component, base }: ViewProps) {
                           {config[key]?.label ?? key}
                         </span>
                         <span className="font-mono font-medium text-foreground tabular-nums">
-                          {typeof value === "number"
-                            ? formatChartValue(value, yAxisSpec)
+                          {typeof value === "number" && spec
+                            ? formatChartValue(value, spec)
                             : String(value)}
                         </span>
                       </div>
@@ -601,6 +630,7 @@ export function ChartView({ component, base }: ViewProps) {
           fill={`var(--color-${spec.key})`}
           radius={4}
           stackId={stackId(spec)}
+          yAxisId={yAxes.configured ? spec.axis : undefined}
           onClick={selectSeries(spec)}
           isAnimationActive={false}
         >
@@ -620,6 +650,7 @@ export function ChartView({ component, base }: ViewProps) {
           fillOpacity={0.25}
           strokeWidth={2}
           stackId={stackId(spec)}
+          yAxisId={yAxes.configured ? spec.axis : undefined}
           connectNulls={spec.connectNulls}
           isAnimationActive={false}
         />
@@ -634,6 +665,7 @@ export function ChartView({ component, base }: ViewProps) {
         strokeDasharray={strokeDasharray(spec.lineStyle)}
         strokeWidth={2}
         dot={false}
+        yAxisId={yAxes.configured ? spec.axis : undefined}
         connectNulls={spec.connectNulls}
         isAnimationActive={false}
       />
@@ -660,7 +692,7 @@ export function ChartView({ component, base }: ViewProps) {
           <ComposedChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
@@ -672,7 +704,7 @@ export function ChartView({ component, base }: ViewProps) {
           <BarChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
@@ -696,7 +728,7 @@ export function ChartView({ component, base }: ViewProps) {
           <AreaChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
@@ -721,7 +753,7 @@ export function ChartView({ component, base }: ViewProps) {
           <LineChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}

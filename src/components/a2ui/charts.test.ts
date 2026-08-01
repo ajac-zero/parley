@@ -32,6 +32,7 @@ describe("parseSeries", () => {
         stack: "revenue",
         lineStyle: "dashed",
         connectNulls: true,
+        axis: "left",
       },
     ]);
   });
@@ -57,6 +58,7 @@ describe("parseSeries", () => {
         stack: null,
         lineStyle: "solid",
         connectNulls: false,
+        axis: "left",
       },
     ]);
   });

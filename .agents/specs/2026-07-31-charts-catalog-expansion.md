@@ -1,6 +1,6 @@
 ---
 title: "Charts Catalog v1 Expansion"
-status: proposed
+status: in_progress
 kind: design
 created: 2026-07-31T23:57:21+00:00
 ---
@@ -58,28 +58,29 @@ currency or percentage formatting, and an optional relative delta.
 
 #### 1. Improve the current Cartesian Chart
 
-- Per-series rendering: add `series[].type` (`line`, `bar`, `area`) while
-  retaining chart-level `variant` as the default. This enables composed charts,
-  such as bars for actuals plus a line for a target or forecast.
+Implemented:
+
+- [x] Per-series rendering: `series[].type` (`line`, `bar`, `area`) while
+  retaining chart-level `variant` as the default.
+- [x] Named stack groups, semantic line styles, and `connectNulls` behavior.
+- [x] Reference lines and shaded bands using approved theme tokens.
+- [x] Bar selections include `seriesKey` and `seriesLabel`.
+- [x] Independent left and right Y axes with per-series axis assignment.
+
+Remaining:
+
 - Per-series presentation: add named `stack` groups, left/right `axis`, initial
-  visibility, and a semantic line style (`solid`, `dashed`, `dotted`). Replace
-  the chart-wide `stacked` Boolean only after existing authored resources have
-  been migrated or its compatibility behavior is explicitly documented.
-- Dual Y axes: support left and right axis configuration, each with its own
-  label, number/currency/percent formatting, currency, zero-inclusion policy,
-  and optional domain bounds. Keep current `y` as the left-axis shorthand.
-- Reference marks: add semantic reference lines and shaded bands for targets,
-  SLOs, budgets, normal ranges, and thresholds. Colors must use approved theme
-  tokens.
-- Missing data: define `null` as missing, retain `0` as a valid value, and add
-  per-series `connectNulls` for line and area charts.
+  visibility. Replace the chart-wide `stacked` Boolean only after existing
+  authored resources have been migrated or its compatibility behavior is
+  explicitly documented.
+- Optional domain bounds for independently configured Y axes. The `y` field
+  remains a left-axis shorthand.
 - Better time axes: add `x.type` (`category`, `time`, `number`) and explicit
   formatting options. Time values should be ISO-8601 and receive interval-aware
   ticks and tooltip labels.
 - Normalization and ordering: add percent/stacked-percent normalization and
   deterministic category ordering for composition and bar charts.
-- Rich interactions: point selections should include `seriesKey`, `seriesLabel`,
-  and raw values. Add optional legend toggling and a series-selection mode,
+- Rich interactions: add optional legend toggling and a series-selection mode,
   with interaction state stored in the surface-local data model.
 - Accessibility: require usable title, description, axis, and series labels;
   provide an expandable or visually-hidden tabular data fallback.
@@ -124,7 +125,7 @@ valid under the charts catalog.
 
 ### Delivery order
 
-Progress: the first delivery item is implemented in `charts/v1` and Parley's
+Progress: the first delivery item is partially implemented in `charts/v1` and Parley's
 renderer. It adds per-series `type`, named `stack`, `lineStyle`, and
 `connectNulls`; preserves the legacy chart-level `stacked` shorthand; and adds
 series identity to bar point-selection values. It also adds safe, theme-token

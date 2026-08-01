@@ -376,15 +376,16 @@ const REVENUE_MONTHS: ReadonlyArray<{
   revenue: number;
   expenses: number;
   forecast: number | null;
+  margin: number;
 }> = [
-  { month: "Jan", revenue: 186_000, expenses: 152_000, forecast: 190_000 },
-  { month: "Feb", revenue: 198_500, expenses: 156_400, forecast: 201_000 },
-  { month: "Mar", revenue: 224_300, expenses: 161_200, forecast: 218_000 },
-  { month: "Apr", revenue: 209_800, expenses: 173_900, forecast: 228_000 },
-  { month: "May", revenue: 241_600, expenses: 178_300, forecast: 240_000 },
-  { month: "Jun", revenue: 253_100, expenses: 182_700, forecast: 252_000 },
-  { month: "Jul", revenue: 275_400, expenses: 189_500, forecast: 268_000 },
-  { month: "Aug", revenue: 291_200, expenses: 196_800, forecast: null },
+  { month: "Jan", revenue: 186_000, expenses: 152_000, forecast: 190_000, margin: 0.183 },
+  { month: "Feb", revenue: 198_500, expenses: 156_400, forecast: 201_000, margin: 0.212 },
+  { month: "Mar", revenue: 224_300, expenses: 161_200, forecast: 218_000, margin: 0.281 },
+  { month: "Apr", revenue: 209_800, expenses: 173_900, forecast: 228_000, margin: 0.171 },
+  { month: "May", revenue: 241_600, expenses: 178_300, forecast: 240_000, margin: 0.262 },
+  { month: "Jun", revenue: 253_100, expenses: 182_700, forecast: 252_000, margin: 0.278 },
+  { month: "Jul", revenue: 275_400, expenses: 189_500, forecast: 268_000, margin: 0.312 },
+  { month: "Aug", revenue: 291_200, expenses: 196_800, forecast: null, margin: 0.324 },
 ] as const;
 
 type RevenueMonth = (typeof REVENUE_MONTHS)[number];
@@ -432,7 +433,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Actuals and expenses are bars; the dashed plan ends in August because no forecast is available.",
+      text: "Actuals and expenses are bars; the dashed plan ends in August, while the right axis tracks net margin.",
     },
     {
       id: "report_stats",
@@ -470,14 +471,22 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_chart",
       component: "Chart",
       variant: "bar",
-      title: "Revenue actuals, plan, and expenses by month",
+      title: "Revenue actuals, plan, expenses, and margin by month",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
-      y: {
-        label: "USD",
-        format: "currency",
-        maximumFractionDigits: 0,
-        includeZero: true,
+      yAxes: {
+        left: {
+          label: "USD",
+          format: "currency",
+          maximumFractionDigits: 0,
+          includeZero: true,
+        },
+        right: {
+          label: "Net margin",
+          format: "percent",
+          maximumFractionDigits: 0,
+          includeZero: true,
+        },
       },
       // Recharts presents legend entries in reverse rendering order.
       series: [
@@ -491,6 +500,13 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
           connectNulls: false,
         },
         { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
+        {
+          key: "margin",
+          label: "Net margin",
+          color: "chart-4",
+          type: "line",
+          axis: "right",
+        },
       ],
       referenceBands: [
         {

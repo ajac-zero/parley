@@ -405,11 +405,11 @@ describe("handleDemoResponses", () => {
         connectNulls: false,
       }),
       expect.objectContaining({ key: "revenue", type: "bar" }),
+      expect.objectContaining({ key: "margin", type: "line", axis: "right" }),
     ]);
-    expect(chart?.y).toMatchObject({
-      format: "currency",
-      maximumFractionDigits: 0,
-      includeZero: true,
+    expect(chart?.yAxes).toMatchObject({
+      left: { format: "currency", maximumFractionDigits: 0, includeZero: true },
+      right: { format: "percent", maximumFractionDigits: 0, includeZero: true },
     });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
     expect(chart?.referenceBands).toEqual([
