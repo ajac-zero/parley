@@ -559,8 +559,17 @@ export function ChartView({ component, base }: ViewProps) {
       key={index}
       y={line.value}
       stroke={`var(--${line.color})`}
-      strokeDasharray="4 4"
-      label={line.label || undefined}
+      strokeWidth={1.5}
+      label={
+        line.label
+          ? {
+              value: line.label,
+              position: "insideTopRight",
+              fill: `var(--${line.color})`,
+              offset: 12,
+            }
+          : undefined
+      }
       ifOverflow="extendDomain"
     />
   ));

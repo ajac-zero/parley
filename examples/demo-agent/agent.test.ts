@@ -416,7 +416,7 @@ describe("handleDemoResponses", () => {
       expect.objectContaining({ from: 230_000, to: 260_000, label: "" }),
     ]);
     expect(chart?.referenceLines).toEqual([
-      expect.objectContaining({ value: 250_000, label: "Plan: $250k" }),
+      expect.objectContaining({ value: 250_000, label: "Target: $250k" }),
     ]);
     expect(surface.components.stat_margin?.component).toBe("Stat");
 

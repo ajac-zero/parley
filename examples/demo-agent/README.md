@@ -17,6 +17,6 @@ It listens on port `8080` by default. Set `DEMO_AGENT_PORT` to change it.
 Ask the demo agent for a **revenue chart** to see the Charts v1 composed-chart
 example: actuals and expenses render as bars, while a dashed revenue-plan line
 shows how `series[].type`, `lineStyle`, and missing values work together. The
-currency axis, shaded target zone, and labeled plan line demonstrate
+currency axis, shaded target zone, and labeled target threshold demonstrate
 `referenceBands` and
 `referenceLines`.

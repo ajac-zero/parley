@@ -501,7 +501,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
         },
       ],
       referenceLines: [
-        { value: 250_000, label: "Plan: $250k", color: "chart-3" },
+        { value: 250_000, label: "Target: $250k", color: "chart-2" },
       ],
       height: 260,
       selection: { path: "/selection", mode: "point" },
