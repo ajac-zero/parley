@@ -224,6 +224,45 @@ interface YAxisSpec {
   includeZero: boolean;
 }
 
+interface XAxisSpec {
+  key: string;
+  label: string;
+  type: "category" | "time" | "number";
+  format: "short" | "medium" | "long";
+}
+
+function parseXAxis(value: unknown): XAxisSpec | null {
+  const record = asRecord(value);
+  if (typeof record?.key !== "string" || record.key.length === 0) return null;
+  return {
+    key: record.key,
+    label: typeof record.label === "string" ? record.label : "",
+    type:
+      record.type === "time" || record.type === "number"
+        ? record.type
+        : "category",
+    format:
+      record.format === "medium" || record.format === "long"
+        ? record.format
+        : "short",
+  };
+}
+
+function formatTimeAxis(value: unknown, format: XAxisSpec["format"]): string {
+  if (typeof value !== "string") return String(value ?? "");
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return value;
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: format === "long" ? "long" : "short",
+      day: "numeric",
+      ...(format === "long" ? { year: "numeric" } : {}),
+    }).format(date);
+  } catch {
+    return value;
+  }
+}
+
 export function parseYAxis(value: unknown): YAxisSpec | null {
   const record = asRecord(value);
   if (!record) return null;
@@ -304,9 +343,9 @@ export function ChartView({ component, base }: ViewProps) {
     480,
   );
 
-  const xRecord = asRecord(component.x);
-  const xKey = typeof xRecord?.key === "string" ? xRecord.key : null;
-  const xLabel = typeof xRecord?.label === "string" ? xRecord.label : null;
+  const xAxisSpec = parseXAxis(component.x);
+  const xKey = xAxisSpec?.key ?? null;
+  const xLabel = xAxisSpec?.label ?? null;
   const yAxes = parseYAxes(component.yAxes, component.y);
   const series = useMemo(
     () => parseSeries(component.series),
@@ -476,7 +515,17 @@ export function ChartView({ component, base }: ViewProps) {
   } as const;
   const grid = <CartesianGrid vertical={false} />;
   const xAxis = (
-    <XAxis dataKey={xKey} tickLine={false} axisLine={false} tickMargin={8} />
+    <XAxis
+      dataKey={xKey}
+      tickLine={false}
+      axisLine={false}
+      tickMargin={8}
+      tickFormatter={
+        xAxisSpec?.type === "time"
+          ? (value: unknown) => formatTimeAxis(value, xAxisSpec.format)
+          : undefined
+      }
+    />
   );
   const yAxis = (spec: YAxisSpec, side: "left" | "right") => (
     <YAxis
@@ -519,6 +568,11 @@ export function ChartView({ component, base }: ViewProps) {
       content={
         <ChartTooltipContent
           indicator="dot"
+          labelFormatter={
+            xAxisSpec?.type === "time"
+              ? (value) => formatTimeAxis(value, "long")
+              : undefined
+          }
           formatter={
             yAxes.left || yAxes.right
               ? (value, name) => {

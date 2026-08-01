@@ -66,6 +66,7 @@ Implemented:
 - [x] Reference lines and shaded bands using approved theme tokens.
 - [x] Bar selections include `seriesKey` and `seriesLabel`.
 - [x] Independent left and right Y axes with per-series axis assignment.
+- [x] ISO-8601 time-axis tick and tooltip formatting.
 
 Remaining:
 
@@ -75,9 +76,8 @@ Remaining:
   explicitly documented.
 - Optional domain bounds for independently configured Y axes. The `y` field
   remains a left-axis shorthand.
-- Better time axes: add `x.type` (`category`, `time`, `number`) and explicit
-  formatting options. Time values should be ISO-8601 and receive interval-aware
-  ticks and tooltip labels.
+- Numeric X-axis scaling and interval-aware time ticks. Time values use
+  ISO-8601 with explicit compact date formatting.
 - Normalization and ordering: add percent/stacked-percent normalization and
   deterministic category ordering for composition and bar charts.
 - Rich interactions: add optional legend toggling and a series-selection mode,

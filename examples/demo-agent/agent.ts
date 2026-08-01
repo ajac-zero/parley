@@ -664,21 +664,6 @@ const pct = (fraction: number): string =>
 
 /* -------------------- A2UI charts showcase: range mode -------------------- */
 
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
-
 /**
  * The fabricated daily-sessions series behind the demo traffic report:
  * 45 days from May 1 with a gentle upward trend, a weekly cycle, and a
@@ -687,7 +672,7 @@ const MONTH_NAMES = [
 const TRAFFIC_DAYS = Array.from({ length: 45 }, (_, i) => {
   const date = new Date(Date.UTC(2026, 4, 1) + i * 86_400_000);
   return {
-    day: `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`,
+    day: date.toISOString(),
     sessions: Math.round(
       3200 +
         i * 28 +
@@ -704,6 +689,14 @@ const TRAFFIC_LAST = TRAFFIC_DAYS[TRAFFIC_DAYS.length - 1] as TrafficDay;
 
 const trafficTotal = (days: readonly TrafficDay[]): number =>
   days.reduce((total, d) => total + d.sessions, 0);
+
+const displayTrafficDay = (iso: string): string => {
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
 
 /**
  * The traffic report surface: an area chart with a `range` selection —
@@ -736,7 +729,7 @@ function trafficReportMessages(): Array<Record<string, unknown>> {
       id: "traffic_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Drag across the chart to select a date range; the selection binds into the surface's data model.",
+       text: "ISO timestamps render as dates. Drag across the chart to select a date range in the surface data model.",
     },
     {
       id: "traffic_chart",
@@ -744,7 +737,7 @@ function trafficReportMessages(): Array<Record<string, unknown>> {
       variant: "area",
       title: "Daily sessions",
       data: { path: "/traffic/daily" },
-      x: { key: "day", label: "Day" },
+      x: { key: "day", label: "Day", type: "time", format: "short" },
       series: [{ key: "sessions", label: "Sessions", color: "chart-2" }],
       selection: { path: "/range", mode: "range" },
     },
@@ -881,7 +874,7 @@ function replyForTrafficSummary(action: DemoA2uiAction): BuiltReply {
   const windowDays = TRAFFIC_DAYS.slice(start, end + 1);
   const from = (TRAFFIC_DAYS[start] as TrafficDay).day;
   const to = (TRAFFIC_DAYS[end] as TrafficDay).day;
-  const window = `${from} – ${to}`;
+  const window = `${displayTrafficDay(from)} – ${displayTrafficDay(to)}`;
   const total = trafficTotal(windowDays);
   const average = total / windowDays.length;
   const overallAverage = trafficTotal(TRAFFIC_DAYS) / TRAFFIC_DAYS.length;

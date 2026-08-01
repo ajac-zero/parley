@@ -554,6 +554,7 @@ describe("handleDemoResponses", () => {
     const chart = surface.components.traffic_chart;
     expect(chart?.component).toBe("Chart");
     expect(chart?.variant).toBe("area");
+    expect(chart?.x).toMatchObject({ type: "time", format: "short" });
     expect(chart?.selection).toEqual({ path: "/range", mode: "range" });
 
     /* Server-seeded data: 45 daily rows plus a full-window selection. */
@@ -563,8 +564,8 @@ describe("handleDemoResponses", () => {
       mode: "range",
       startIndex: 0,
       endIndex: 44,
-      from: "May 1",
-      to: "Jun 14",
+      from: "2026-05-01T00:00:00.000Z",
+      to: "2026-06-14T00:00:00.000Z",
     });
   });
 
@@ -603,8 +604,8 @@ describe("handleDemoResponses", () => {
       mode: "range",
       startIndex: 7,
       endIndex: 13,
-      from: "May 8",
-      to: "May 14",
+      from: "2026-05-08T00:00:00.000Z",
+      to: "2026-05-14T00:00:00.000Z",
     });
     const call = state.items.find((i) => i.type === "function_call") as {
       name: string;
@@ -612,8 +613,8 @@ describe("handleDemoResponses", () => {
     };
     expect(call.name).toBe("summarize_range");
     expect(JSON.parse(call.arguments)).toEqual({
-      from: "May 8",
-      to: "May 14",
+      from: "2026-05-08T00:00:00.000Z",
+      to: "2026-05-14T00:00:00.000Z",
       days: 7,
     });
 
@@ -643,8 +644,8 @@ describe("handleDemoResponses", () => {
       (i) => i.type === "function_call",
     ) as { arguments: string };
     expect(JSON.parse(clampedCall.arguments)).toEqual({
-      from: "May 1",
-      to: "Jun 14",
+      from: "2026-05-01T00:00:00.000Z",
+      to: "2026-06-14T00:00:00.000Z",
       days: 45,
     });
   });
