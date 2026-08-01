@@ -34,8 +34,11 @@ import {
   PieChart,
   ReferenceArea,
   ReferenceLine,
+  Scatter,
+  ScatterChart,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
 import type { ViewProps } from "~/components/a2ui/catalog";
 import { useA2uiSurface } from "~/components/a2ui/context";
@@ -346,6 +349,11 @@ export function ChartView({ component, base }: ViewProps) {
   const title = resolveString(component.title, dataModel, base);
   const variant = toDisplayString(component.variant) || "line";
   const stacked = component.stacked === true;
+  const sizeRecord = asRecord(component.size);
+  const sizeKey =
+    typeof sizeRecord?.key === "string" && SAFE_SERIES_KEY.test(sizeRecord.key)
+      ? sizeRecord.key
+      : null;
   const height = Math.min(
     Math.max(toNumber(component.height) ?? 256, 160),
     480,
@@ -421,7 +429,8 @@ export function ChartView({ component, base }: ViewProps) {
     !xKey ||
     series.length === 0 ||
     rows.length === 0 ||
-    ((variant === "pie" || variant === "donut") && series.length !== 1)
+    ((variant === "pie" || variant === "donut") && series.length !== 1) ||
+    ((variant === "scatter" || variant === "bubble") && series.length !== 1)
   ) {
     return <ChartPlaceholder />;
   }
@@ -530,6 +539,7 @@ export function ChartView({ component, base }: ViewProps) {
   const xAxis = (
     <XAxis
       dataKey={xKey}
+      type={xAxisSpec?.type === "number" ? "number" : "category"}
       tickLine={false}
       axisLine={false}
       tickMargin={8}
@@ -781,6 +791,23 @@ export function ChartView({ component, base }: ViewProps) {
             </Pie>
             {legend}
           </PieChart>
+        ) : variant === "scatter" || variant === "bubble" ? (
+          <ScatterChart {...shared}>
+            {grid}
+            {xAxis}
+            {yAxisViews}
+            {tooltip}
+            {variant === "bubble" && sizeKey ? (
+              <ZAxis dataKey={sizeKey} range={[48, 360]} />
+            ) : null}
+            <Scatter
+              data={rows}
+              name={pieSeries.label}
+              fill={`var(--color-${pieSeries.key})`}
+              dataKey={pieSeries.key}
+              isAnimationActive={false}
+            />
+          </ScatterChart>
         ) : composed ? (
           <ComposedChart {...shared}>
             {grid}

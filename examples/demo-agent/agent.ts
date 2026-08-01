@@ -648,6 +648,54 @@ function revenueMixMessages(): Array<Record<string, unknown>> {
   ];
 }
 
+function accountOpportunityMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_account_opportunity";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Account opportunity" },
+    {
+      id: "subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Bubble position compares engagement and opportunity; size shows account value.",
+    },
+    {
+      id: "chart",
+      component: "Chart",
+      variant: "bubble",
+      title: "Engagement versus opportunity",
+      data: { path: "/accounts" },
+      x: { key: "engagement", label: "Engagement score", type: "number" },
+      y: { label: "Opportunity score", includeZero: true },
+      size: { key: "value" },
+      series: [{ key: "opportunity", label: "Opportunity", color: "chart-4" }],
+      height: 280,
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/accounts",
+        value: [
+          { engagement: 28, opportunity: 42, value: 45 },
+          { engagement: 45, opportunity: 61, value: 120 },
+          { engagement: 63, opportunity: 55, value: 80 },
+          { engagement: 76, opportunity: 82, value: 210 },
+          { engagement: 88, opportunity: 73, value: 155 },
+        ],
+      },
+    },
+  ];
+}
+
 /**
  * The analysis for one selected month: update envelopes targeting the
  * existing `demo_revenue_report` surface — the insight section is appended
@@ -1101,6 +1149,24 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
           "a2ui://demo/traffic-report",
           `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Drag a range in the chart to summarize it.`,
           trafficReportMessages(),
+        ),
+      },
+    };
+  }
+
+  if (/\b(scatter|bubble|opportunity)\b/.test(lower)) {
+    return {
+      reasoning:
+        "The user wants a relationship chart. I'll return the account-opportunity bubble surface.",
+      reply:
+        "I called `get_account_opportunity` to show a **bubble chart** with numeric X and Y values plus a size field.",
+      tool: {
+        name: "get_account_opportunity",
+        args: JSON.stringify({ segment: "all accounts" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/account-opportunity",
+          "Account opportunity bubble chart.",
+          accountOpportunityMessages(),
         ),
       },
     };

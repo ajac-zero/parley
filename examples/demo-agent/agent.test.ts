@@ -553,6 +553,26 @@ describe("handleDemoResponses", () => {
     });
   });
 
+  it("returns a numeric bubble chart for opportunity asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show account opportunity")],
+    });
+    const call = state.items.find((item) => item.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_account_opportunity");
+    const output = state.items.find(
+      (item) => item.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart",
+      variant: "bubble",
+      x: { key: "engagement", type: "number" },
+      size: { key: "value" },
+    });
+  });
+
   it("returns a range-selectable traffic chart for trend asks", async () => {
     const { state } = await streamAndReduce({
       input: [userMessage("what's the traffic trend?")],

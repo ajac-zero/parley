@@ -99,9 +99,13 @@ Remaining:
 
 #### 3. Add relationship charts
 
-- Add `scatter` and `bubble` variants.
-- Let `x.key` and `y.key` name numeric record fields; `size.key` supplies the
-  bubble magnitude when applicable.
+Implemented:
+
+- [x] `scatter` and `bubble` variants, using numeric `x.key`, one numeric
+  `series[].key` Y field, and optional `size.key` bubble magnitude.
+
+Remaining:
+
 - Preserve point selection and include the selected record values in its bound
   payload.
 - Use for correlation, distribution, clusters, and outlier analysis.
