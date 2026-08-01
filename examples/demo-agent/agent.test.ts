@@ -579,6 +579,17 @@ describe("handleDemoResponses", () => {
     });
   });
 
+  it("returns focused progress and sparkline leaves for delivery health asks", async () => {
+    const { state } = await streamAndReduce({ input: [userMessage("show delivery health")] });
+    const call = state.items.find((item) => item.type === "function_call") as { name: string };
+    expect(call.name).toBe("get_delivery_health");
+    const output = state.items.find((item) => item.type === "function_call_output") as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    const components = reduceA2uiMessages(messages)[0]?.components;
+    expect(components?.progress?.component).toBe("Progress");
+    expect(components?.sparkline?.component).toBe("Sparkline");
+  });
+
   it("returns a range-selectable traffic chart for trend asks", async () => {
     const { state } = await streamAndReduce({
       input: [userMessage("what's the traffic trend?")],

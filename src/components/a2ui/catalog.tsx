@@ -980,6 +980,17 @@ const LazyStatView = lazy(() =>
   })),
 );
 
+const LazySparklineView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.SparklineView,
+  })),
+);
+const LazyProgressView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.ProgressView,
+  })),
+);
+
 /**
  * Contains failures from the charting library (or a chunk that failed to
  * load) to an inert placeholder: a malformed chart resource must degrade
@@ -1037,10 +1048,45 @@ function SuspendedStatView(props: ViewProps) {
   );
 }
 
+function SuspendedSparklineView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-10 w-full animate-pulse rounded bg-muted/40"
+          />
+        }
+      >
+        <LazySparklineView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+function SuspendedProgressView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-10 w-36 animate-pulse rounded bg-muted/40"
+          />
+        }
+      >
+        <LazyProgressView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
 const chartsComponentViews: A2uiComponentViews = {
   ...basicComponentViews,
   Chart: SuspendedChartView,
   Stat: SuspendedStatView,
+  Sparkline: SuspendedSparklineView,
+  Progress: SuspendedProgressView,
 };
 
 /**

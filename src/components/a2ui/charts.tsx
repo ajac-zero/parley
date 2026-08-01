@@ -1049,3 +1049,87 @@ export function StatView({ component, base }: ViewProps) {
     </div>
   );
 }
+
+export function SparklineView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const values = parseSparkline(
+    resolveDynamic(component.data, dataModel, base),
+  );
+  const color = toDisplayString(component.color);
+  if (values.length < 2) return <ChartPlaceholder />;
+  const min = Math.min(...values);
+  const range = Math.max(...values) - min || 1;
+  const points = values
+    .map(
+      (value, index) =>
+        `${(index / (values.length - 1)) * 100},${100 - ((value - min) / range) * 100}`,
+    )
+    .join(" ");
+  return (
+    <div className="flex min-w-28 flex-col gap-1">
+      {label && <span className="text-muted-foreground text-xs">{label}</span>}
+      <svg
+        aria-label={label || "Trend"}
+        className="h-10 w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <polyline
+          fill="none"
+          points={points}
+          stroke={`var(--${CHART_COLOR_TOKENS.has(color) ? color : "chart-1"})`}
+          strokeWidth="4"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
+  );
+}
+
+export function ProgressView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const value = toNumber(resolveDynamic(component.value, dataModel, base)) ?? 0;
+  const max = toNumber(resolveDynamic(component.max, dataModel, base));
+  const target = toNumber(resolveDynamic(component.target, dataModel, base));
+  const ratio =
+    max !== null && max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const targetRatio =
+    target !== null && max !== null && max > 0
+      ? Math.max(0, Math.min(1, target / max))
+      : null;
+  const format = toDisplayString(component.format);
+  const display =
+    format === "percent"
+      ? formatChartValue(ratio, {
+          label: "",
+          format: "percent",
+          currency: "USD",
+          maximumFractionDigits: 0,
+          includeZero: false,
+          min: null,
+          max: null,
+        })
+      : `${new Intl.NumberFormat().format(value)} / ${new Intl.NumberFormat().format(max ?? 0)}`;
+  return (
+    <div className="flex min-w-36 flex-col gap-1">
+      <div className="flex justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="tabular-nums">{display}</span>
+      </div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary"
+          style={{ width: `${ratio * 100}%` }}
+        />
+        {targetRatio !== null && (
+          <span
+            className="absolute top-0 h-full w-px bg-foreground"
+            style={{ left: `${targetRatio * 100}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

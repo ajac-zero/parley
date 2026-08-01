@@ -122,9 +122,12 @@ Remaining:
 
 #### 5. Add focused visualization leaves
 
-- `Sparkline`: a small standalone line or bar trend for dense tables and KPI
-  rows.
-- `Progress`: current value, maximum, label, and optional target.
+Implemented:
+
+- [x] `Sparkline` and `Progress` leaves.
+
+Remaining:
+
 - `Gauge`: a bounded single-value status display with a small, explicit set of
   threshold bands.
 

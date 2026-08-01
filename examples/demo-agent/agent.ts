@@ -714,6 +714,24 @@ function accountOpportunityMessages(): Array<Record<string, unknown>> {
   ];
 }
 
+function deliveryHealthMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_delivery_health";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "metrics"] },
+    { id: "title", component: "Text", variant: "h3", text: "Delivery health" },
+    { id: "subtitle", component: "Text", variant: "caption", text: "Focused chart leaves for a compact operational summary." },
+    { id: "metrics", component: "Row", children: ["progress", "sparkline"] },
+    { id: "progress", component: "Progress", label: "Sprint completion", value: { path: "/delivery/completed" }, max: { path: "/delivery/planned" }, target: { path: "/delivery/target" }, format: "percent", weight: 1 },
+    { id: "sparkline", component: "Sparkline", label: "Deploys per day", data: { path: "/delivery/deploys" }, color: "chart-2", weight: 1 },
+  ];
+  return [
+    { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/delivery", value: { completed: 37, planned: 48, target: 40, deploys: [3, 5, 4, 7, 6, 9, 8] } } },
+  ];
+}
+
 /**
  * The analysis for one selected month: update envelopes targeting the
  * existing `demo_revenue_report` surface — the insight section is appended
@@ -1187,6 +1205,14 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
           accountOpportunityMessages(),
         ),
       },
+    };
+  }
+
+  if (/\b(progress|sparkline|delivery health)\b/.test(lower)) {
+    return {
+      reasoning: "The user wants compact operational metrics. I'll return the delivery-health leaf-component surface.",
+      reply: "I called `get_delivery_health` to show the standalone **Progress** and **Sparkline** chart leaves.",
+      tool: { name: "get_delivery_health", args: JSON.stringify({ sprint: "current" }), output: a2uiToolOutput("a2ui://demo/delivery-health", "Delivery health: 37 of 48 planned items complete.", deliveryHealthMessages()) },
     };
   }
 
