@@ -425,6 +425,12 @@ describe("handleDemoResponses", () => {
       expect.objectContaining({ value: 250_000, label: "Target: $250k" }),
     ]);
     expect(surface.components.stat_margin?.component).toBe("Stat");
+    expect(surface.components.stat_margin).toMatchObject({
+      comparisonLabel: "vs. January",
+      trend: "up",
+      status: "positive",
+      sparkline: { path: "/report/stats/marginTrend" },
+    });
 
     /* Server-seeded data: rows plus a preselected latest month. */
     const monthly = pointerGet(surface.dataModel, "/report/monthly");

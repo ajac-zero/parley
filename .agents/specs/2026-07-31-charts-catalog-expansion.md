@@ -112,12 +112,13 @@ Remaining:
 
 #### 4. Expand Stat
 
-- Add `description` and `comparisonLabel`, such as "vs. prior month".
-- Add explicit `trend` (`up`, `down`, `neutral`) independent of delta sign.
-  This supports metrics where decreases are positive, including latency, cost,
-  and error rate.
-- Add an optional compact sparkline binding for recent context.
-- Add semantic status/emphasis (`neutral`, `positive`, `negative`, `warning`).
+Implemented:
+
+- [x] Descriptions, comparison labels, semantic trend/status, and bound-data
+  sparklines.
+
+Remaining:
+
 
 #### 5. Add focused visualization leaves
 

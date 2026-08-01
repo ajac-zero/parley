@@ -17,7 +17,7 @@
  * appear mid-stream anyway.
  */
 
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -939,6 +939,14 @@ function formatDelta(delta: number): string {
   }
 }
 
+function parseSparkline(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const number = toNumber(entry);
+    return number === null ? [] : [number];
+  });
+}
+
 export function StatView({ component, base }: ViewProps) {
   const { dataModel } = useA2uiSurface();
   const label = resolveString(component.label, dataModel, base);
@@ -946,6 +954,49 @@ export function StatView({ component, base }: ViewProps) {
   const format = toDisplayString(component.format) || "number";
   const currency = toDisplayString(component.currency) || "USD";
   const delta = toNumber(resolveDynamic(component.delta, dataModel, base));
+  const comparisonLabel = resolveString(
+    component.comparisonLabel,
+    dataModel,
+    base,
+  );
+  const description = resolveString(component.description, dataModel, base);
+  const trend = toDisplayString(component.trend);
+  const status = toDisplayString(component.status) || "neutral";
+  const sparkline = parseSparkline(
+    resolveDynamic(component.sparkline, dataModel, base),
+  );
+  const effectiveTrend =
+    trend === "up" || trend === "down" || trend === "neutral"
+      ? trend
+      : delta === null
+        ? "neutral"
+        : delta >= 0
+          ? "up"
+          : "down";
+  const trendClass =
+    status === "positive" || (status === "neutral" && effectiveTrend === "up")
+      ? "text-green-600 dark:text-green-400"
+      : status === "negative" ||
+          (status === "neutral" && effectiveTrend === "down")
+        ? "text-red-600 dark:text-red-400"
+        : status === "warning"
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-muted-foreground";
+  const sparklinePoints =
+    sparkline.length > 1
+      ? (() => {
+          const min = Math.min(...sparkline);
+          const max = Math.max(...sparkline);
+          const range = max - min || 1;
+          return sparkline
+            .map((value, index) => {
+              const x = (index / (sparkline.length - 1)) * 100;
+              const y = 100 - ((value - min) / range) * 100;
+              return `${x},${y}`;
+            })
+            .join(" ");
+        })()
+      : null;
 
   return (
     <div className="flex min-w-28 flex-col gap-0.5 rounded-lg border bg-card px-3 py-2 shadow-xs">
@@ -955,23 +1006,46 @@ export function StatView({ component, base }: ViewProps) {
       <span className="font-semibold text-lg tabular-nums leading-tight">
         {formatStatValue(raw, format, currency)}
       </span>
+      {sparklinePoints ? (
+        <svg
+          aria-label="Recent trend"
+          className="h-7 w-full overflow-visible"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <polyline
+            fill="none"
+            points={sparklinePoints}
+            stroke="currentColor"
+            strokeWidth="8"
+            vectorEffect="non-scaling-stroke"
+            className={trendClass}
+          />
+        </svg>
+      ) : null}
       {delta !== null && (
         <span
           className={cn(
             "flex items-center gap-1 text-xs tabular-nums",
-            delta >= 0
-              ? "text-green-600 dark:text-green-400"
-              : "text-red-600 dark:text-red-400",
+            trendClass,
           )}
         >
-          {delta >= 0 ? (
+          {effectiveTrend === "up" ? (
             <TrendingUp className="size-3" />
-          ) : (
+          ) : effectiveTrend === "down" ? (
             <TrendingDown className="size-3" />
+          ) : (
+            <Minus className="size-3" />
           )}
           {formatDelta(delta)}
+          {comparisonLabel.length > 0 ? (
+            <span className="text-muted-foreground">{comparisonLabel}</span>
+          ) : null}
         </span>
       )}
+      {description.length > 0 ? (
+        <span className="text-muted-foreground text-xs">{description}</span>
+      ) : null}
     </div>
   );
 }
