@@ -358,6 +358,7 @@ export function ChartView({ component, base }: ViewProps) {
     Math.max(toNumber(component.height) ?? 256, 160),
     480,
   );
+  const sort = toDisplayString(component.sort) || "data";
 
   const xAxisSpec = parseXAxis(component.x);
   const xKey = xAxisSpec?.key ?? null;
@@ -378,15 +379,24 @@ export function ChartView({ component, base }: ViewProps) {
   );
 
   const rawRows = resolveDynamic(component.data, dataModel, base);
-  const rows = useMemo(
-    () =>
-      Array.isArray(rawRows)
-        ? rawRows.filter(
-            (row): row is Record<string, unknown> => asRecord(row) !== null,
-          )
-        : [],
-    [rawRows],
-  );
+  const rows = useMemo(() => {
+    const resolved = Array.isArray(rawRows)
+      ? rawRows.filter(
+          (row): row is Record<string, unknown> => asRecord(row) !== null,
+        )
+      : [];
+    if (
+      (sort !== "ascending" && sort !== "descending") ||
+      series.length !== 1
+    ) {
+      return resolved;
+    }
+    return [...resolved].sort((a, b) => {
+      const key = series[0]?.key ?? "";
+      const delta = (toNumber(a[key]) ?? 0) - (toNumber(b[key]) ?? 0);
+      return sort === "ascending" ? delta : -delta;
+    });
+  }, [rawRows, series, sort]);
 
   const config = useMemo(() => {
     const entries: ChartConfig = {};
@@ -752,6 +762,8 @@ export function ChartView({ component, base }: ViewProps) {
   };
   const composed = series.some((spec) => spec.type !== null);
   const pieSeries = series[0] as SeriesSpec;
+  const centerLabel = resolveString(component.centerLabel, dataModel, base);
+  const centerValue = resolveDynamic(component.centerValue, dataModel, base);
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -789,6 +801,34 @@ export function ChartView({ component, base }: ViewProps) {
                 />
               ))}
             </Pie>
+            {variant === "donut" &&
+            (centerLabel || centerValue !== undefined) ? (
+              <text
+                x="50%"
+                y="50%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {centerValue !== undefined ? (
+                  <tspan
+                    x="50%"
+                    dy="-0.4em"
+                    className="fill-foreground font-semibold text-sm"
+                  >
+                    {toDisplayString(centerValue)}
+                  </tspan>
+                ) : null}
+                {centerLabel ? (
+                  <tspan
+                    x="50%"
+                    dy={centerValue !== undefined ? "1.5em" : "0"}
+                    className="fill-muted-foreground text-xs"
+                  >
+                    {centerLabel}
+                  </tspan>
+                ) : null}
+              </text>
+            ) : null}
             {legend}
           </PieChart>
         ) : variant === "scatter" || variant === "bubble" ? (

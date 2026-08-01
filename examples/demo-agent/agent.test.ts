@@ -556,6 +556,8 @@ describe("handleDemoResponses", () => {
       component: "Chart",
       variant: "donut",
       series: [{ key: "revenue" }],
+      sort: "descending",
+      centerLabel: "FY26 revenue",
     });
   });
 

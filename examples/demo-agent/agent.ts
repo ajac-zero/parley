@@ -639,6 +639,9 @@ function revenueMixMessages(): Array<Record<string, unknown>> {
       data: { path: "/mix/channels" },
       x: { key: "channel", label: "Channel" },
       series: [{ key: "revenue", label: "Revenue" }],
+      sort: "descending",
+      centerValue: { path: "/mix/total" },
+      centerLabel: "FY26 revenue",
       height: 280,
     },
   ];
@@ -654,6 +657,7 @@ function revenueMixMessages(): Array<Record<string, unknown>> {
         surfaceId,
         path: "/mix",
         value: {
+          total: "$1.53M",
           channels: [
             { channel: "Enterprise", revenue: 640_000 },
             { channel: "Self-serve", revenue: 430_000 },

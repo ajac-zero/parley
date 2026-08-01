@@ -90,10 +90,10 @@ Remaining:
 Implemented:
 
 - [x] `pie` and `donut` variants for one numeric series over x-axis categories.
+- [x] Value-based category ordering and optional donut center summaries.
 
 Remaining:
 
-- Add optional centered donut summary content and semantic category ordering.
 - Use for category share and composition with a small number of categories;
   favor a bar chart when labels or category count are large.
 
