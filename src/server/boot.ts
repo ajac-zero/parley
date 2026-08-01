@@ -6,6 +6,12 @@ import { db, schema } from "~/server/db/client";
 import { appEnv } from "~/server/env";
 
 const DEMO_AGENT_ID = "agent_demo";
+const DEMO_PROMPT_SUGGESTIONS = [
+  "What's the weather in Tokyo?",
+  "Show me a revenue chart",
+  "Book a table for two",
+  "Show me some markdown",
+];
 
 /** Arbitrary constant identifying Parley's migration lock cluster-wide. */
 const MIGRATION_LOCK_KEY = 810_243_991;
@@ -35,15 +41,30 @@ async function runMigrations(): Promise<void> {
 async function seedDemoAgent(): Promise<void> {
   if (!appEnv.demoAgent) return;
   const existing = await db
-    .select({ id: schema.agents.id, baseUrl: schema.agents.baseUrl })
+    .select({
+      id: schema.agents.id,
+      baseUrl: schema.agents.baseUrl,
+      promptSuggestions: schema.agents.promptSuggestions,
+    })
     .from(schema.agents)
     .where(eq(schema.agents.id, DEMO_AGENT_ID));
   if (existing.length > 0) {
-    // Keep the managed demo row aligned with the separately deployed server.
-    if (existing[0]?.baseUrl !== appEnv.demoAgentUrl) {
+    // Keep the managed demo row aligned with the separately deployed server;
+    // backfill suggestions added after the agent was first seeded without
+    // overwriting an admin's customized set.
+    const demo = existing[0];
+    if (
+      demo?.baseUrl !== appEnv.demoAgentUrl ||
+      demo?.promptSuggestions.length === 0
+    ) {
       await db
         .update(schema.agents)
-        .set({ baseUrl: appEnv.demoAgentUrl })
+        .set({
+          baseUrl: appEnv.demoAgentUrl,
+          ...(demo?.promptSuggestions.length === 0
+            ? { promptSuggestions: DEMO_PROMPT_SUGGESTIONS }
+            : {}),
+        })
         .where(eq(schema.agents.id, DEMO_AGENT_ID));
     }
     return;
@@ -64,6 +85,7 @@ async function seedDemoAgent(): Promise<void> {
     fileDelivery: "url",
     supportsImages: true,
     supportsFiles: true,
+    promptSuggestions: DEMO_PROMPT_SUGGESTIONS,
     isEnabled: true,
   });
 

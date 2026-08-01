@@ -30,6 +30,9 @@ export const AgentInputSchema = Schema.Struct({
   }),
   supportsImages: Schema.Boolean,
   supportsFiles: Schema.Boolean,
+  promptSuggestions: Schema.Array(
+    Schema.String.pipe(Schema.minLength(1), Schema.maxLength(500)),
+  ).pipe(Schema.maxItems(8)),
   params: Schema.NullOr(
     Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   ),

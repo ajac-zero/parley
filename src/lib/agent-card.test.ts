@@ -99,6 +99,7 @@ describe("prefillFromAgentCard", () => {
       baseUrl: "https://recipes.example.com/v1",
       supportsImages: true,
       supportsFiles: true,
+      promptSuggestions: [],
     });
   });
 
@@ -122,5 +123,15 @@ describe("prefillFromAgentCard", () => {
     );
     expect(prefill.name).toHaveLength(80);
     expect(prefill.description).toHaveLength(500);
+  });
+
+  it("includes agent-provided prompt suggestions", () => {
+    const prefill = prefillFromAgentCard(
+      card({ promptSuggestions: ["Find relevant papers", "Summarize this"] }),
+    );
+    expect(prefill.promptSuggestions).toEqual([
+      "Find relevant papers",
+      "Summarize this",
+    ]);
   });
 });

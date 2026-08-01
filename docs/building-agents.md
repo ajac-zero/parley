@@ -228,6 +228,10 @@ identifier `https://openresponses.org/v1`:
   "capabilities": {},
   "defaultInputModes": ["text/plain", "image/png"],
   "defaultOutputModes": ["text/plain"],
+  "promptSuggestions": [
+    "Find the latest research on...",
+    "Summarize this document"
+  ],
   "skills": [],
   "supportedInterfaces": [
     {
@@ -245,6 +249,16 @@ Parley fetches the card and prefills the agent's name, description, base URL
 `defaultInputModes`: any `image/*` mode enables image input; modes beyond
 text/JSON/images enable file input). The card URL is stored so the agent can
 be re-synced later from the edit dialog.
+
+### Prompt suggestions
+
+An agent can provide optional one-click starter prompts in its agent card using
+Parley's `promptSuggestions` extension. Supply up to eight non-empty strings,
+each at most 500 characters. Parley imports them into the agent configuration
+and shows them on the initial new-chat screen while that agent is selected.
+Selecting a suggestion sends its text as a normal user message; no special
+request format is used. Suggestions can also be edited directly in the Parley
+agent editor.
 
 ## Operational notes
 
