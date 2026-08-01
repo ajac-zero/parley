@@ -70,6 +70,7 @@ Implemented:
 - [x] ISO-8601 time-axis tick and tooltip formatting.
 - [x] Legend visibility binding and expandable data-table fallback.
 - [x] Percent and stacked-percent row-total normalization.
+- [x] Series-selection binding and accessible chart descriptions.
 
 Remaining:
 
@@ -82,7 +83,6 @@ Remaining:
   ISO-8601 with explicit compact date formatting.
 - Deterministic category ordering for composition and bar charts is available
   through `sort`.
-- Series-selection mode and additional chart description fields.
 
 #### 2. Add composition charts
 

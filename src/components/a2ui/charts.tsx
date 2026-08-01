@@ -163,7 +163,7 @@ function strokeDasharray(style: SeriesSpec["lineStyle"]): string | undefined {
 
 interface SelectionSpec {
   pointer: string;
-  mode: "point" | "range";
+  mode: "point" | "range" | "series";
 }
 
 function parseLegendPath(value: unknown, base: string): string | null {
@@ -338,7 +338,12 @@ function parseSelection(value: unknown, base: string): SelectionSpec | null {
   if (typeof record?.path !== "string") return null;
   return {
     pointer: resolvePath(record.path, base),
-    mode: record.mode === "range" ? "range" : "point",
+    mode:
+      record.mode === "range"
+        ? "range"
+        : record.mode === "series"
+          ? "series"
+          : "point",
   };
 }
 
@@ -354,6 +359,7 @@ export function ChartView({ component, base }: ViewProps) {
   const { dataModel, setValue, disabled } = useA2uiSurface();
 
   const title = resolveString(component.title, dataModel, base);
+  const description = resolveString(component.description, dataModel, base);
   const variant = toDisplayString(component.variant) || "line";
   const stacked = component.stacked === true;
   const sizeRecord = asRecord(component.size);
@@ -825,6 +831,14 @@ export function ChartView({ component, base }: ViewProps) {
                 aria-pressed={!hidden}
                 onClick={() => {
                   if (disabled) return;
+                  if (selection?.mode === "series") {
+                    setValue(selection.pointer, {
+                      mode: "series",
+                      seriesKey: spec.key,
+                      seriesLabel: spec.label,
+                    });
+                    return;
+                  }
                   const next = new Set(hiddenSeries);
                   if (hidden) next.delete(spec.key);
                   else next.add(spec.key);
@@ -852,6 +866,7 @@ export function ChartView({ component, base }: ViewProps) {
             "cursor-crosshair select-none",
         )}
         aria-label={xLabel ? `${title || "Chart"} by ${xLabel}` : undefined}
+        aria-description={description || undefined}
       >
         {variant === "pie" || variant === "donut" ? (
           <PieChart>

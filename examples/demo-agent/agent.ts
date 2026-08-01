@@ -487,6 +487,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       component: "Chart",
       variant: "bar",
       title: "Revenue actuals, plan, expenses, and margin by month",
+      description: "Actual revenue and expenses rise through August. The revenue plan ends in July because August has no forecast; net margin uses the right axis.",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
       yAxes: {
@@ -537,9 +538,9 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
         { value: 250_000, label: "Target: $250k", color: "chart-2" },
       ],
       legend: { path: "/hiddenSeries" },
+      selection: { path: "/selection", mode: "point" },
       dataTable: true,
       height: 260,
-      selection: { path: "/selection", mode: "point" },
     },
     {
       id: "report_hint",
@@ -679,12 +680,13 @@ function channelShareMessages(): Array<Record<string, unknown>> {
     { id: "root", component: "Card", child: "layout" },
     { id: "layout", component: "Column", children: ["title", "chart"] },
     { id: "title", component: "Text", variant: "h3", text: "Channel share" },
-    { id: "chart", component: "Chart", variant: "bar", title: "Revenue share by quarter", data: { path: "/share" }, x: { key: "quarter", label: "Quarter" }, y: { format: "percent", includeZero: true }, series: [{ key: "enterprise", label: "Enterprise", color: "chart-1" }, { key: "selfServe", label: "Self-serve", color: "chart-2" }, { key: "partners", label: "Partners", color: "chart-3" }], normalize: "stackedPercent", height: 260 },
+    { id: "chart", component: "Chart", variant: "bar", title: "Revenue share by quarter", description: "Each stacked bar sums to 100 percent. Select a legend entry to bind its series identity.", data: { path: "/share" }, x: { key: "quarter", label: "Quarter" }, y: { format: "percent", includeZero: true }, series: [{ key: "enterprise", label: "Enterprise", color: "chart-1" }, { key: "selfServe", label: "Self-serve", color: "chart-2" }, { key: "partners", label: "Partners", color: "chart-3" }], normalize: "stackedPercent", legend: { path: "/hiddenSeries" }, selection: { path: "/selectedSeries", mode: "series" }, height: 260 },
   ];
   return [
     { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
     { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
     { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/share", value: [{ quarter: "Q1", enterprise: 520, selfServe: 270, partners: 110 }, { quarter: "Q2", enterprise: 560, selfServe: 330, partners: 125 }, { quarter: "Q3", enterprise: 610, selfServe: 370, partners: 155 }] } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/hiddenSeries", value: [] } },
   ];
 }
 

@@ -418,6 +418,7 @@ describe("handleDemoResponses", () => {
       },
     });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
+    expect(chart?.description).toContain("Actual revenue and expenses");
     expect(chart?.legend).toEqual({ path: "/hiddenSeries" });
     expect(chart?.dataTable).toBe(true);
     expect(chart?.referenceBands).toEqual([
@@ -569,6 +570,7 @@ describe("handleDemoResponses", () => {
     const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
     expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
       component: "Chart", variant: "bar", normalize: "stackedPercent",
+      selection: { path: "/selectedSeries", mode: "series" },
     });
   });
 
