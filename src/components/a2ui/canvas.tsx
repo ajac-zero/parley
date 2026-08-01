@@ -11,6 +11,7 @@ import { Pin, PinOff } from "lucide-react";
 import { memo } from "react";
 import type { A2uiActionHandler } from "~/components/a2ui/context";
 import { A2uiSurfaceView } from "~/components/a2ui/surface";
+import { useI18n } from "~/components/i18n";
 import type { A2uiSurface } from "~/lib/a2ui";
 
 export interface A2uiCanvasItem {
@@ -30,11 +31,12 @@ export const A2uiCanvas = memo(function A2uiCanvas({
   onUnpin: (surfaceId: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <aside className="flex h-full w-104 shrink-0 flex-col border-l bg-background">
       <header className="flex h-13 shrink-0 items-center gap-2 border-b px-4">
         <Pin className="size-3.5 text-muted-foreground" />
-        <span className="font-medium text-sm">Pinned</span>
+        <span className="font-medium text-sm">{t("pinned")}</span>
         <span className="text-muted-foreground text-xs">{items.length}</span>
       </header>
       <div className="scrollbar-thin flex-1 space-y-5 overflow-y-auto p-4">
@@ -47,7 +49,7 @@ export const A2uiCanvas = memo(function A2uiCanvas({
               <button
                 type="button"
                 onClick={() => onUnpin(surface.surfaceId)}
-                title="Unpin"
+                title={t("unpin")}
                 className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <PinOff className="size-3.5" />
