@@ -125,11 +125,10 @@ Remaining:
 Implemented:
 
 - [x] `Sparkline` and `Progress` leaves.
+- [x] Bounded single-value `Gauge` leaf.
 
 Remaining:
 
-- `Gauge`: a bounded single-value status display with a small, explicit set of
-  threshold bands.
 
 These remain leaf components so all Basic Catalog resources continue to be
 valid under the charts catalog.

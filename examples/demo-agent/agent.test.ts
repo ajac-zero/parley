@@ -588,6 +588,7 @@ describe("handleDemoResponses", () => {
     const components = reduceA2uiMessages(messages)[0]?.components;
     expect(components?.progress?.component).toBe("Progress");
     expect(components?.sparkline?.component).toBe("Sparkline");
+    expect(components?.gauge?.component).toBe("Gauge");
   });
 
   it("returns a range-selectable traffic chart for trend asks", async () => {

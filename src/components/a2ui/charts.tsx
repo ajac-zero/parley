@@ -1133,3 +1133,41 @@ export function ProgressView({ component, base }: ViewProps) {
     </div>
   );
 }
+
+export function GaugeView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const value = toNumber(resolveDynamic(component.value, dataModel, base)) ?? 0;
+  const min = toNumber(resolveDynamic(component.min, dataModel, base)) ?? 0;
+  const max = toNumber(resolveDynamic(component.max, dataModel, base)) ?? 1;
+  const ratio =
+    max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
+  const format = toDisplayString(component.format);
+  const display =
+    format === "percent"
+      ? formatChartValue(ratio, {
+          label: "",
+          format: "percent",
+          currency: "USD",
+          maximumFractionDigits: 0,
+          includeZero: false,
+          min: null,
+          max: null,
+        })
+      : new Intl.NumberFormat().format(value);
+  return (
+    <div className="flex min-w-28 flex-col items-center gap-1">
+      <div
+        className="relative grid size-20 place-items-center rounded-full"
+        style={{
+          background: `conic-gradient(var(--chart-2) ${ratio * 360}deg, var(--muted) 0deg)`,
+        }}
+      >
+        <div className="grid size-14 place-items-center rounded-full bg-card font-semibold text-sm tabular-nums">
+          {display}
+        </div>
+      </div>
+      {label && <span className="text-muted-foreground text-xs">{label}</span>}
+    </div>
+  );
+}

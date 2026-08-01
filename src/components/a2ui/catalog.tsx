@@ -990,6 +990,11 @@ const LazyProgressView = lazy(() =>
     default: module.ProgressView,
   })),
 );
+const LazyGaugeView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.GaugeView,
+  })),
+);
 
 /**
  * Contains failures from the charting library (or a chunk that failed to
@@ -1080,6 +1085,22 @@ function SuspendedProgressView(props: ViewProps) {
     </ChartViewBoundary>
   );
 }
+function SuspendedGaugeView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="size-20 animate-pulse rounded-full bg-muted/40"
+          />
+        }
+      >
+        <LazyGaugeView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
 
 const chartsComponentViews: A2uiComponentViews = {
   ...basicComponentViews,
@@ -1087,6 +1108,7 @@ const chartsComponentViews: A2uiComponentViews = {
   Stat: SuspendedStatView,
   Sparkline: SuspendedSparklineView,
   Progress: SuspendedProgressView,
+  Gauge: SuspendedGaugeView,
 };
 
 /**

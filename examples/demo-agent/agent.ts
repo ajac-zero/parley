@@ -721,14 +721,15 @@ function deliveryHealthMessages(): Array<Record<string, unknown>> {
     { id: "layout", component: "Column", children: ["title", "subtitle", "metrics"] },
     { id: "title", component: "Text", variant: "h3", text: "Delivery health" },
     { id: "subtitle", component: "Text", variant: "caption", text: "Focused chart leaves for a compact operational summary." },
-    { id: "metrics", component: "Row", children: ["progress", "sparkline"] },
+    { id: "metrics", component: "Row", children: ["progress", "sparkline", "gauge"] },
     { id: "progress", component: "Progress", label: "Sprint completion", value: { path: "/delivery/completed" }, max: { path: "/delivery/planned" }, target: { path: "/delivery/target" }, format: "percent", weight: 1 },
     { id: "sparkline", component: "Sparkline", label: "Deploys per day", data: { path: "/delivery/deploys" }, color: "chart-2", weight: 1 },
+    { id: "gauge", component: "Gauge", label: "Release confidence", value: { path: "/delivery/confidence" }, min: 0, max: 1, format: "percent", weight: 1 },
   ];
   return [
     { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
     { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
-    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/delivery", value: { completed: 37, planned: 48, target: 40, deploys: [3, 5, 4, 7, 6, 9, 8] } } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/delivery", value: { completed: 37, planned: 48, target: 40, confidence: 0.82, deploys: [3, 5, 4, 7, 6, 9, 8] } } },
   ];
 }
 
