@@ -397,7 +397,6 @@ describe("handleDemoResponses", () => {
     const chart = surface.components.report_chart;
     expect(chart?.component).toBe("Chart");
     expect(chart?.series).toEqual([
-      expect.objectContaining({ key: "revenue", type: "bar" }),
       expect.objectContaining({ key: "expenses", type: "bar" }),
       expect.objectContaining({
         key: "forecast",
@@ -405,13 +404,19 @@ describe("handleDemoResponses", () => {
         lineStyle: "dashed",
         connectNulls: false,
       }),
+      expect.objectContaining({ key: "revenue", type: "bar" }),
     ]);
+    expect(chart?.y).toMatchObject({
+      format: "currency",
+      maximumFractionDigits: 0,
+      includeZero: true,
+    });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
     expect(chart?.referenceBands).toEqual([
-      expect.objectContaining({ from: 230_000, to: 260_000 }),
+      expect.objectContaining({ from: 230_000, to: 260_000, label: "" }),
     ]);
     expect(chart?.referenceLines).toEqual([
-      expect.objectContaining({ value: 250_000, label: "Plan" }),
+      expect.objectContaining({ value: 250_000, label: "Plan: $250k" }),
     ]);
     expect(surface.components.stat_margin?.component).toBe("Stat");
 

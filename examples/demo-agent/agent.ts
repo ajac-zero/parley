@@ -432,7 +432,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_subtitle",
       component: "Text",
       variant: "caption",
-       text: "A composed chart: actuals are bars and the dashed plan line deliberately stops where the forecast is missing.",
+      text: "Actuals and expenses are bars; the dashed plan ends in August because no forecast is available.",
     },
     {
       id: "report_stats",
@@ -470,31 +470,38 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_chart",
       component: "Chart",
       variant: "bar",
-       title: "Revenue actuals, expenses, and plan by month",
+      title: "Revenue actuals, plan, and expenses by month",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
-       series: [
-        { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
+      y: {
+        label: "USD",
+        format: "currency",
+        maximumFractionDigits: 0,
+        includeZero: true,
+      },
+      // Recharts presents legend entries in reverse rendering order.
+      series: [
         { key: "expenses", label: "Expenses", color: "chart-5", type: "bar" },
         {
           key: "forecast",
           label: "Revenue plan",
-          color: "chart-2",
+          color: "chart-3",
           type: "line",
           lineStyle: "dashed",
-         connectNulls: false,
+          connectNulls: false,
         },
+        { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
       ],
       referenceBands: [
         {
           from: 230_000,
           to: 260_000,
-          label: "Monthly target zone",
+          label: "",
           color: "chart-2",
         },
       ],
       referenceLines: [
-        { value: 250_000, label: "Plan", color: "chart-2" },
+        { value: 250_000, label: "Plan: $250k", color: "chart-3" },
       ],
       height: 260,
       selection: { path: "/selection", mode: "point" },
@@ -508,7 +515,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
         args: {
           value:
             // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
-            "Selected month: ${/selection/x}. Click a bar to change the selection, then analyze it.",
+            "Selected month: ${/selection/x}. The plan is unavailable in August. Click a bar to analyze it.",
         },
       },
     },
