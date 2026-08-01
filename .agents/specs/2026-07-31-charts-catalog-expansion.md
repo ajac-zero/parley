@@ -68,6 +68,7 @@ Implemented:
 - [x] Independent left and right Y axes with per-series axis assignment.
 - [x] Optional Y-axis domain bounds.
 - [x] ISO-8601 time-axis tick and tooltip formatting.
+- [x] Legend visibility binding and expandable data-table fallback.
 
 Remaining:
 
@@ -80,10 +81,7 @@ Remaining:
   ISO-8601 with explicit compact date formatting.
 - Normalization and ordering: add percent/stacked-percent normalization and
   deterministic category ordering for composition and bar charts.
-- Rich interactions: add optional legend toggling and a series-selection mode,
-  with interaction state stored in the surface-local data model.
-- Accessibility: require usable title, description, axis, and series labels;
-  provide an expandable or visually-hidden tabular data fallback.
+- Series-selection mode and additional chart description fields.
 
 #### 2. Add composition charts
 

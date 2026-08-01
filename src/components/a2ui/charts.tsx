@@ -166,6 +166,13 @@ interface SelectionSpec {
   mode: "point" | "range";
 }
 
+function parseLegendPath(value: unknown, base: string): string | null {
+  const record = asRecord(value);
+  return typeof record?.path === "string"
+    ? resolvePath(record.path, base)
+    : null;
+}
+
 interface ReferenceLineSpec {
   value: number;
   label: string;
@@ -369,6 +376,17 @@ export function ChartView({ component, base }: ViewProps) {
     [component.series],
   );
   const selection = parseSelection(component.selection, base);
+  const legendPath = parseLegendPath(component.legend, base);
+  const hiddenSeriesValue = legendPath
+    ? pointerGet(dataModel, legendPath)
+    : null;
+  const hiddenSeries = new Set(
+    Array.isArray(hiddenSeriesValue)
+      ? hiddenSeriesValue.filter(
+          (key): key is string => typeof key === "string",
+        )
+      : [],
+  );
   const referenceLines = useMemo(
     () => parseReferenceLines(component.referenceLines),
     [component.referenceLines],
@@ -648,7 +666,9 @@ export function ChartView({ component, base }: ViewProps) {
     />
   );
   const legend =
-    series.length > 1 ? <ChartLegend content={<ChartLegendContent />} /> : null;
+    series.length > 1 && !legendPath ? (
+      <ChartLegend content={<ChartLegendContent />} />
+    ) : null;
   const rangeArea = rangeExtent ? (
     <ReferenceArea
       x1={axisValue(rangeExtent[0])}
@@ -710,6 +730,7 @@ export function ChartView({ component, base }: ViewProps) {
   const stackId = (spec: SeriesSpec) =>
     spec.stack ?? (stacked ? "stack" : undefined);
   const renderSeries = (spec: SeriesSpec) => {
+    if (hiddenSeries.has(spec.key)) return null;
     const type = seriesType(spec);
     if (type === "bar") {
       return (
@@ -768,6 +789,37 @@ export function ChartView({ component, base }: ViewProps) {
   return (
     <div className="flex w-full flex-col gap-2">
       {title.length > 0 && <div className="font-medium text-sm">{title}</div>}
+      {legendPath ? (
+        <div className="flex flex-wrap gap-3 text-xs">
+          {series.map((spec) => {
+            const hidden = hiddenSeries.has(spec.key);
+            return (
+              <button
+                key={spec.key}
+                type="button"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  hidden && "opacity-45",
+                )}
+                aria-pressed={!hidden}
+                onClick={() => {
+                  if (disabled) return;
+                  const next = new Set(hiddenSeries);
+                  if (hidden) next.delete(spec.key);
+                  else next.add(spec.key);
+                  setValue(legendPath, [...next]);
+                }}
+              >
+                <span
+                  className="size-2 rounded-[2px]"
+                  style={{ backgroundColor: `var(--color-${spec.key})` }}
+                />
+                {spec.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <ChartContainer
         config={config}
         style={{ height }}
@@ -870,19 +922,21 @@ export function ChartView({ component, base }: ViewProps) {
             {rangeArea}
             {referenceAreas}
             {referenceLineMarks}
-            {series.map((spec) => (
-              <Bar
-                key={spec.key}
-                dataKey={spec.key}
-                fill={`var(--color-${spec.key})`}
-                radius={4}
-                stackId={stackId(spec)}
-                onClick={selectSeries(spec)}
-                isAnimationActive={false}
-              >
-                {cells(spec)}
-              </Bar>
-            ))}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Bar
+                  key={spec.key}
+                  dataKey={spec.key}
+                  fill={`var(--color-${spec.key})`}
+                  radius={4}
+                  stackId={stackId(spec)}
+                  onClick={selectSeries(spec)}
+                  isAnimationActive={false}
+                >
+                  {cells(spec)}
+                </Bar>
+              ))}
           </BarChart>
         ) : variant === "area" ? (
           <AreaChart {...shared}>
@@ -894,20 +948,22 @@ export function ChartView({ component, base }: ViewProps) {
             {rangeArea}
             {referenceAreas}
             {referenceLineMarks}
-            {series.map((spec) => (
-              <Area
-                key={spec.key}
-                type="monotone"
-                dataKey={spec.key}
-                stroke={`var(--color-${spec.key})`}
-                fill={`var(--color-${spec.key})`}
-                fillOpacity={0.25}
-                strokeWidth={2}
-                stackId={stackId(spec)}
-                connectNulls={spec.connectNulls}
-                isAnimationActive={false}
-              />
-            ))}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Area
+                  key={spec.key}
+                  type="monotone"
+                  dataKey={spec.key}
+                  stroke={`var(--color-${spec.key})`}
+                  fill={`var(--color-${spec.key})`}
+                  fillOpacity={0.25}
+                  strokeWidth={2}
+                  stackId={stackId(spec)}
+                  connectNulls={spec.connectNulls}
+                  isAnimationActive={false}
+                />
+              ))}
           </AreaChart>
         ) : (
           <LineChart {...shared}>
@@ -919,21 +975,59 @@ export function ChartView({ component, base }: ViewProps) {
             {rangeArea}
             {referenceAreas}
             {referenceLineMarks}
-            {series.map((spec) => (
-              <Line
-                key={spec.key}
-                type="monotone"
-                dataKey={spec.key}
-                stroke={`var(--color-${spec.key})`}
-                strokeWidth={2}
-                dot={false}
-                connectNulls={spec.connectNulls}
-                isAnimationActive={false}
-              />
-            ))}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Line
+                  key={spec.key}
+                  type="monotone"
+                  dataKey={spec.key}
+                  stroke={`var(--color-${spec.key})`}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={spec.connectNulls}
+                  isAnimationActive={false}
+                />
+              ))}
           </LineChart>
         )}
       </ChartContainer>
+      {component.dataTable === true ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground">
+            View data table
+          </summary>
+          <div className="mt-2 max-h-52 overflow-auto rounded-md border">
+            <table className="w-full border-collapse text-left">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">{xLabel || xKey}</th>
+                  {series.map((spec) => (
+                    <th key={spec.key} className="px-2 py-1.5 font-medium">
+                      {spec.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: chart rows are positional and categories may repeat
+                  <tr key={index} className="border-t">
+                    <td className="px-2 py-1.5">
+                      {toDisplayString(row[xKey])}
+                    </td>
+                    {series.map((spec) => (
+                      <td key={spec.key} className="px-2 py-1.5 tabular-nums">
+                        {toDisplayString(row[spec.key])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

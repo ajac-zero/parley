@@ -536,6 +536,8 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       referenceLines: [
         { value: 250_000, label: "Target: $250k", color: "chart-2" },
       ],
+      legend: { path: "/hiddenSeries" },
+      dataTable: true,
       height: 260,
       selection: { path: "/selection", mode: "point" },
     },
@@ -599,6 +601,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
         },
       },
     },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/hiddenSeries", value: [] } },
     {
       version: A2UI_VERSION,
       updateDataModel: {

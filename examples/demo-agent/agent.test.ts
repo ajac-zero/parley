@@ -418,6 +418,8 @@ describe("handleDemoResponses", () => {
       },
     });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
+    expect(chart?.legend).toEqual({ path: "/hiddenSeries" });
+    expect(chart?.dataTable).toBe(true);
     expect(chart?.referenceBands).toEqual([
       expect.objectContaining({ from: 230_000, to: 260_000, label: "" }),
     ]);
