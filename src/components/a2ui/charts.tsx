@@ -30,6 +30,8 @@ import {
   ComposedChart,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ReferenceArea,
   ReferenceLine,
   XAxis,
@@ -415,7 +417,12 @@ export function ChartView({ component, base }: ViewProps) {
     return () => window.removeEventListener("mouseup", onUp);
   }, [dragging]);
 
-  if (!xKey || series.length === 0 || rows.length === 0) {
+  if (
+    !xKey ||
+    series.length === 0 ||
+    rows.length === 0 ||
+    ((variant === "pie" || variant === "donut") && series.length !== 1)
+  ) {
     return <ChartPlaceholder />;
   }
 
@@ -734,6 +741,7 @@ export function ChartView({ component, base }: ViewProps) {
     );
   };
   const composed = series.some((spec) => spec.type !== null);
+  const pieSeries = series[0] as SeriesSpec;
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -750,7 +758,30 @@ export function ChartView({ component, base }: ViewProps) {
         )}
         aria-label={xLabel ? `${title || "Chart"} by ${xLabel}` : undefined}
       >
-        {composed ? (
+        {variant === "pie" || variant === "donut" ? (
+          <PieChart>
+            {tooltip}
+            <Pie
+              data={rows}
+              dataKey={pieSeries.key}
+              nameKey={xKey}
+              innerRadius={variant === "donut" ? "55%" : 0}
+              outerRadius="82%"
+              paddingAngle={2}
+              isAnimationActive={false}
+              onClick={selectSeries(pieSeries)}
+            >
+              {rows.map((_, index) => (
+                <Cell
+                  // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
+                  key={index}
+                  fill={`var(--chart-${(index % 5) + 1})`}
+                />
+              ))}
+            </Pie>
+            {legend}
+          </PieChart>
+        ) : composed ? (
           <ComposedChart {...shared}>
             {grid}
             {xAxis}

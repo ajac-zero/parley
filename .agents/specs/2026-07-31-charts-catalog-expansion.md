@@ -87,9 +87,12 @@ Remaining:
 
 #### 2. Add composition charts
 
-- Add `Chart` variants `pie` and `donut`.
-- Reuse record data: `x.key` names category labels and one series supplies the
-  value. Limit or clearly define behavior for multiple series.
+Implemented:
+
+- [x] `pie` and `donut` variants for one numeric series over x-axis categories.
+
+Remaining:
+
 - Add optional centered donut summary content and semantic category ordering.
 - Use for category share and composition with a small number of categories;
   favor a bar chart when labels or category count are large.

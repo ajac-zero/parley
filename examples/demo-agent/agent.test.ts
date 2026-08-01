@@ -534,6 +534,25 @@ describe("handleDemoResponses", () => {
     expect(insightGroup?.showFallback).toBe(false);
   });
 
+  it("returns a single-series donut chart for revenue mix asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show revenue mix")],
+    });
+    const call = state.items.find((item) => item.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_revenue_mix");
+    const output = state.items.find(
+      (item) => item.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart",
+      variant: "donut",
+      series: [{ key: "revenue" }],
+    });
+  });
+
   it("returns a range-selectable traffic chart for trend asks", async () => {
     const { state } = await streamAndReduce({
       input: [userMessage("what's the traffic trend?")],

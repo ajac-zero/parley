@@ -601,6 +601,53 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
   ];
 }
 
+function revenueMixMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_mix";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Revenue mix" },
+    {
+      id: "subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "A donut chart uses one value series across named categories.",
+    },
+    {
+      id: "chart",
+      component: "Chart",
+      variant: "donut",
+      title: "Revenue by channel",
+      data: { path: "/mix/channels" },
+      x: { key: "channel", label: "Channel" },
+      series: [{ key: "revenue", label: "Revenue" }],
+      height: 280,
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/mix",
+        value: {
+          channels: [
+            { channel: "Enterprise", revenue: 640_000 },
+            { channel: "Self-serve", revenue: 430_000 },
+            { channel: "Partners", revenue: 285_000 },
+            { channel: "Services", revenue: 175_000 },
+          ],
+        },
+      },
+    },
+  ];
+}
+
 /**
  * The analysis for one selected month: update envelopes targeting the
  * existing `demo_revenue_report` surface — the insight section is appended
@@ -1059,6 +1106,24 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     };
   }
 
+  if (/\b(donut|pie|revenue mix|channel mix)\b/.test(lower)) {
+    return {
+      reasoning:
+        "The user wants a composition chart. I'll return the demo revenue-mix donut surface.",
+      reply:
+        "I called `get_revenue_mix` to show a **donut chart**: one numeric revenue series grouped by channel.",
+      tool: {
+        name: "get_revenue_mix",
+        args: JSON.stringify({ period: "FY26" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/revenue-mix",
+          "Revenue mix by channel.",
+          revenueMixMessages(),
+        ),
+      },
+    };
+  }
+
   if (/\b(charts?|revenue|graphs?|dashboard)\b/.test(lower)) {
     const totalRevenue = sum((m) => m.revenue);
     const totalExpenses = sum((m) => m.expenses);
@@ -1145,7 +1210,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **revenue mix** to see a donut chart\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }
