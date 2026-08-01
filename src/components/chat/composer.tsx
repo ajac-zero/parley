@@ -1,6 +1,7 @@
 import { ArrowUp, Loader2, Square, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useI18n } from "~/components/i18n";
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -52,12 +53,13 @@ function ComposerInner({
   onStop,
   busy,
   disabled,
-  placeholder = "Message your agent…",
+  placeholder,
   supportsAttachments = true,
   disclaimer,
   autoFocus,
   fileMaxMb = 10,
 }: ComposerProps) {
+  const { t } = useI18n();
   const attachments = useProviderAttachments();
   const controller = usePromptInputController();
   const inputId = useId();
@@ -88,12 +90,12 @@ function ComposerInner({
           const body = (await res.json().catch(() => null)) as {
             error?: { message?: string };
           } | null;
-          throw new Error(body?.error?.message ?? "Upload failed.");
+          throw new Error(body?.error?.message ?? t("uploadFailed"));
         }
         const uploaded = (await res.json()) as { id: string };
         fileIdMapRef.current.set(file.id, uploaded.id);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Upload failed.");
+        toast.error(error instanceof Error ? error.message : t("uploadFailed"));
         attachments.remove(file.id);
       } finally {
         setUploadingIds((prev) => {
@@ -140,7 +142,7 @@ function ComposerInner({
         onError={(err) => {
           toast.error(
             err.code === "max_file_size"
-              ? `Files must be under ${fileMaxMb} MB.`
+              ? t("filesMustBeUnder", { size: fileMaxMb })
               : err.message,
           );
         }}
@@ -177,7 +179,9 @@ function ComposerInner({
                     type="button"
                     className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                     onClick={() => attachments.remove(attachment.id)}
-                    aria-label={`Remove ${attachment.filename}`}
+                    aria-label={t("removeFile", {
+                      filename: attachment.filename,
+                    })}
                   >
                     <X className="size-3.5" />
                   </button>
@@ -192,7 +196,9 @@ function ComposerInner({
             <PromptInputActionMenu>
               <PromptInputActionMenuTrigger disabled={disabled} />
               <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments />
+                <PromptInputActionAddAttachments
+                  label={t("addPhotosOrFiles")}
+                />
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
           )}
@@ -200,7 +206,7 @@ function ComposerInner({
           <PromptInputTextarea
             ref={textareaRef}
             id={inputId}
-            placeholder={placeholder}
+            placeholder={placeholder ?? t("messageYourAgent")}
             disabled={disabled}
             autoFocus={autoFocus}
             className="self-center"
@@ -221,8 +227,7 @@ function ComposerInner({
       </PromptInput>
 
       <p className="px-2 pt-2 pb-1 text-center text-muted-foreground text-xs">
-        {disclaimer ??
-          "Agents can make mistakes. Verify important information."}
+        {disclaimer ?? t("agentsCanMakeMistakes")}
       </p>
     </div>
   );

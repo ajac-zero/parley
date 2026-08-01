@@ -21,6 +21,7 @@ import {
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { LanguageSelect, useI18n } from "~/components/i18n";
 import { useTheme } from "~/components/theme";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
@@ -57,7 +58,7 @@ interface SessionUserLike {
   role: string;
 }
 
-function groupLabel(iso: string): string {
+function groupLabel(iso: string, t: ReturnType<typeof useI18n>["t"]): string {
   const date = new Date(iso);
   const now = new Date();
   const startOfDay = (d: Date) =>
@@ -65,20 +66,12 @@ function groupLabel(iso: string): string {
   const diffDays = Math.floor(
     (startOfDay(now) - startOfDay(date)) / 86_400_000,
   );
-  if (diffDays <= 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return "Previous 7 days";
-  if (diffDays < 30) return "Previous 30 days";
-  return "Older";
+  if (diffDays <= 0) return t("today");
+  if (diffDays === 1) return t("yesterday");
+  if (diffDays < 7) return t("previous7Days");
+  if (diffDays < 30) return t("previous30Days");
+  return t("older");
 }
-
-const GROUP_ORDER = [
-  "Today",
-  "Yesterday",
-  "Previous 7 days",
-  "Previous 30 days",
-  "Older",
-];
 
 const SIDEBAR_TOOLTIP_CLASS =
   "rounded-md border border-sidebar-border bg-sidebar px-2.5 py-1.5 font-normal text-xs text-sidebar-foreground shadow-md";
@@ -96,6 +89,7 @@ export function AppSidebar({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const { data: conversations } = useQuery(conversationsQuery());
   const params = useParams({ strict: false }) as { conversationId?: string };
@@ -104,16 +98,22 @@ export function AppSidebar({
   const conversationGroups = useMemo(() => {
     const map = new Map<string, NonNullable<typeof conversations>>();
     for (const conversation of conversations ?? []) {
-      const label = groupLabel(conversation.updatedAt);
+      const label = groupLabel(conversation.updatedAt, t);
       const list = map.get(label) ?? [];
       list.push(conversation);
       map.set(label, list);
     }
-    return GROUP_ORDER.flatMap((label) => {
+    return [
+      t("today"),
+      t("yesterday"),
+      t("previous7Days"),
+      t("previous30Days"),
+      t("older"),
+    ].flatMap((label) => {
       const list = map.get(label);
       return list ? [{ label, list }] : [];
     });
-  }, [conversations]);
+  }, [conversations, t]);
   const groups = useMemo(
     () =>
       conversationGroups.flatMap((group) => {
@@ -173,14 +173,14 @@ export function AppSidebar({
           <SidebarNavItem
             to="/chat"
             icon={<SquarePen className="size-4.5 shrink-0" />}
-            label="New chat"
+            label={t("newChat")}
             collapsed={collapsed}
             onNavigate={onNavigate}
           />
           <SidebarNavItem
             to="/agents"
             icon={<Bot className="size-4.5 shrink-0" />}
-            label="Agents"
+            label={t("agents")}
             collapsed={collapsed}
             onNavigate={onNavigate}
             activeProps={{ className: "bg-sidebar-accent" }}
@@ -212,7 +212,7 @@ export function AppSidebar({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search chats"
+              placeholder={t("searchChats")}
               className="h-8 border-transparent bg-sidebar-accent/60 pl-8 text-sm shadow-none focus-visible:border-sidebar-border focus-visible:bg-sidebar-accent/60 focus-visible:ring-0"
             />
           </div>
@@ -228,7 +228,7 @@ export function AppSidebar({
           <nav className="h-full overflow-y-auto px-3 pb-2 scrollbar-thin">
             {groups.length === 0 && (
               <p className="px-2 py-6 text-center text-muted-foreground text-sm">
-                {search ? "No chats match your search." : "No chats yet."}
+                {search ? t("noChatsMatch") : t("noChatsYet")}
               </p>
             )}
             {groups.map((group) => (
@@ -273,12 +273,13 @@ function CollapsedChatsMenu({
   activeId?: string;
   onNavigate?: () => void;
 }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const trigger = (
     <button
       type="button"
       className="flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors hover:bg-sidebar-accent"
-      aria-label="Chats"
+      aria-label={t("chats")}
     >
       <MessageCircle className="size-4.5" />
     </button>
@@ -296,7 +297,7 @@ function CollapsedChatsMenu({
           showArrow={false}
           className={SIDEBAR_TOOLTIP_CLASS}
         >
-          Chats
+          {t("chats")}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -305,7 +306,7 @@ function CollapsedChatsMenu({
         className="max-h-[min(28rem,var(--radix-dropdown-menu-content-available-height))] w-64"
       >
         {groups.length === 0 ? (
-          <DropdownMenuItem disabled>No chats yet</DropdownMenuItem>
+          <DropdownMenuItem disabled>{t("noChatsYet")}</DropdownMenuItem>
         ) : (
           groups.map((group) => (
             <DropdownMenuGroup key={group.label}>
@@ -607,6 +608,7 @@ function UserMenu({
 }) {
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
+  const { t } = useI18n();
   const initials = user.name
     .split(/\s+/)
     .map((part) => part[0])
@@ -663,7 +665,7 @@ function UserMenu({
       )}
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-muted-foreground text-xs">
-          Theme
+          {t("theme")}
         </DropdownMenuLabel>
         <div className="flex gap-1 px-2 pb-1.5">
           {(
@@ -686,13 +688,17 @@ function UserMenu({
           ))}
         </div>
         <DropdownMenuSeparator />
+        <div className="px-2 py-1.5">
+          <LanguageSelect className="block w-full" />
+        </div>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
             onNavigate?.();
             navigate({ to: "/settings" });
           }}
         >
-          <Settings className="size-4" /> Settings
+          <Settings className="size-4" /> {t("settings")}
         </DropdownMenuItem>
         {user.role === "admin" && (
           <DropdownMenuItem
@@ -701,7 +707,7 @@ function UserMenu({
               navigate({ to: "/admin" });
             }}
           >
-            <Shield className="size-4" /> Admin
+            <Shield className="size-4" /> {t("admin")}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -711,7 +717,7 @@ function UserMenu({
             window.location.href = "/auth/sign-in";
           }}
         >
-          <LogOut className="size-4" /> Sign out
+          <LogOut className="size-4" /> {t("signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

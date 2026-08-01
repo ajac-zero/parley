@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { ParleyMark } from "~/components/app-sidebar";
+import { LanguageSelect, useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/auth/sign-in")({
 });
 
 function SignInPage() {
+  const { t } = useI18n();
   const { config } = Route.useRouteContext();
   const search = Route.useSearch();
   const [email, setEmail] = useState("");
@@ -44,12 +46,12 @@ function SignInPage() {
   return (
     <AuthShell
       config={config}
-      title={`Welcome back`}
-      subtitle={`Sign in to continue to ${config.appName}`}
+      title={t("welcomeBack")}
+      subtitle={t("signInToContinue", { appName: config.appName })}
     >
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t("email")}</Label>
           <Input
             id="email"
             type="email"
@@ -61,7 +63,7 @@ function SignInPage() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t("password")}</Label>
           <Input
             id="password"
             type="password"
@@ -74,17 +76,17 @@ function SignInPage() {
         </div>
         {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit" className="w-full" disabled={pending}>
-          {pending ? "Signing in…" : "Sign in"}
+          {pending ? t("signingIn") : t("signIn")}
         </Button>
       </form>
       {config.registrationEnabled && (
         <p className="mt-6 text-center text-muted-foreground text-sm">
-          No account yet?{" "}
+          {t("noAccount")}{" "}
           <Link
             to="/auth/sign-up"
             className="font-medium text-foreground underline underline-offset-4"
           >
-            Create one
+            {t("createOne")}
           </Link>
         </p>
       )}
@@ -106,6 +108,9 @@ export function AuthShell({
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
+        <div className="mb-4 flex justify-end">
+          <LanguageSelect />
+        </div>
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           {config.appLogoUrl ? (
             <img

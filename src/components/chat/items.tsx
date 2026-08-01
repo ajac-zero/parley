@@ -20,6 +20,7 @@ import { memo, useMemo, useState } from "react";
 import type { A2uiActionHandler } from "~/components/a2ui/context";
 import { A2uiToolSurfaces } from "~/components/a2ui/surface";
 import { Markdown } from "~/components/chat/markdown";
+import { useI18n } from "~/components/i18n";
 import { useShowReasoning } from "~/components/reasoning-preference";
 import { Action, Actions } from "~/components/ui/actions";
 import { Button } from "~/components/ui/button";
@@ -70,7 +71,7 @@ const parleyFileUrl = (ref: string): string | null => {
   return /^file_[a-z0-9]+$/.test(id) ? `/api/files/${id}` : null;
 };
 
-export function formatFileSize(bytes: number): string {
+export function formatFileSize(bytes: number, locale = "en"): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
   let unit = 0;
@@ -80,7 +81,7 @@ export function formatFileSize(bytes: number): string {
     value /= 1000;
     unit += 1;
   }
-  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
 }
 
 export function isDownloadableArtifactItem(
@@ -196,6 +197,7 @@ export const UserMessage = memo(function UserMessage({
   onEdit?: (newText: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const text = messageText(item);
   const { copied, copy } = useCopy(text);
   const [editing, setEditing] = useState(false);
@@ -243,7 +245,7 @@ export const UserMessage = memo(function UserMessage({
               setDraft(text);
             }}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             size="sm"
@@ -253,7 +255,7 @@ export const UserMessage = memo(function UserMessage({
               onEdit?.(draft);
             }}
           >
-            Send
+            {t("send")}
           </Button>
         </div>
       </div>
@@ -306,7 +308,7 @@ export const UserMessage = memo(function UserMessage({
           size="icon"
           className="size-7 text-muted-foreground"
           onClick={copy}
-          aria-label="Copy message"
+          aria-label={t("copyMessage")}
         >
           {copied ? (
             <Check className="size-3.5" />
@@ -320,7 +322,7 @@ export const UserMessage = memo(function UserMessage({
             className="size-7 text-muted-foreground"
             onClick={() => setEditing(true)}
             disabled={disabled}
-            aria-label="Edit message"
+            aria-label={t("editMessage")}
           >
             <Pencil className="size-3.5" />
           </Action>
@@ -401,6 +403,7 @@ export const AssistantAttachment = memo(function AssistantAttachment({
 }: {
   item: ParleyAttachmentItem;
 }) {
+  const { locale } = useI18n();
   const url = parleyFileUrl(item.file_url);
   if (!url) return null;
   const { Icon: FileIcon, color } =
@@ -415,7 +418,7 @@ export const AssistantAttachment = memo(function AssistantAttachment({
       <span className="min-w-0">
         <span className="block truncate font-medium">{item.filename}</span>
         <span className="text-muted-foreground text-xs">
-          {item.mime_type} · {formatFileSize(item.size)}
+          {item.mime_type} · {formatFileSize(item.size, locale)}
         </span>
       </span>
     </a>
@@ -427,6 +430,7 @@ export const PreparingArtifact = memo(function PreparingArtifact({
 }: {
   item: DownloadableArtifactItem;
 }) {
+  const { locale } = useI18n();
   return (
     <div
       role="status"
@@ -437,7 +441,7 @@ export const PreparingArtifact = memo(function PreparingArtifact({
       <span className="min-w-0">
         <span className="block truncate font-medium">{item.filename}</span>
         <span className="text-muted-foreground text-xs">
-          Preparing download · {formatFileSize(item.size)}
+          Preparing download · {formatFileSize(item.size, locale)}
         </span>
       </span>
     </div>
@@ -453,6 +457,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({
   item: ReasoningItem;
   streaming?: boolean;
 }) {
+  const { t } = useI18n();
   const summary = reasoningSummaryText(item);
   const hasContent = summary.trim().length > 0;
   // The "show reasoning" preference (see settings) is the block's default
@@ -466,9 +471,9 @@ export const ReasoningBlock = memo(function ReasoningBlock({
     return (
       <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
         {streaming ? (
-          <span className="animate-pulse">Thinking…</span>
+          <span className="animate-pulse">{t("thinking")}</span>
         ) : (
-          "Thought process"
+          t("thoughtProcess")
         )}
       </div>
     );

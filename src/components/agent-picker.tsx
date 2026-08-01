@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, Check, ChevronDown, Plus } from "lucide-react";
 import type { ReactNode } from "react";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -70,6 +71,7 @@ export function AgentPicker({
   onSelect: (agentId: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const selected = agents.find((a) => a.id === selectedId) ?? null;
   const enabled = agents.filter((a) => a.isEnabled);
 
@@ -84,7 +86,7 @@ export function AgentPicker({
             <AgentTitle agent={selected} className="pr-0" />
           ) : (
             <span className="px-2.5 font-medium text-[15px] text-muted-foreground">
-              Choose an agent
+              {t("chooseAgent")}
             </span>
           )}
           <ChevronDown className="mr-2.5 size-4 text-muted-foreground" />
@@ -93,7 +95,7 @@ export function AgentPicker({
       <DropdownMenuContent align="start" className="w-80">
         {enabled.length === 0 && (
           <div className="px-3 py-6 text-center text-muted-foreground text-sm">
-            No agents available yet.
+            {t("noAgentsAvailable")}
           </div>
         )}
         {enabled.map((agent) => (
@@ -108,7 +110,7 @@ export function AgentPicker({
                 <span className="truncate font-medium">{agent.name}</span>
                 {agent.isGlobal && (
                   <span className="rounded-full border px-1.5 py-px text-[10px] text-muted-foreground uppercase tracking-wide">
-                    shared
+                    {t("shared")}
                   </span>
                 )}
               </span>
@@ -126,7 +128,7 @@ export function AgentPicker({
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/agents">
-            <Plus className="size-4" /> Add an agent
+            <Plus className="size-4" /> {t("addAgent")}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
