@@ -41,6 +41,7 @@ export const toPublicAgent = (row: AgentRow) => ({
   fileDelivery: row.fileDelivery,
   supportsImages: row.supportsImages,
   supportsFiles: row.supportsFiles,
+  promptSuggestions: row.promptSuggestions,
   params: row.params,
   isEnabled: row.isEnabled,
   createdAt: row.createdAt.toISOString(),
@@ -153,6 +154,7 @@ export class Agents extends Effect.Service<Agents>()("Agents", {
               fileDelivery: input.fileDelivery,
               supportsImages: input.supportsImages,
               supportsFiles: input.supportsFiles,
+              promptSuggestions: [...input.promptSuggestions],
               params: input.params,
               isEnabled: input.isEnabled,
             })
@@ -187,6 +189,7 @@ export class Agents extends Effect.Service<Agents>()("Agents", {
               fileDelivery: input.fileDelivery,
               supportsImages: input.supportsImages,
               supportsFiles: input.supportsFiles,
+              promptSuggestions: [...input.promptSuggestions],
               params: input.params,
               isEnabled: input.isEnabled,
               updatedAt: new Date(),

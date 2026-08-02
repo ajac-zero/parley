@@ -157,6 +157,11 @@ export const agents = pgTable(
       .default("url"),
     supportsImages: boolean("supports_images").notNull().default(false),
     supportsFiles: boolean("supports_files").notNull().default(false),
+    /** Starter prompts shown above the composer for this agent. */
+    promptSuggestions: jsonb("prompt_suggestions")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     /** Extra request params merged into the request body (temperature, reasoning, ...). */
     params: jsonb("params").$type<Record<string, unknown>>(),
     isEnabled: boolean("is_enabled").notNull().default(true),

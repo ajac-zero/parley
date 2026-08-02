@@ -69,6 +69,12 @@ export const AgentCardSchema = Schema.Struct({
   ),
   defaultInputModes: Schema.optional(Schema.Array(Schema.String)),
   defaultOutputModes: Schema.optional(Schema.Array(Schema.String)),
+  /** Parley extension: starter prompts to show in the chat composer. */
+  promptSuggestions: Schema.optional(
+    Schema.Array(
+      Schema.String.pipe(Schema.minLength(1), Schema.maxLength(500)),
+    ).pipe(Schema.maxItems(8)),
+  ),
   skills: Schema.optional(
     Schema.Array(
       Schema.Struct({
@@ -113,6 +119,7 @@ export interface AgentCardPrefill {
   baseUrl: string | null;
   supportsImages: boolean;
   supportsFiles: boolean;
+  promptSuggestions: string[];
 }
 
 /** Maps a validated card onto Parley's agent fields (clamped to our limits). */
@@ -124,5 +131,6 @@ export function prefillFromAgentCard(card: AgentCard): AgentCardPrefill {
     baseUrl: openResponsesInterfaceOf(card)?.url ?? null,
     supportsImages: inputModes.some(isImageMode),
     supportsFiles: inputModes.some(isFileMode),
+    promptSuggestions: [...(card.promptSuggestions ?? [])],
   };
 }

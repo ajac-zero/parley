@@ -40,6 +40,7 @@ interface AgentFormState {
   fileDelivery: "url" | "inline";
   supportsImages: boolean;
   supportsFiles: boolean;
+  promptSuggestionsText: string;
   paramsText: string;
   isEnabled: boolean;
   global: boolean;
@@ -59,6 +60,7 @@ const emptyForm = (): AgentFormState => ({
   fileDelivery: "url",
   supportsImages: false,
   supportsFiles: false,
+  promptSuggestionsText: "",
   paramsText: "",
   isEnabled: true,
   global: false,
@@ -78,6 +80,7 @@ const formFromAgent = (agent: PublicAgent): AgentFormState => ({
   fileDelivery: agent.fileDelivery,
   supportsImages: agent.supportsImages,
   supportsFiles: agent.supportsFiles,
+  promptSuggestionsText: agent.promptSuggestions.join("\n"),
   paramsText: agent.params ? JSON.stringify(agent.params, null, 2) : "",
   isEnabled: agent.isEnabled,
   global: agent.isGlobal,
@@ -128,6 +131,7 @@ export function AgentDialog({
         baseUrl: prefill.baseUrl ?? prev.baseUrl,
         supportsImages: prefill.supportsImages,
         supportsFiles: prefill.supportsFiles,
+        promptSuggestionsText: prefill.promptSuggestions.join("\n"),
         cardUrl,
       }));
       setFormError(null);
@@ -182,6 +186,10 @@ export function AgentDialog({
         fileDelivery: form.fileDelivery,
         supportsImages: form.supportsImages,
         supportsFiles: form.supportsFiles,
+        promptSuggestions: form.promptSuggestionsText
+          .split("\n")
+          .map((suggestion) => suggestion.trim())
+          .filter(Boolean),
         params,
         isEnabled: form.isEnabled,
         global: form.global,
@@ -418,6 +426,21 @@ export function AgentDialog({
               placeholder={t("optionalInstructions")}
               className="min-h-20"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-prompt-suggestions">Prompt suggestions</Label>
+            <Textarea
+              id="agent-prompt-suggestions"
+              value={form.promptSuggestionsText}
+              onChange={(e) => set("promptSuggestionsText", e.target.value)}
+              placeholder={"Summarize this document\nHelp me plan my week"}
+              className="min-h-20"
+            />
+            <p className="text-muted-foreground text-xs">
+              One starter prompt per line, up to 8. These appear above the
+              composer when this agent is selected.
+            </p>
           </div>
 
           <div className="space-y-1.5">

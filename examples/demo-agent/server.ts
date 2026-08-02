@@ -26,6 +26,12 @@ export function startDemoAgentServer(options: { port?: number } = {}) {
           capabilities: { streaming: true },
           defaultInputModes: ["text/plain", "image/*", "application/octet-stream"],
           defaultOutputModes: ["text/plain", "application/a2ui+json"],
+          promptSuggestions: [
+            "What's the weather in Tokyo?",
+            "Show me a revenue chart",
+            "Book a table for two",
+            "Show me some markdown",
+          ],
           skills: [],
           supportedInterfaces: [
             {

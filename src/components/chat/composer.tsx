@@ -1,6 +1,7 @@
 import { ArrowUp, Loader2, Square, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Suggestion, Suggestions } from "~/components/ai-elements/suggestion";
 import { useI18n } from "~/components/i18n";
 import {
   PromptInput,
@@ -30,6 +31,8 @@ export interface ComposerProps {
   autoFocus?: boolean;
   /** Max upload size (MB), for client-side validation. */
   fileMaxMb?: number;
+  /** Optional agent-provided starter prompts. */
+  promptSuggestions?: string[];
 }
 
 /**
@@ -58,6 +61,7 @@ function ComposerInner({
   disclaimer,
   autoFocus,
   fileMaxMb = 10,
+  promptSuggestions = [],
 }: ComposerProps) {
   const { t } = useI18n();
   const attachments = useProviderAttachments();
@@ -131,9 +135,23 @@ function ComposerInner({
   };
 
   const status = busy ? "streaming" : "ready";
+  const showSuggestions =
+    promptSuggestions.length > 0 && !text && !attachments.files.length;
 
   return (
     <div className="w-full">
+      {showSuggestions && (
+        <Suggestions className="mb-3 px-1">
+          {promptSuggestions.map((suggestion) => (
+            <Suggestion
+              key={suggestion}
+              suggestion={suggestion}
+              disabled={disabled || busy}
+              onClick={(value) => onSend(value, [])}
+            />
+          ))}
+        </Suggestions>
+      )}
       <PromptInput
         onSubmit={handleSubmit}
         multiple
