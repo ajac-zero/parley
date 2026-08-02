@@ -1,5 +1,97 @@
 import { describe, expect, it } from "vitest";
-import { formatChartValue, parseYAxis } from "~/components/a2ui/charts";
+import {
+  formatChartValue,
+  parseReferenceBands,
+  parseReferenceLines,
+  parseSeries,
+  parseYAxis,
+} from "~/components/a2ui/charts";
+
+/* -------------------------------- parseSeries ------------------------------ */
+
+describe("parseSeries", () => {
+  it("reads safe composed-series display options", () => {
+    expect(
+      parseSeries([
+        {
+          key: "actual",
+          label: "Actual revenue",
+          color: "chart-2",
+          type: "bar",
+          stack: "revenue",
+          lineStyle: "dashed",
+          connectNulls: true,
+        },
+      ]),
+    ).toEqual([
+      {
+        key: "actual",
+        label: "Actual revenue",
+        color: "chart-2",
+        type: "bar",
+        stack: "revenue",
+        lineStyle: "dashed",
+        connectNulls: true,
+        axis: "left",
+      },
+    ]);
+  });
+
+  it("defaults and rejects malformed, duplicate, or unsafe options", () => {
+    expect(
+      parseSeries([
+        {
+          key: "forecast",
+          type: "invalid",
+          stack: "not safe!",
+          lineStyle: "wiggle",
+        },
+        { key: "forecast" },
+        { key: "bad key" },
+      ]),
+    ).toEqual([
+      {
+        key: "forecast",
+        label: "forecast",
+        color: "chart-1",
+        type: null,
+        stack: null,
+        lineStyle: "solid",
+        connectNulls: false,
+        axis: "left",
+      },
+    ]);
+  });
+});
+
+/* ----------------------------- reference marks ---------------------------- */
+
+describe("reference marks", () => {
+  it("reads finite reference lines with safe color tokens", () => {
+    expect(
+      parseReferenceLines([
+        { value: 250_000, label: "Plan", color: "chart-2" },
+        { value: 0, color: "not-a-token" },
+        { value: "nope" },
+      ]),
+    ).toEqual([
+      { value: 250_000, label: "Plan", color: "chart-2" },
+      { value: 0, label: "", color: "chart-3" },
+    ]);
+  });
+
+  it("normalizes bands and drops zero-width or malformed ranges", () => {
+    expect(
+      parseReferenceBands([
+        { from: 260_000, to: 230_000, label: "Target zone", color: "chart-1" },
+        { from: 1, to: 1 },
+        { from: 1, to: "nope" },
+      ]),
+    ).toEqual([
+      { from: 230_000, to: 260_000, label: "Target zone", color: "chart-1" },
+    ]);
+  });
+});
 
 /* -------------------------------- parseYAxis ------------------------------- */
 
@@ -18,6 +110,8 @@ describe("parseYAxis", () => {
       currency: "USD",
       maximumFractionDigits: 2,
       includeZero: false,
+      min: null,
+      max: null,
     });
   });
 
@@ -54,6 +148,22 @@ describe("parseYAxis", () => {
     expect(parseYAxis({ label: "Revenue" })?.label).toBe("Revenue");
     expect(parseYAxis({ label: 42 })?.label).toBe("");
   });
+
+  it("accepts ordered finite domain bounds and drops invalid pairs", () => {
+    expect(parseYAxis({ min: 0, max: 1 })).toMatchObject({ min: 0, max: 1 });
+    expect(parseYAxis({ min: 1, max: 1 })).toMatchObject({
+      min: null,
+      max: null,
+    });
+    expect(parseYAxis({ min: 2, max: 1 })).toMatchObject({
+      min: null,
+      max: null,
+    });
+    expect(parseYAxis({ min: "nope", max: 1 })).toMatchObject({
+      min: null,
+      max: 1,
+    });
+  });
 });
 
 /* ----------------------------- formatChartValue ---------------------------- */
@@ -65,6 +175,8 @@ describe("formatChartValue", () => {
     currency: "USD",
     maximumFractionDigits: 2,
     includeZero: false,
+    min: null,
+    max: null,
   };
 
   it("formats plain numbers with the given fraction digits", () => {

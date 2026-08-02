@@ -17,7 +17,7 @@
  * appear mid-stream anyway.
  */
 
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -27,11 +27,18 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ReferenceArea,
+  ReferenceLine,
+  Scatter,
+  ScatterChart,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
 import type { ViewProps } from "~/components/a2ui/catalog";
 import { useA2uiSurface } from "~/components/a2ui/context";
@@ -98,14 +105,23 @@ interface SeriesSpec {
   label: string;
   /** One of the `chart-N` theme tokens. */
   color: string;
+  type: "line" | "bar" | "area" | null;
+  stack: string | null;
+  lineStyle: "solid" | "dashed" | "dotted";
+  connectNulls: boolean;
+  axis: "left" | "right";
 }
 
-function parseSeries(value: unknown): SeriesSpec[] {
+export function parseSeries(value: unknown): SeriesSpec[] {
   if (!Array.isArray(value)) return [];
   const series: SeriesSpec[] = [];
   for (const entry of value) {
     const record = asRecord(entry);
-    if (typeof record?.key !== "string" || !SAFE_SERIES_KEY.test(record.key)) {
+    if (
+      typeof record?.key !== "string" ||
+      !SAFE_SERIES_KEY.test(record.key) ||
+      series.some((spec) => spec.key === record.key)
+    ) {
       continue;
     }
     series.push({
@@ -118,14 +134,98 @@ function parseSeries(value: unknown): SeriesSpec[] {
         typeof record.color === "string" && CHART_COLOR_TOKENS.has(record.color)
           ? record.color
           : `chart-${(series.length % 5) + 1}`,
+      type:
+        record.type === "line" ||
+        record.type === "bar" ||
+        record.type === "area"
+          ? record.type
+          : null,
+      stack:
+        typeof record.stack === "string" && SAFE_SERIES_KEY.test(record.stack)
+          ? record.stack
+          : null,
+      lineStyle:
+        record.lineStyle === "dashed" || record.lineStyle === "dotted"
+          ? record.lineStyle
+          : "solid",
+      connectNulls: record.connectNulls === true,
+      axis: record.axis === "right" ? "right" : "left",
     });
   }
   return series;
 }
 
+function strokeDasharray(style: SeriesSpec["lineStyle"]): string | undefined {
+  if (style === "dashed") return "6 4";
+  if (style === "dotted") return "2 3";
+  return undefined;
+}
+
 interface SelectionSpec {
   pointer: string;
-  mode: "point" | "range";
+  mode: "point" | "range" | "series";
+}
+
+function parseLegendPath(value: unknown, base: string): string | null {
+  const record = asRecord(value);
+  return typeof record?.path === "string"
+    ? resolvePath(record.path, base)
+    : null;
+}
+
+interface ReferenceLineSpec {
+  value: number;
+  label: string;
+  color: string;
+}
+
+interface ReferenceBandSpec {
+  from: number;
+  to: number;
+  label: string;
+  color: string;
+}
+
+export function parseReferenceLines(value: unknown): ReferenceLineSpec[] {
+  if (!Array.isArray(value)) return [];
+  const lines: ReferenceLineSpec[] = [];
+  for (const entry of value) {
+    const record = asRecord(entry);
+    const lineValue = toNumber(record?.value);
+    if (lineValue === null) continue;
+    lines.push({
+      value: lineValue,
+      label: typeof record?.label === "string" ? record.label : "",
+      color:
+        typeof record?.color === "string" &&
+        CHART_COLOR_TOKENS.has(record.color)
+          ? record.color
+          : "chart-3",
+    });
+  }
+  return lines;
+}
+
+export function parseReferenceBands(value: unknown): ReferenceBandSpec[] {
+  if (!Array.isArray(value)) return [];
+  const bands: ReferenceBandSpec[] = [];
+  for (const entry of value) {
+    const record = asRecord(entry);
+    const from = toNumber(record?.from);
+    const to = toNumber(record?.to);
+    if (from === null || to === null || from === to) continue;
+    bands.push({
+      from: Math.min(from, to),
+      to: Math.max(from, to),
+      label: typeof record?.label === "string" ? record.label : "",
+      color:
+        typeof record?.color === "string" &&
+        CHART_COLOR_TOKENS.has(record.color)
+          ? record.color
+          : "chart-3",
+    });
+  }
+  return bands;
 }
 
 interface YAxisSpec {
@@ -134,12 +234,55 @@ interface YAxisSpec {
   currency: string;
   maximumFractionDigits: number;
   includeZero: boolean;
+  min: number | null;
+  max: number | null;
+}
+
+interface XAxisSpec {
+  key: string;
+  label: string;
+  type: "category" | "time" | "number";
+  format: "short" | "medium" | "long";
+}
+
+function parseXAxis(value: unknown): XAxisSpec | null {
+  const record = asRecord(value);
+  if (typeof record?.key !== "string" || record.key.length === 0) return null;
+  return {
+    key: record.key,
+    label: typeof record.label === "string" ? record.label : "",
+    type:
+      record.type === "time" || record.type === "number"
+        ? record.type
+        : "category",
+    format:
+      record.format === "medium" || record.format === "long"
+        ? record.format
+        : "short",
+  };
+}
+
+function formatTimeAxis(value: unknown, format: XAxisSpec["format"]): string {
+  if (typeof value !== "string") return String(value ?? "");
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return value;
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: format === "long" ? "long" : "short",
+      day: "numeric",
+      ...(format === "long" ? { year: "numeric" } : {}),
+    }).format(date);
+  } catch {
+    return value;
+  }
 }
 
 export function parseYAxis(value: unknown): YAxisSpec | null {
   const record = asRecord(value);
   if (!record) return null;
   const digits = toNumber(record.maximumFractionDigits);
+  const min = toNumber(record.min);
+  const max = toNumber(record.max);
   return {
     label: typeof record.label === "string" ? record.label : "",
     format:
@@ -153,6 +296,23 @@ export function parseYAxis(value: unknown): YAxisSpec | null {
     maximumFractionDigits:
       digits !== null ? Math.min(6, Math.max(0, Math.floor(digits))) : 2,
     includeZero: record.includeZero === true,
+    min: min !== null && (max === null || min < max) ? min : null,
+    max: max !== null && (min === null || min < max) ? max : null,
+  };
+}
+
+function parseYAxes(
+  value: unknown,
+  legacy: unknown,
+): { left: YAxisSpec | null; right: YAxisSpec | null; configured: boolean } {
+  const record = asRecord(value);
+  if (!record) {
+    return { left: parseYAxis(legacy), right: null, configured: false };
+  }
+  return {
+    left: parseYAxis(record.left) ?? parseYAxis(legacy),
+    right: parseYAxis(record.right),
+    configured: true,
   };
 }
 
@@ -178,7 +338,12 @@ function parseSelection(value: unknown, base: string): SelectionSpec | null {
   if (typeof record?.path !== "string") return null;
   return {
     pointer: resolvePath(record.path, base),
-    mode: record.mode === "range" ? "range" : "point",
+    mode:
+      record.mode === "range"
+        ? "range"
+        : record.mode === "series"
+          ? "series"
+          : "point",
   };
 }
 
@@ -194,33 +359,88 @@ export function ChartView({ component, base }: ViewProps) {
   const { dataModel, setValue, disabled } = useA2uiSurface();
 
   const title = resolveString(component.title, dataModel, base);
+  const description = resolveString(component.description, dataModel, base);
   const variant = toDisplayString(component.variant) || "line";
   const stacked = component.stacked === true;
+  const sizeRecord = asRecord(component.size);
+  const sizeKey =
+    typeof sizeRecord?.key === "string" && SAFE_SERIES_KEY.test(sizeRecord.key)
+      ? sizeRecord.key
+      : null;
   const height = Math.min(
     Math.max(toNumber(component.height) ?? 256, 160),
     480,
   );
+  const sort = toDisplayString(component.sort) || "data";
+  const normalize = toDisplayString(component.normalize) || "none";
 
-  const xRecord = asRecord(component.x);
-  const xKey = typeof xRecord?.key === "string" ? xRecord.key : null;
-  const xLabel = typeof xRecord?.label === "string" ? xRecord.label : null;
-  const yAxisSpec = parseYAxis(component.y);
+  const xAxisSpec = parseXAxis(component.x);
+  const xKey = xAxisSpec?.key ?? null;
+  const xLabel = xAxisSpec?.label ?? null;
+  const yAxes = parseYAxes(component.yAxes, component.y);
   const series = useMemo(
     () => parseSeries(component.series),
     [component.series],
   );
   const selection = parseSelection(component.selection, base);
+  const legendPath = parseLegendPath(component.legend, base);
+  const hiddenSeriesValue = legendPath
+    ? pointerGet(dataModel, legendPath)
+    : null;
+  const hiddenSeries = new Set(
+    Array.isArray(hiddenSeriesValue)
+      ? hiddenSeriesValue.filter(
+          (key): key is string => typeof key === "string",
+        )
+      : [],
+  );
+  const referenceLines = useMemo(
+    () => parseReferenceLines(component.referenceLines),
+    [component.referenceLines],
+  );
+  const referenceBands = useMemo(
+    () => parseReferenceBands(component.referenceBands),
+    [component.referenceBands],
+  );
 
   const rawRows = resolveDynamic(component.data, dataModel, base);
-  const rows = useMemo(
-    () =>
-      Array.isArray(rawRows)
-        ? rawRows.filter(
-            (row): row is Record<string, unknown> => asRecord(row) !== null,
-          )
-        : [],
-    [rawRows],
-  );
+  const rows = useMemo(() => {
+    const resolved = Array.isArray(rawRows)
+      ? rawRows.filter(
+          (row): row is Record<string, unknown> => asRecord(row) !== null,
+        )
+      : [];
+    if (
+      (sort !== "ascending" && sort !== "descending") ||
+      series.length !== 1
+    ) {
+      return resolved;
+    }
+    return [...resolved].sort((a, b) => {
+      const key = series[0]?.key ?? "";
+      const delta = (toNumber(a[key]) ?? 0) - (toNumber(b[key]) ?? 0);
+      return sort === "ascending" ? delta : -delta;
+    });
+  }, [rawRows, series, sort]);
+  const normalizedRows = useMemo(() => {
+    if (normalize !== "percent" && normalize !== "stackedPercent") return rows;
+    return rows.map((row) => {
+      const total = series.reduce(
+        (sum, spec) => sum + Math.max(0, toNumber(row[spec.key]) ?? 0),
+        0,
+      );
+      if (total === 0) return row;
+      return {
+        ...row,
+        ...Object.fromEntries(
+          series.map((spec) => [
+            spec.key,
+            (toNumber(row[spec.key]) ?? 0) / total,
+          ]),
+        ),
+      };
+    });
+  }, [normalize, rows, series]);
 
   const config = useMemo(() => {
     const entries: ChartConfig = {};
@@ -259,11 +479,17 @@ export function ChartView({ component, base }: ViewProps) {
     return () => window.removeEventListener("mouseup", onUp);
   }, [dragging]);
 
-  if (!xKey || series.length === 0 || rows.length === 0) {
+  if (
+    !xKey ||
+    series.length === 0 ||
+    rows.length === 0 ||
+    ((variant === "pie" || variant === "donut") && series.length !== 1) ||
+    ((variant === "scatter" || variant === "bubble") && series.length !== 1)
+  ) {
     return <ChartPlaceholder />;
   }
 
-  const selectPointAt = (index: number | null) => {
+  const selectPointAt = (index: number | null, spec?: SeriesSpec) => {
     if (disabled || !selection || selection.mode !== "point") return;
     const row = index !== null ? rows[index] : undefined;
     if (index === null || !row) return;
@@ -274,6 +500,7 @@ export function ChartView({ component, base }: ViewProps) {
       index,
       x: row[xKey],
       values,
+      ...(spec ? { seriesKey: spec.key, seriesLabel: spec.label } : {}),
     });
   };
 
@@ -285,9 +512,10 @@ export function ChartView({ component, base }: ViewProps) {
     selectPointAt(activeTooltipIndexOf(state));
   };
 
-  const selectBar = (_entry: unknown, index: number) => {
-    selectPointAt(Number.isInteger(index) ? index : null);
-  };
+  const selectSeries =
+    (spec: SeriesSpec) => (_entry: unknown, index: number) => {
+      selectPointAt(Number.isInteger(index) ? index : null, spec);
+    };
 
   const commitDrag = () => {
     setDrag(null);
@@ -357,52 +585,82 @@ export function ChartView({ component, base }: ViewProps) {
 
   const shared = {
     accessibilityLayer: true,
-    data: rows,
+    data: normalizedRows,
     onClick: selectPoint,
     ...dragHandlers,
   } as const;
   const grid = <CartesianGrid vertical={false} />;
   const xAxis = (
-    <XAxis dataKey={xKey} tickLine={false} axisLine={false} tickMargin={8} />
-  );
-  const yAxis = yAxisSpec ? (
-    <YAxis
+    <XAxis
+      dataKey={xKey}
+      type={xAxisSpec?.type === "number" ? "number" : "category"}
       tickLine={false}
       axisLine={false}
       tickMargin={8}
-      width={yAxisSpec.format === "currency" ? 88 : 64}
-      domain={
-        yAxisSpec.includeZero
-          ? [
-              (minimum: number) => Math.min(0, minimum),
-              (maximum: number) => Math.max(0, maximum),
-            ]
+      tickFormatter={
+        xAxisSpec?.type === "time"
+          ? (value: unknown) => formatTimeAxis(value, xAxisSpec.format)
           : undefined
       }
-      tickFormatter={(value: number) => formatChartValue(value, yAxisSpec)}
+    />
+  );
+  const yAxis = (spec: YAxisSpec, side: "left" | "right") => (
+    <YAxis
+      yAxisId={yAxes.configured ? side : undefined}
+      orientation={side === "right" ? "right" : undefined}
+      tickLine={false}
+      axisLine={false}
+      tickMargin={8}
+      width={spec.format === "currency" ? 88 : 64}
+      domain={
+        spec.min !== null || spec.max !== null
+          ? [spec.min ?? "auto", spec.max ?? "auto"]
+          : spec.includeZero
+            ? [
+                (minimum: number) => Math.min(0, minimum),
+                (maximum: number) => Math.max(0, maximum),
+              ]
+            : undefined
+      }
+      tickFormatter={(value: number) => formatChartValue(value, spec)}
       label={
-        yAxisSpec.label
+        spec.label
           ? {
-              value: yAxisSpec.label,
-              angle: -90,
-              position: "insideLeft",
+              value: spec.label,
+              angle: side === "right" ? 90 : -90,
+              position: side === "right" ? "insideRight" : "insideLeft",
               style: { fill: "var(--muted-foreground)", fontSize: 11 },
             }
           : undefined
       }
     />
-  ) : null;
+  );
+  const yAxisViews = (
+    <>
+      {yAxes.left ? yAxis(yAxes.left, "left") : null}
+      {yAxes.right ? yAxis(yAxes.right, "right") : null}
+    </>
+  );
   const tooltip = (
     <ChartTooltip
       cursor
       content={
         <ChartTooltipContent
           indicator="dot"
+          labelFormatter={
+            xAxisSpec?.type === "time"
+              ? (value) => formatTimeAxis(value, "long")
+              : undefined
+          }
           formatter={
-            yAxisSpec
+            yAxes.left || yAxes.right
               ? (value, name) => {
                   const key = String(name);
                   const indicatorColor = config[key]?.color;
+                  const spec =
+                    series.find((entry) => entry.key === key)?.axis === "right"
+                      ? yAxes.right
+                      : yAxes.left;
                   return (
                     <>
                       <div
@@ -419,8 +677,8 @@ export function ChartView({ component, base }: ViewProps) {
                           {config[key]?.label ?? key}
                         </span>
                         <span className="font-mono font-medium text-foreground tabular-nums">
-                          {typeof value === "number"
-                            ? formatChartValue(value, yAxisSpec)
+                          {typeof value === "number" && spec
+                            ? formatChartValue(value, spec)
                             : String(value)}
                         </span>
                       </div>
@@ -434,7 +692,9 @@ export function ChartView({ component, base }: ViewProps) {
     />
   );
   const legend =
-    series.length > 1 ? <ChartLegend content={<ChartLegendContent />} /> : null;
+    series.length > 1 && !legendPath ? (
+      <ChartLegend content={<ChartLegendContent />} />
+    ) : null;
   const rangeArea = rangeExtent ? (
     <ReferenceArea
       x1={axisValue(rangeExtent[0])}
@@ -445,6 +705,38 @@ export function ChartView({ component, base }: ViewProps) {
       ifOverflow="visible"
     />
   ) : null;
+  const referenceAreas = referenceBands.map((band, index) => (
+    <ReferenceArea
+      // biome-ignore lint/suspicious/noArrayIndexKey: static resource order
+      key={index}
+      y1={band.from}
+      y2={band.to}
+      fill={`var(--${band.color})`}
+      fillOpacity={0.12}
+      label={band.label || undefined}
+      ifOverflow="extendDomain"
+    />
+  ));
+  const referenceLineMarks = referenceLines.map((line, index) => (
+    <ReferenceLine
+      // biome-ignore lint/suspicious/noArrayIndexKey: static resource order
+      key={index}
+      y={line.value}
+      stroke={`var(--${line.color})`}
+      strokeWidth={1.5}
+      label={
+        line.label
+          ? {
+              value: line.label,
+              position: "insideTopRight",
+              fill: `var(--${line.color})`,
+              offset: 12,
+            }
+          : undefined
+      }
+      ifOverflow="extendDomain"
+    />
+  ));
   /* Non-selected points dim once a point is picked (bar charts only —
    * recharts Cells are per-bar). */
   const cells = (spec: SeriesSpec) =>
@@ -459,9 +751,110 @@ export function ChartView({ component, base }: ViewProps) {
         ))
       : null;
 
+  const seriesType = (spec: SeriesSpec): NonNullable<SeriesSpec["type"]> =>
+    spec.type ?? (variant === "bar" || variant === "area" ? variant : "line");
+  const stackId = (spec: SeriesSpec) =>
+    spec.stack ??
+    (stacked || normalize === "stackedPercent" ? "stack" : undefined);
+  const renderSeries = (spec: SeriesSpec) => {
+    if (hiddenSeries.has(spec.key)) return null;
+    const type = seriesType(spec);
+    if (type === "bar") {
+      return (
+        <Bar
+          key={spec.key}
+          dataKey={spec.key}
+          fill={`var(--color-${spec.key})`}
+          radius={4}
+          stackId={stackId(spec)}
+          yAxisId={yAxes.configured ? spec.axis : undefined}
+          onClick={selectSeries(spec)}
+          isAnimationActive={false}
+        >
+          {cells(spec)}
+        </Bar>
+      );
+    }
+    if (type === "area") {
+      return (
+        <Area
+          key={spec.key}
+          type="monotone"
+          dataKey={spec.key}
+          stroke={`var(--color-${spec.key})`}
+          strokeDasharray={strokeDasharray(spec.lineStyle)}
+          fill={`var(--color-${spec.key})`}
+          fillOpacity={0.25}
+          strokeWidth={2}
+          stackId={stackId(spec)}
+          yAxisId={yAxes.configured ? spec.axis : undefined}
+          connectNulls={spec.connectNulls}
+          isAnimationActive={false}
+        />
+      );
+    }
+    return (
+      <Line
+        key={spec.key}
+        type="monotone"
+        dataKey={spec.key}
+        stroke={`var(--color-${spec.key})`}
+        strokeDasharray={strokeDasharray(spec.lineStyle)}
+        strokeWidth={2}
+        dot={false}
+        yAxisId={yAxes.configured ? spec.axis : undefined}
+        connectNulls={spec.connectNulls}
+        isAnimationActive={false}
+      />
+    );
+  };
+  const composed = series.some((spec) => spec.type !== null);
+  const pieSeries = series[0] as SeriesSpec;
+  const centerLabel = resolveString(component.centerLabel, dataModel, base);
+  const centerValue = resolveDynamic(component.centerValue, dataModel, base);
+
   return (
     <div className="flex w-full flex-col gap-2">
       {title.length > 0 && <div className="font-medium text-sm">{title}</div>}
+      {legendPath ? (
+        <div className="flex flex-wrap gap-3 text-xs">
+          {series.map((spec) => {
+            const hidden = hiddenSeries.has(spec.key);
+            return (
+              <button
+                key={spec.key}
+                type="button"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  hidden && "opacity-45",
+                )}
+                aria-pressed={!hidden}
+                onClick={() => {
+                  if (disabled) return;
+                  if (selection?.mode === "series") {
+                    setValue(selection.pointer, {
+                      mode: "series",
+                      seriesKey: spec.key,
+                      seriesLabel: spec.label,
+                    });
+                    return;
+                  }
+                  const next = new Set(hiddenSeries);
+                  if (hidden) next.delete(spec.key);
+                  else next.add(spec.key);
+                  setValue(legendPath, [...next]);
+                }}
+              >
+                <span
+                  className="size-2 rounded-[2px]"
+                  style={{ backgroundColor: `var(--color-${spec.key})` }}
+                />
+                {spec.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <ChartContainer
         config={config}
         style={{ height }}
@@ -473,73 +866,204 @@ export function ChartView({ component, base }: ViewProps) {
             "cursor-crosshair select-none",
         )}
         aria-label={xLabel ? `${title || "Chart"} by ${xLabel}` : undefined}
+        aria-description={description || undefined}
       >
-        {variant === "bar" ? (
-          <BarChart {...shared}>
+        {variant === "pie" || variant === "donut" ? (
+          <PieChart>
+            {tooltip}
+            <Pie
+              data={rows}
+              dataKey={pieSeries.key}
+              nameKey={xKey}
+              innerRadius={variant === "donut" ? "55%" : 0}
+              outerRadius="82%"
+              paddingAngle={2}
+              isAnimationActive={false}
+              onClick={selectSeries(pieSeries)}
+            >
+              {rows.map((_, index) => (
+                <Cell
+                  // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
+                  key={index}
+                  fill={`var(--chart-${(index % 5) + 1})`}
+                />
+              ))}
+            </Pie>
+            {variant === "donut" &&
+            (centerLabel || centerValue !== undefined) ? (
+              <text
+                x="50%"
+                y="50%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {centerValue !== undefined ? (
+                  <tspan
+                    x="50%"
+                    dy="-0.4em"
+                    className="fill-foreground font-semibold text-sm"
+                  >
+                    {toDisplayString(centerValue)}
+                  </tspan>
+                ) : null}
+                {centerLabel ? (
+                  <tspan
+                    x="50%"
+                    dy={centerValue !== undefined ? "1.5em" : "0"}
+                    className="fill-muted-foreground text-xs"
+                  >
+                    {centerLabel}
+                  </tspan>
+                ) : null}
+              </text>
+            ) : null}
+            {legend}
+          </PieChart>
+        ) : variant === "scatter" || variant === "bubble" ? (
+          <ScatterChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
+            {tooltip}
+            {variant === "bubble" && sizeKey ? (
+              <ZAxis dataKey={sizeKey} range={[48, 360]} />
+            ) : null}
+            <Scatter
+              data={rows}
+              name={pieSeries.label}
+              fill={`var(--color-${pieSeries.key})`}
+              dataKey={pieSeries.key}
+              isAnimationActive={false}
+            />
+          </ScatterChart>
+        ) : composed ? (
+          <ComposedChart {...shared}>
+            {grid}
+            {xAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
-            {series.map((spec) => (
-              <Bar
-                key={spec.key}
-                dataKey={spec.key}
-                fill={`var(--color-${spec.key})`}
-                radius={4}
-                stackId={stacked ? "stack" : undefined}
-                onClick={selectBar}
-                isAnimationActive={false}
-              >
-                {cells(spec)}
-              </Bar>
-            ))}
+            {referenceAreas}
+            {referenceLineMarks}
+            {series.map(renderSeries)}
+          </ComposedChart>
+        ) : variant === "bar" ? (
+          <BarChart {...shared}>
+            {grid}
+            {xAxis}
+            {yAxisViews}
+            {tooltip}
+            {legend}
+            {rangeArea}
+            {referenceAreas}
+            {referenceLineMarks}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Bar
+                  key={spec.key}
+                  dataKey={spec.key}
+                  fill={`var(--color-${spec.key})`}
+                  radius={4}
+                  stackId={stackId(spec)}
+                  onClick={selectSeries(spec)}
+                  isAnimationActive={false}
+                >
+                  {cells(spec)}
+                </Bar>
+              ))}
           </BarChart>
         ) : variant === "area" ? (
           <AreaChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
-            {series.map((spec) => (
-              <Area
-                key={spec.key}
-                type="monotone"
-                dataKey={spec.key}
-                stroke={`var(--color-${spec.key})`}
-                fill={`var(--color-${spec.key})`}
-                fillOpacity={0.25}
-                strokeWidth={2}
-                stackId={stacked ? "stack" : undefined}
-                isAnimationActive={false}
-              />
-            ))}
+            {referenceAreas}
+            {referenceLineMarks}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Area
+                  key={spec.key}
+                  type="monotone"
+                  dataKey={spec.key}
+                  stroke={`var(--color-${spec.key})`}
+                  fill={`var(--color-${spec.key})`}
+                  fillOpacity={0.25}
+                  strokeWidth={2}
+                  stackId={stackId(spec)}
+                  connectNulls={spec.connectNulls}
+                  isAnimationActive={false}
+                />
+              ))}
           </AreaChart>
         ) : (
           <LineChart {...shared}>
             {grid}
             {xAxis}
-            {yAxis}
+            {yAxisViews}
             {tooltip}
             {legend}
             {rangeArea}
-            {series.map((spec) => (
-              <Line
-                key={spec.key}
-                type="monotone"
-                dataKey={spec.key}
-                stroke={`var(--color-${spec.key})`}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            ))}
+            {referenceAreas}
+            {referenceLineMarks}
+            {series
+              .filter((spec) => !hiddenSeries.has(spec.key))
+              .map((spec) => (
+                <Line
+                  key={spec.key}
+                  type="monotone"
+                  dataKey={spec.key}
+                  stroke={`var(--color-${spec.key})`}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={spec.connectNulls}
+                  isAnimationActive={false}
+                />
+              ))}
           </LineChart>
         )}
       </ChartContainer>
+      {component.dataTable === true ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground">
+            View data table
+          </summary>
+          <div className="mt-2 max-h-52 overflow-auto rounded-md border">
+            <table className="w-full border-collapse text-left">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">{xLabel || xKey}</th>
+                  {series.map((spec) => (
+                    <th key={spec.key} className="px-2 py-1.5 font-medium">
+                      {spec.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: chart rows are positional and categories may repeat
+                  <tr key={index} className="border-t">
+                    <td className="px-2 py-1.5">
+                      {toDisplayString(row[xKey])}
+                    </td>
+                    {series.map((spec) => (
+                      <td key={spec.key} className="px-2 py-1.5 tabular-nums">
+                        {toDisplayString(row[spec.key])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -585,6 +1109,14 @@ function formatDelta(delta: number): string {
   }
 }
 
+function parseSparkline(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const number = toNumber(entry);
+    return number === null ? [] : [number];
+  });
+}
+
 export function StatView({ component, base }: ViewProps) {
   const { dataModel } = useA2uiSurface();
   const label = resolveString(component.label, dataModel, base);
@@ -592,6 +1124,49 @@ export function StatView({ component, base }: ViewProps) {
   const format = toDisplayString(component.format) || "number";
   const currency = toDisplayString(component.currency) || "USD";
   const delta = toNumber(resolveDynamic(component.delta, dataModel, base));
+  const comparisonLabel = resolveString(
+    component.comparisonLabel,
+    dataModel,
+    base,
+  );
+  const description = resolveString(component.description, dataModel, base);
+  const trend = toDisplayString(component.trend);
+  const status = toDisplayString(component.status) || "neutral";
+  const sparkline = parseSparkline(
+    resolveDynamic(component.sparkline, dataModel, base),
+  );
+  const effectiveTrend =
+    trend === "up" || trend === "down" || trend === "neutral"
+      ? trend
+      : delta === null
+        ? "neutral"
+        : delta >= 0
+          ? "up"
+          : "down";
+  const trendClass =
+    status === "positive" || (status === "neutral" && effectiveTrend === "up")
+      ? "text-green-600 dark:text-green-400"
+      : status === "negative" ||
+          (status === "neutral" && effectiveTrend === "down")
+        ? "text-red-600 dark:text-red-400"
+        : status === "warning"
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-muted-foreground";
+  const sparklinePoints =
+    sparkline.length > 1
+      ? (() => {
+          const min = Math.min(...sparkline);
+          const max = Math.max(...sparkline);
+          const range = max - min || 1;
+          return sparkline
+            .map((value, index) => {
+              const x = (index / (sparkline.length - 1)) * 100;
+              const y = 100 - ((value - min) / range) * 100;
+              return `${x},${y}`;
+            })
+            .join(" ");
+        })()
+      : null;
 
   return (
     <div className="flex min-w-28 flex-col gap-0.5 rounded-lg border bg-card px-3 py-2 shadow-xs">
@@ -601,23 +1176,168 @@ export function StatView({ component, base }: ViewProps) {
       <span className="font-semibold text-lg tabular-nums leading-tight">
         {formatStatValue(raw, format, currency)}
       </span>
+      {sparklinePoints ? (
+        <svg
+          aria-label="Recent trend"
+          className="h-7 w-full overflow-visible"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <polyline
+            fill="none"
+            points={sparklinePoints}
+            stroke="currentColor"
+            strokeWidth="8"
+            vectorEffect="non-scaling-stroke"
+            className={trendClass}
+          />
+        </svg>
+      ) : null}
       {delta !== null && (
         <span
           className={cn(
             "flex items-center gap-1 text-xs tabular-nums",
-            delta >= 0
-              ? "text-green-600 dark:text-green-400"
-              : "text-red-600 dark:text-red-400",
+            trendClass,
           )}
         >
-          {delta >= 0 ? (
+          {effectiveTrend === "up" ? (
             <TrendingUp className="size-3" />
-          ) : (
+          ) : effectiveTrend === "down" ? (
             <TrendingDown className="size-3" />
+          ) : (
+            <Minus className="size-3" />
           )}
           {formatDelta(delta)}
+          {comparisonLabel.length > 0 ? (
+            <span className="text-muted-foreground">{comparisonLabel}</span>
+          ) : null}
         </span>
       )}
+      {description.length > 0 ? (
+        <span className="text-muted-foreground text-xs">{description}</span>
+      ) : null}
+    </div>
+  );
+}
+
+export function SparklineView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const values = parseSparkline(
+    resolveDynamic(component.data, dataModel, base),
+  );
+  const color = toDisplayString(component.color);
+  if (values.length < 2) return <ChartPlaceholder />;
+  const min = Math.min(...values);
+  const range = Math.max(...values) - min || 1;
+  const points = values
+    .map(
+      (value, index) =>
+        `${(index / (values.length - 1)) * 100},${100 - ((value - min) / range) * 100}`,
+    )
+    .join(" ");
+  return (
+    <div className="flex min-w-28 flex-col gap-1">
+      {label && <span className="text-muted-foreground text-xs">{label}</span>}
+      <svg
+        aria-label={label || "Trend"}
+        className="h-10 w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <polyline
+          fill="none"
+          points={points}
+          stroke={`var(--${CHART_COLOR_TOKENS.has(color) ? color : "chart-1"})`}
+          strokeWidth="4"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
+  );
+}
+
+export function ProgressView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const value = toNumber(resolveDynamic(component.value, dataModel, base)) ?? 0;
+  const max = toNumber(resolveDynamic(component.max, dataModel, base));
+  const target = toNumber(resolveDynamic(component.target, dataModel, base));
+  const ratio =
+    max !== null && max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const targetRatio =
+    target !== null && max !== null && max > 0
+      ? Math.max(0, Math.min(1, target / max))
+      : null;
+  const format = toDisplayString(component.format);
+  const display =
+    format === "percent"
+      ? formatChartValue(ratio, {
+          label: "",
+          format: "percent",
+          currency: "USD",
+          maximumFractionDigits: 0,
+          includeZero: false,
+          min: null,
+          max: null,
+        })
+      : `${new Intl.NumberFormat().format(value)} / ${new Intl.NumberFormat().format(max ?? 0)}`;
+  return (
+    <div className="flex min-w-36 flex-col gap-1">
+      <div className="flex justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="tabular-nums">{display}</span>
+      </div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary"
+          style={{ width: `${ratio * 100}%` }}
+        />
+        {targetRatio !== null && (
+          <span
+            className="absolute top-0 h-full w-px bg-foreground"
+            style={{ left: `${targetRatio * 100}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function GaugeView({ component, base }: ViewProps) {
+  const { dataModel } = useA2uiSurface();
+  const label = resolveString(component.label, dataModel, base);
+  const value = toNumber(resolveDynamic(component.value, dataModel, base)) ?? 0;
+  const min = toNumber(resolveDynamic(component.min, dataModel, base)) ?? 0;
+  const max = toNumber(resolveDynamic(component.max, dataModel, base)) ?? 1;
+  const ratio =
+    max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
+  const format = toDisplayString(component.format);
+  const display =
+    format === "percent"
+      ? formatChartValue(ratio, {
+          label: "",
+          format: "percent",
+          currency: "USD",
+          maximumFractionDigits: 0,
+          includeZero: false,
+          min: null,
+          max: null,
+        })
+      : new Intl.NumberFormat().format(value);
+  return (
+    <div className="flex min-w-28 flex-col items-center gap-1">
+      <div
+        className="relative grid size-20 place-items-center rounded-full"
+        style={{
+          background: `conic-gradient(var(--chart-2) ${ratio * 360}deg, var(--muted) 0deg)`,
+        }}
+      >
+        <div className="grid size-14 place-items-center rounded-full bg-card font-semibold text-sm tabular-nums">
+          {display}
+        </div>
+      </div>
+      {label && <span className="text-muted-foreground text-xs">{label}</span>}
     </div>
   );
 }

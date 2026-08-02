@@ -13,3 +13,10 @@ It listens on port `8080` by default. Set `DEMO_AGENT_PORT` to change it.
 - `POST /v1/responses` - Open Responses endpoint
 - `GET /.well-known/agent-card.json` - A2A agent card
 - `GET /health` - process health
+
+Ask the demo agent for a **revenue chart** to see the Charts v1 composed-chart
+example: actuals and expenses render as bars, while a dashed revenue-plan line
+shows how `series[].type`, `lineStyle`, and missing values work together. The
+dual currency and percentage axes, shaded target zone, and labeled target
+threshold demonstrate `yAxes`, `referenceBands`, and
+`referenceLines`.

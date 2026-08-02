@@ -396,13 +396,51 @@ describe("handleDemoResponses", () => {
     /* The extension components, wired for the selection loop. */
     const chart = surface.components.report_chart;
     expect(chart?.component).toBe("Chart");
-    expect(chart?.series).toHaveLength(2);
+    expect(chart?.series).toEqual([
+      expect.objectContaining({ key: "expenses", type: "bar" }),
+      expect.objectContaining({
+        key: "forecast",
+        type: "line",
+        lineStyle: "dashed",
+        connectNulls: false,
+      }),
+      expect.objectContaining({ key: "revenue", type: "bar" }),
+      expect.objectContaining({ key: "margin", type: "line", axis: "right" }),
+    ]);
+    expect(chart?.yAxes).toMatchObject({
+      left: { format: "currency", maximumFractionDigits: 0, includeZero: true },
+      right: {
+        format: "percent",
+        maximumFractionDigits: 0,
+        includeZero: true,
+        min: 0,
+        max: 0.4,
+      },
+    });
     expect(chart?.selection).toEqual({ path: "/selection", mode: "point" });
+    expect(chart?.description).toContain("Actual revenue and expenses");
+    expect(chart?.legend).toEqual({ path: "/hiddenSeries" });
+    expect(chart?.dataTable).toBe(true);
+    expect(chart?.referenceBands).toEqual([
+      expect.objectContaining({ from: 230_000, to: 260_000, label: "" }),
+    ]);
+    expect(chart?.referenceLines).toEqual([
+      expect.objectContaining({ value: 250_000, label: "Target: $250k" }),
+    ]);
     expect(surface.components.stat_margin?.component).toBe("Stat");
+    expect(surface.components.stat_margin).toMatchObject({
+      comparisonLabel: "vs. January",
+      trend: "up",
+      status: "positive",
+      sparkline: { path: "/report/stats/marginTrend" },
+    });
 
     /* Server-seeded data: rows plus a preselected latest month. */
     const monthly = pointerGet(surface.dataModel, "/report/monthly");
     expect(Array.isArray(monthly) && monthly.length).toBe(8);
+    expect((monthly as Array<{ forecast: number | null }>).at(-1)?.forecast).toBe(
+      null,
+    );
     expect(pointerGet(surface.dataModel, "/selection/x")).toBe("Aug");
   });
 
@@ -505,6 +543,69 @@ describe("handleDemoResponses", () => {
     expect(insightGroup?.showFallback).toBe(false);
   });
 
+  it("returns a single-series donut chart for revenue mix asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show revenue mix")],
+    });
+    const call = state.items.find((item) => item.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_revenue_mix");
+    const output = state.items.find(
+      (item) => item.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart",
+      variant: "donut",
+      series: [{ key: "revenue" }],
+      sort: "descending",
+      centerLabel: "FY26 revenue",
+    });
+  });
+
+  it("returns a stacked-percent chart for channel share asks", async () => {
+    const { state } = await streamAndReduce({ input: [userMessage("show channel share")] });
+    const output = state.items.find((item) => item.type === "function_call_output") as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart", variant: "bar", normalize: "stackedPercent",
+      selection: { path: "/selectedSeries", mode: "series" },
+    });
+  });
+
+  it("returns a numeric bubble chart for opportunity asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show account opportunity")],
+    });
+    const call = state.items.find((item) => item.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_account_opportunity");
+    const output = state.items.find(
+      (item) => item.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    expect(reduceA2uiMessages(messages)[0]?.components.chart).toMatchObject({
+      component: "Chart",
+      variant: "bubble",
+      x: { key: "engagement", type: "number" },
+      size: { key: "value" },
+    });
+  });
+
+  it("returns focused progress and sparkline leaves for delivery health asks", async () => {
+    const { state } = await streamAndReduce({ input: [userMessage("show delivery health")] });
+    const call = state.items.find((item) => item.type === "function_call") as { name: string };
+    expect(call.name).toBe("get_delivery_health");
+    const output = state.items.find((item) => item.type === "function_call_output") as FunctionCallOutputItem;
+    const messages = extractA2uiResources(output.output).resources[0]?.messages ?? [];
+    const components = reduceA2uiMessages(messages)[0]?.components;
+    expect(components?.progress?.component).toBe("Progress");
+    expect(components?.sparkline?.component).toBe("Sparkline");
+    expect(components?.gauge?.component).toBe("Gauge");
+  });
+
   it("returns a range-selectable traffic chart for trend asks", async () => {
     const { state } = await streamAndReduce({
       input: [userMessage("what's the traffic trend?")],
@@ -531,6 +632,7 @@ describe("handleDemoResponses", () => {
     const chart = surface.components.traffic_chart;
     expect(chart?.component).toBe("Chart");
     expect(chart?.variant).toBe("area");
+    expect(chart?.x).toMatchObject({ type: "time", format: "short" });
     expect(chart?.selection).toEqual({ path: "/range", mode: "range" });
 
     /* Server-seeded data: 45 daily rows plus a full-window selection. */
@@ -540,8 +642,8 @@ describe("handleDemoResponses", () => {
       mode: "range",
       startIndex: 0,
       endIndex: 44,
-      from: "May 1",
-      to: "Jun 14",
+      from: "2026-05-01T00:00:00.000Z",
+      to: "2026-06-14T00:00:00.000Z",
     });
   });
 
@@ -580,8 +682,8 @@ describe("handleDemoResponses", () => {
       mode: "range",
       startIndex: 7,
       endIndex: 13,
-      from: "May 8",
-      to: "May 14",
+      from: "2026-05-08T00:00:00.000Z",
+      to: "2026-05-14T00:00:00.000Z",
     });
     const call = state.items.find((i) => i.type === "function_call") as {
       name: string;
@@ -589,8 +691,8 @@ describe("handleDemoResponses", () => {
     };
     expect(call.name).toBe("summarize_range");
     expect(JSON.parse(call.arguments)).toEqual({
-      from: "May 8",
-      to: "May 14",
+      from: "2026-05-08T00:00:00.000Z",
+      to: "2026-05-14T00:00:00.000Z",
       days: 7,
     });
 
@@ -620,8 +722,8 @@ describe("handleDemoResponses", () => {
       (i) => i.type === "function_call",
     ) as { arguments: string };
     expect(JSON.parse(clampedCall.arguments)).toEqual({
-      from: "May 1",
-      to: "Jun 14",
+      from: "2026-05-01T00:00:00.000Z",
+      to: "2026-06-14T00:00:00.000Z",
       days: 45,
     });
   });

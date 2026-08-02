@@ -983,6 +983,22 @@ const LazyStatView = lazy(() =>
   })),
 );
 
+const LazySparklineView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.SparklineView,
+  })),
+);
+const LazyProgressView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.ProgressView,
+  })),
+);
+const LazyGaugeView = lazy(() =>
+  import("~/components/a2ui/charts").then((module) => ({
+    default: module.GaugeView,
+  })),
+);
+
 /**
  * Contains failures from the charting library (or a chunk that failed to
  * load) to an inert placeholder: a malformed chart resource must degrade
@@ -1040,10 +1056,62 @@ function SuspendedStatView(props: ViewProps) {
   );
 }
 
+function SuspendedSparklineView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-10 w-full animate-pulse rounded bg-muted/40"
+          />
+        }
+      >
+        <LazySparklineView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+function SuspendedProgressView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-10 w-36 animate-pulse rounded bg-muted/40"
+          />
+        }
+      >
+        <LazyProgressView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+function SuspendedGaugeView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="size-20 animate-pulse rounded-full bg-muted/40"
+          />
+        }
+      >
+        <LazyGaugeView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
 const chartsComponentViews: A2uiComponentViews = {
   ...basicComponentViews,
   Chart: SuspendedChartView,
   Stat: SuspendedStatView,
+  Sparkline: SuspendedSparklineView,
+  Progress: SuspendedProgressView,
+  Gauge: SuspendedGaugeView,
 };
 
 /**

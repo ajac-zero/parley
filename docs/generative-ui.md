@@ -136,9 +136,10 @@ Parley to download or execute anything.
 Parley ships a renderer for the independently owned
 [ajac-zero Charts v1 catalog](https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json),
 which composes the official Basic Catalog v0.9.1 with two leaf components —
-`Chart` (line/bar/area series
-over data-model rows, with optional point/range selection written back
-through two-way binding) and `Stat` (a labeled headline number with an
+`Chart` (line/bar/area series, including composed Cartesian charts with
+per-series rendering and stack controls, over data-model rows, with optional
+point/range selection written back through two-way binding, plus target lines
+and shaded reference bands) and `Stat` (a labeled headline number with an
 optional delta). Because both extensions are leaves, every Basic Catalog
 resource remains valid under the charts catalog unchanged; adding a new
 container component would be a breaking change and would require a new
