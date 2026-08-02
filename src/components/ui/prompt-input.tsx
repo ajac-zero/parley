@@ -21,6 +21,7 @@ import {
 } from "react";
 import { CornerDownLeft, ImagePlus, Loader2, Plus, Square, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { useI18n } from "~/components/i18n";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -265,6 +266,7 @@ export const PromptInput = ({
   children,
   ...props
 }: PromptInputProps) => {
+  const { t } = useI18n();
   const controller = useOptionalPromptInputController();
   const usingProvider = !!controller;
 
@@ -447,12 +449,12 @@ export const PromptInput = ({
     <LocalAttachmentsContext.Provider value={attachmentsCtx}>
       <input
         accept={accept}
-        aria-label="Upload files"
+        aria-label={t("uploadFiles")}
         className="hidden"
         multiple={multiple}
         onChange={handleChange}
         ref={inputRef}
-        title="Upload files"
+        title={t("uploadFiles")}
         type="file"
       />
       <form
@@ -574,6 +576,7 @@ export const PromptInputSubmit = ({
   children,
   ...props
 }: PromptInputSubmitProps) => {
+  const { t } = useI18n();
   const isGenerating = status === "submitted" || status === "streaming";
 
   let icon = <CornerDownLeft className="size-4" />;
@@ -595,7 +598,7 @@ export const PromptInputSubmit = ({
 
   return (
     <Button
-      aria-label={isGenerating ? "Stop generating" : "Send message"}
+      aria-label={isGenerating ? t("stopGenerating") : t("sendMessage")}
       className={cn("size-9 shrink-0 rounded-full", className)}
       onClick={handleClick}
       size="icon"
@@ -625,9 +628,21 @@ export const PromptInputActionMenuTrigger = ({
   children,
   ...props
 }: PromptInputActionMenuTriggerProps) => (
-  <DropdownMenuTrigger asChild>
-    <Button
-      aria-label="More actions"
+  <PromptInputActionMenuTriggerInner className={className} {...props}>
+    {children}
+  </PromptInputActionMenuTriggerInner>
+);
+
+function PromptInputActionMenuTriggerInner({
+  className,
+  children,
+  ...props
+}: PromptInputActionMenuTriggerProps) {
+  const { t } = useI18n();
+  return (
+    <DropdownMenuTrigger asChild>
+      <Button
+        aria-label={t("moreActions")}
       className={cn(
         "size-9 shrink-0 rounded-full text-muted-foreground",
         className,
@@ -636,11 +651,12 @@ export const PromptInputActionMenuTrigger = ({
       type="button"
       variant="ghost"
       {...props}
-    >
-      {children ?? <Plus className="size-4.5" />}
-    </Button>
-  </DropdownMenuTrigger>
-);
+      >
+        {children ?? <Plus className="size-4.5" />}
+      </Button>
+    </DropdownMenuTrigger>
+  );
+}
 
 export type PromptInputActionMenuContentProps = ComponentProps<
   typeof DropdownMenuContent

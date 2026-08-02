@@ -3,6 +3,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { PanelLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppSidebar } from "~/components/app-sidebar";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { chatStore } from "~/lib/chat-store";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
+  const { t } = useI18n();
   const { config, session } = Route.useRouteContext();
   const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -75,7 +77,7 @@ function AppLayout() {
       {/* Mobile sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-[290px] p-0 md:hidden">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SheetTitle className="sr-only">{t("navigation")}</SheetTitle>
           <AppSidebar
             config={config}
             user={session.user}
@@ -92,7 +94,7 @@ function AppLayout() {
             size="icon"
             className="text-muted-foreground"
             onClick={() => setMobileOpen(true)}
-            aria-label="Open sidebar"
+            aria-label={t("openSidebar")}
           >
             <PanelLeft className="size-5" />
           </Button>

@@ -3,6 +3,7 @@ import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { Check, Copy, ExternalLink, Link2, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -51,22 +52,23 @@ export const Route = createFileRoute("/_app/admin")({
 type Tab = "branding" | "catalogs" | "users";
 
 function AdminPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("branding");
 
   return (
     <main className="h-full flex-1 overflow-y-auto scrollbar-thin">
       <div className="mx-auto w-full max-w-3xl px-4 pt-16 pb-16 md:px-6">
-        <h1 className="font-semibold text-2xl tracking-tight">Admin</h1>
+        <h1 className="font-semibold text-2xl tracking-tight">{t("admin")}</h1>
         <p className="mt-1 text-muted-foreground text-sm">
-          Manage this deployment: branding, access, and members.
+          {t("adminDescription")}
         </p>
 
         <div className="mt-6 flex gap-1 border-b">
           {(
             [
-              ["branding", "Branding & access"],
-              ["catalogs", "Catalogs"],
-              ["users", "Members"],
+              ["branding", t("brandingAccess")],
+              ["catalogs", t("catalogs")],
+              ["users", t("members")],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -102,6 +104,7 @@ function AdminPage() {
 /* -------------------------------- catalogs ------------------------------- */
 
 function CatalogsTab() {
+  const { t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery(adminSettingsQuery());
@@ -117,7 +120,7 @@ function CatalogsTab() {
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
       await router.invalidate();
-      toast.success("Catalog settings saved.");
+      toast.success(t("catalogSettingsSaved"));
     },
     onError: (error) => toast.error(error.message),
   });
@@ -125,11 +128,9 @@ function CatalogsTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-medium text-lg">Installed catalog plugins</h2>
+        <h2 className="font-medium text-lg">{t("installedCatalogPlugins")}</h2>
         <p className="mt-1 text-muted-foreground text-sm">
-          These trusted renderers are installed in this Parley build. Disabling
-          one falls back to the tool's text response instead of rendering its
-          UI.
+          {t("catalogPluginsDescription")}
         </p>
       </div>
 
@@ -146,7 +147,7 @@ function CatalogsTab() {
                   {plugin.name}
                   {plugin.builtin && (
                     <span className="rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground text-xs">
-                      Built in
+                      {t("builtIn")}
                     </span>
                   )}
                   <Dialog>
@@ -158,7 +159,7 @@ function CatalogsTab() {
                         className="text-muted-foreground"
                       >
                         <Link2 />
-                        Catalog ID
+                        {t("catalogId")}
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
@@ -185,7 +186,9 @@ function CatalogsTab() {
                 </p>
               </div>
               <Switch
-                aria-label={`${checked ? "Disable" : "Enable"} ${plugin.name}`}
+                aria-label={t(checked ? "disable" : "enable", {
+                  name: plugin.name,
+                })}
                 checked={checked}
                 onCheckedChange={(next) =>
                   setEnabled((current) =>
@@ -205,7 +208,7 @@ function CatalogsTab() {
         disabled={!settings || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
-        {mutation.isPending ? "Saving…" : "Save catalogs"}
+        {mutation.isPending ? t("saving") : t("saveCatalogs")}
       </Button>
     </div>
   );
@@ -225,6 +228,7 @@ function isNavigableUrl(catalogId: string): boolean {
 }
 
 function CatalogIdRow({ catalogId }: { catalogId: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -247,7 +251,7 @@ function CatalogIdRow({ catalogId }: { catalogId: string }) {
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Open catalog ID"
+          aria-label={t("openCatalogId")}
           asChild
         >
           <a href={catalogId} target="_blank" rel="noreferrer noopener">
@@ -259,7 +263,7 @@ function CatalogIdRow({ catalogId }: { catalogId: string }) {
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label={copied ? "Catalog ID copied" : "Copy catalog ID"}
+        aria-label={copied ? t("catalogIdCopied") : t("copyCatalogId")}
         onClick={copy}
       >
         {copied ? <Check /> : <Copy />}
@@ -271,6 +275,7 @@ function CatalogIdRow({ catalogId }: { catalogId: string }) {
 /* -------------------------------- branding ------------------------------- */
 
 function BrandingTab() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery(adminSettingsQuery());
   const { data: agents = [] } = useQuery(agentsQuery());
@@ -318,7 +323,7 @@ function BrandingTab() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
-      toast.success("Settings saved. Reload to see branding changes.");
+      toast.success(t("settingsSaved"));
     },
     onError: (error) => toast.error(error.message),
   });
@@ -334,10 +339,10 @@ function BrandingTab() {
       }}
     >
       <section className="space-y-4">
-        <h2 className="font-medium text-lg">Branding</h2>
+        <h2 className="font-medium text-lg">{t("branding")}</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="app-name">App name</Label>
+            <Label htmlFor="app-name">{t("appName")}</Label>
             <Input
               id="app-name"
               value={form.appName}
@@ -345,7 +350,7 @@ function BrandingTab() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="app-tagline">Tagline</Label>
+            <Label htmlFor="app-tagline">{t("tagline")}</Label>
             <Input
               id="app-tagline"
               value={form.appTagline}
@@ -354,27 +359,27 @@ function BrandingTab() {
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="app-logo">Logo URL</Label>
+          <Label htmlFor="app-logo">{t("logoUrl")}</Label>
           <Input
             id="app-logo"
             value={form.appLogoUrl}
             onChange={(e) => setForm({ ...form, appLogoUrl: e.target.value })}
-            placeholder="https://…/logo.svg (leave empty for the default mark)"
+            placeholder={t("logoUrlPlaceholder")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="app-disclaimer">Composer disclaimer</Label>
+          <Label htmlFor="app-disclaimer">{t("composerDisclaimer")}</Label>
           <Input
             id="app-disclaimer"
             value={form.chatDisclaimer}
             onChange={(e) =>
               setForm({ ...form, chatDisclaimer: e.target.value })
             }
-            placeholder="Agents can make mistakes. Verify important information."
+            placeholder={t("agentsCanMakeMistakes")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="custom-css">Theme CSS</Label>
+          <Label htmlFor="custom-css">{t("themeCss")}</Label>
           <Textarea
             id="custom-css"
             value={form.customCss}
@@ -398,12 +403,12 @@ function BrandingTab() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-medium text-lg">Access</h2>
+        <h2 className="font-medium text-lg">{t("access")}</h2>
         <label className="flex items-center justify-between gap-4 rounded-xl border p-4 text-sm">
           <span>
-            <span className="block font-medium">Open registration</span>
+            <span className="block font-medium">{t("openRegistration")}</span>
             <span className="text-muted-foreground">
-              Allow anyone to create an account on this deployment.
+              {t("openRegistrationDescription")}
             </span>
           </span>
           <Switch
@@ -415,9 +420,9 @@ function BrandingTab() {
         </label>
         <label className="flex items-center justify-between gap-4 rounded-xl border p-4 text-sm">
           <span>
-            <span className="block font-medium">Personal agents</span>
+            <span className="block font-medium">{t("personalAgents")}</span>
             <span className="text-muted-foreground">
-              Let members register their own agent endpoints.
+              {t("personalAgentsDescription")}
             </span>
           </span>
           <Switch
@@ -426,7 +431,7 @@ function BrandingTab() {
           />
         </label>
         <div className="space-y-1.5">
-          <Label>Default agent for new chats</Label>
+          <Label>{t("defaultAgent")}</Label>
           <Select
             value={form.defaultAgentId}
             onValueChange={(v) => setForm({ ...form, defaultAgentId: v })}
@@ -435,7 +440,7 @@ function BrandingTab() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No default</SelectItem>
+              <SelectItem value="none">{t("noDefault")}</SelectItem>
               {globalAgents.map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   {agent.name}
@@ -447,7 +452,7 @@ function BrandingTab() {
       </section>
 
       <Button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "Saving…" : "Save settings"}
+        {mutation.isPending ? t("saving") : t("saveSettings")}
       </Button>
     </form>
   );
@@ -456,6 +461,7 @@ function BrandingTab() {
 /* ---------------------------------- users -------------------------------- */
 
 function UsersTab() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: users = [] } = useQuery(usersQuery());
 
@@ -487,9 +493,9 @@ function UsersTab() {
       <table className="w-full text-sm">
         <thead className="bg-muted/50 text-left">
           <tr>
-            <th className="px-4 py-2.5 font-medium">Member</th>
-            <th className="px-4 py-2.5 font-medium">Role</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium">{t("member")}</th>
+            <th className="px-4 py-2.5 font-medium">{t("role")}</th>
+            <th className="px-4 py-2.5 font-medium">{t("status")}</th>
             <th className="w-12 px-4 py-2.5" />
           </tr>
         </thead>
@@ -516,10 +522,12 @@ function UsersTab() {
               <td className="px-4 py-3">
                 {user.banned ? (
                   <span className="rounded-full border border-destructive/40 px-2 py-0.5 text-destructive text-xs">
-                    banned
+                    {t("banned")}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground text-xs">active</span>
+                  <span className="text-muted-foreground text-xs">
+                    {t("active")}
+                  </span>
                 )}
               </td>
               <td className="px-4 py-3">
@@ -529,7 +537,7 @@ function UsersTab() {
                       variant="ghost"
                       size="icon"
                       className="size-7"
-                      aria-label={`Manage ${user.email}`}
+                      aria-label={t("manageUser", { email: user.email })}
                     >
                       <MoreHorizontal className="size-4" />
                     </Button>
@@ -543,7 +551,9 @@ function UsersTab() {
                         })
                       }
                     >
-                      {user.role === "admin" ? "Demote to user" : "Make admin"}
+                      {user.role === "admin"
+                        ? t("demoteToUser")
+                        : t("makeAdmin")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() =>
@@ -553,21 +563,21 @@ function UsersTab() {
                         })
                       }
                     >
-                      {user.banned ? "Unban" : "Ban"}
+                      {user.banned ? t("unban") : t("ban")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"
                       onClick={() => {
                         if (
                           window.confirm(
-                            `Delete ${user.email} and all their data? This cannot be undone.`,
+                            t("deleteUserConfirmation", { email: user.email }),
                           )
                         ) {
                           removeMutation.mutate(user.id);
                         }
                       }}
                     >
-                      Delete account
+                      {t("deleteAccount")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

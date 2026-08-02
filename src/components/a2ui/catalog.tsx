@@ -85,6 +85,7 @@ import {
 } from "react";
 import { useA2uiSurface } from "~/components/a2ui/context";
 import { Markdown } from "~/components/chat/markdown";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -362,6 +363,7 @@ function TabsView({ component, base }: ViewProps) {
 }
 
 function ModalView({ component, base }: ViewProps) {
+  const { t } = useI18n();
   const { surface } = useA2uiSurface();
   const [open, setOpen] = useState(false);
   const triggerId =
@@ -385,7 +387,7 @@ function ModalView({ component, base }: ViewProps) {
         </DialogTrigger>
       )}
       <DialogContent className="max-h-[80vh] overflow-y-auto">
-        <DialogTitle className="sr-only">Dialog</DialogTitle>
+        <DialogTitle className="sr-only">{t("dialog")}</DialogTitle>
         {contentId && <CatalogNode id={contentId} base={base} />}
       </DialogContent>
     </Dialog>
@@ -750,6 +752,7 @@ function CheckBoxView({ component, base }: ViewProps) {
 }
 
 function ChoicePickerView({ component, base }: ViewProps) {
+  const { t } = useI18n();
   const { dataModel, setValue, disabled } = useA2uiSurface();
   const [filter, setFilter] = useState("");
   const pointer = boundPointer(component.value, base);
@@ -801,7 +804,7 @@ function ChoicePickerView({ component, base }: ViewProps) {
       {filterable && (
         <Input
           value={filter}
-          placeholder="Filter…"
+          placeholder={t("filter")}
           disabled={disabled}
           onChange={(e) => setFilter(e.target.value)}
         />

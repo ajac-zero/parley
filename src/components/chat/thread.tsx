@@ -13,6 +13,7 @@ import {
   UnknownItemBlock,
   UserMessage,
 } from "~/components/chat/items";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import {
   Conversation,
@@ -308,6 +309,7 @@ export const Thread = memo(function Thread({
    */
   composerCardHeight?: number;
 }) {
+  const { t } = useI18n();
   const pairedOutputs = useMemo(() => pairOutputsByCall(entries), [entries]);
 
   const lastAssistantKey = useMemo(() => {
@@ -474,7 +476,7 @@ export const Thread = memo(function Thread({
 
         {!active && !lastTurnError && lastTurnCancelled && (
           <div className="text-muted-foreground text-sm">
-            Generation stopped.
+            {t("generationStopped")}
           </div>
         )}
       </ConversationContent>
@@ -504,6 +506,7 @@ function ErrorBanner({
   onRetry?: () => void;
   onDismiss?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
       <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
@@ -511,12 +514,12 @@ function ErrorBanner({
       <div className="flex shrink-0 gap-2">
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry}>
-            Retry
+            {t("retry")}
           </Button>
         )}
         {onDismiss && (
           <Button variant="ghost" size="sm" onClick={onDismiss}>
-            Dismiss
+            {t("dismiss")}
           </Button>
         )}
       </div>

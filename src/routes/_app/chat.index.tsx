@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AgentPicker } from "~/components/agent-picker";
 import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
+import { useI18n } from "~/components/i18n";
 import { useActiveTurn } from "~/hooks/use-active-turn";
 import { useElementHeight } from "~/hooks/use-element-size";
 import { chatStore, NEW_CHAT_KEY } from "~/lib/chat-store";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_app/chat/")({
 const LAST_AGENT_KEY = "parley-last-agent";
 
 function NewChatPage() {
+  const { t } = useI18n();
   const { config, session } = Route.useRouteContext();
   const navigate = useNavigate();
   const { data: agents = [] } = useQuery(agentsQuery());
@@ -150,7 +152,7 @@ function NewChatPage() {
           <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24">
             <div className="w-full max-w-3xl">
               <h1 className="mb-8 text-center font-medium text-[28px] text-foreground/90 tracking-tight">
-                {greeting(session?.user.name)}
+                {greeting(session?.user.name, t)}
               </h1>
               <Composer
                 onSend={handleSend}
@@ -158,8 +160,8 @@ function NewChatPage() {
                 disabled={!selectedAgentId}
                 placeholder={
                   selectedAgent
-                    ? `Message ${selectedAgent.name}…`
-                    : "Add an agent to start chatting"
+                    ? `${t("messageYourAgent").replace("...", "")} ${selectedAgent.name}...`
+                    : t("addAgentToChat")
                 }
                 disclaimer={config.chatDisclaimer}
                 supportsAttachments={
@@ -176,7 +178,10 @@ function NewChatPage() {
   );
 }
 
-function greeting(name?: string): string {
+function greeting(
+  name: string | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   const hour = new Date().getHours();
   const timeOfDay =
     hour < 5
@@ -187,6 +192,14 @@ function greeting(name?: string): string {
           ? "afternoon"
           : "evening";
   const first = name?.split(/\s+/)[0];
-  if (timeOfDay === "night owl") return `Hello${first ? `, ${first}` : ""} 🌙`;
-  return `Good ${timeOfDay}${first ? `, ${first}` : ""}`;
+  const suffix = first ? `, ${first}` : "";
+  if (timeOfDay === "night owl") return t("greetingNight", { suffix });
+  return t(
+    timeOfDay === "morning"
+      ? "greetingMorning"
+      : timeOfDay === "afternoon"
+        ? "greetingAfternoon"
+        : "greetingEvening",
+    { suffix },
+  );
 }
