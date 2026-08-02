@@ -9,6 +9,7 @@ import {
 import { AgentTitle } from "~/components/agent-picker";
 import { Composer } from "~/components/chat/composer";
 import { buildThread, Thread } from "~/components/chat/thread";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import { useActiveTurn } from "~/hooks/use-active-turn";
 import { useElementHeight } from "~/hooks/use-element-size";
@@ -31,17 +32,23 @@ export const Route = createFileRoute("/_app/chat/$conversationId")({
     if (!detail) throw notFound();
   },
   component: ConversationPage,
-  notFoundComponent: () => (
-    <main className="flex h-full flex-1 flex-col items-center justify-center gap-3">
-      <p className="text-muted-foreground">This conversation doesn't exist.</p>
-      <Button asChild variant="outline">
-        <Link to="/chat">Start a new chat</Link>
-      </Button>
-    </main>
-  ),
+  notFoundComponent: ConversationNotFound,
 });
 
+function ConversationNotFound() {
+  const { t } = useI18n();
+  return (
+    <main className="flex h-full flex-1 flex-col items-center justify-center gap-3">
+      <p className="text-muted-foreground">{t("conversationNotFound")}</p>
+      <Button asChild variant="outline">
+        <Link to="/chat">{t("startNewChat")}</Link>
+      </Button>
+    </main>
+  );
+}
+
 function ConversationPage() {
+  const { t } = useI18n();
   const { conversationId } = Route.useParams();
   const { config } = Route.useRouteContext();
   const { data: detail } = useQuery(conversationQuery(conversationId));
@@ -212,13 +219,13 @@ function ConversationPage() {
                 >
                   {!agent.isEnabled && (
                     <span className="rounded-full border px-2 py-px text-muted-foreground text-xs">
-                      disabled
+                      {t("disabled")}
                     </span>
                   )}
                 </AgentTitle>
               ) : (
                 <span className="text-muted-foreground text-sm">
-                  Agent unavailable
+                  {t("agentUnavailable")}
                 </span>
               )}
             </header>
@@ -250,7 +257,9 @@ function ConversationPage() {
                 busy={busy}
                 disabled={!agent?.isEnabled}
                 placeholder={
-                  agent ? `Message ${agent.name}…` : "Agent unavailable"
+                  agent
+                    ? `${t("messageYourAgent").replace("...", "")} ${agent.name}...`
+                    : t("agentUnavailable")
                 }
                 supportsAttachments={
                   agent?.supportsImages || agent?.supportsFiles

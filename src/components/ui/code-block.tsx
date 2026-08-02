@@ -20,6 +20,7 @@ import type {
 } from "shiki";
 import { createHighlighter } from "shiki";
 import { Button } from "~/components/ui/button";
+import { useI18n } from "~/components/i18n";
 import {
   Select,
   SelectContent,
@@ -443,6 +444,7 @@ export const CodeBlockCopyButton = ({
   className,
   ...props
 }: CodeBlockCopyButtonProps) => {
+  const { t } = useI18n();
   const [isCopied, setIsCopied] = useState(false);
   const timeoutRef = useRef<number>(0);
   const { code } = useContext(CodeBlockContext);
@@ -491,7 +493,7 @@ export const CodeBlockCopyButton = ({
       {children ?? (
         <>
           <Icon className="size-3.5" />
-          {isCopied ? "Copied" : "Copy"}
+          {isCopied ? t("copied") : t("copy")}
         </>
       )}
     </Button>

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AgentAvatar } from "~/components/agent-picker";
 import { AgentDialog } from "~/components/agents/agent-dialog";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import { deleteAgent } from "~/functions/agents";
 import { agentsQuery } from "~/lib/queries";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_app/agents")({
 });
 
 function AgentsPage() {
+  const { t } = useI18n();
   const { config, session } = Route.useRouteContext();
   const isAdmin = session?.isAdmin ?? false;
   const userId = session?.user.id;
@@ -32,7 +34,7 @@ function AgentsPage() {
     mutationFn: (id: string) => deleteAgent({ data: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents"] });
-      toast.success("Agent deleted.");
+      toast.success(t("agentDeleted"));
     },
     onError: (error) => toast.error(error.message),
   });
@@ -52,10 +54,11 @@ function AgentsPage() {
       <div className="mx-auto w-full max-w-3xl px-4 pt-16 pb-16 md:px-6">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-semibold text-2xl tracking-tight">Agents</h1>
+            <h1 className="font-semibold text-2xl tracking-tight">
+              {t("agents")}
+            </h1>
             <p className="mt-1 text-muted-foreground text-sm">
-              Connect endpoints that speak the Open Responses protocol and chat
-              with them.
+              {t("agentsDescription")}
             </p>
           </div>
           {canCreate && (
@@ -65,16 +68,16 @@ function AgentsPage() {
                 setDialogOpen(true);
               }}
             >
-              <Plus className="size-4" /> Add agent
+              <Plus className="size-4" /> {t("addAgent")}
             </Button>
           )}
         </div>
 
         {agents.length === 0 ? (
           <div className="rounded-2xl border border-dashed px-6 py-16 text-center">
-            <p className="font-medium">No agents yet</p>
+            <p className="font-medium">{t("noAgentsYet")}</p>
             <p className="mt-1 text-muted-foreground text-sm">
-              Add your first Open Responses endpoint to start chatting.
+              {t("addFirstAgent")}
             </p>
           </div>
         ) : (
@@ -90,7 +93,7 @@ function AgentsPage() {
                     <span className="font-medium">{agent.name}</span>
                     {agent.isGlobal && (
                       <span className="flex items-center gap-1 rounded-full border px-2 py-px text-muted-foreground text-xs">
-                        <Globe className="size-3" /> shared
+                        <Globe className="size-3" /> {t("shared")}
                       </span>
                     )}
                     {!agent.isEnabled && (
@@ -114,7 +117,7 @@ function AgentsPage() {
                     size="icon"
                     onClick={() => startChat(agent)}
                     disabled={!agent.isEnabled}
-                    aria-label={`Chat with ${agent.name}`}
+                    aria-label={t("chatWith", { name: agent.name })}
                   >
                     <MessageSquare className="size-4" />
                   </Button>
@@ -127,7 +130,7 @@ function AgentsPage() {
                           setEditing(agent);
                           setDialogOpen(true);
                         }}
-                        aria-label={`Edit ${agent.name}`}
+                        aria-label={t("edit", { name: agent.name })}
                       >
                         <Pencil className="size-4" />
                       </Button>
@@ -138,13 +141,15 @@ function AgentsPage() {
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Delete "${agent.name}"? Conversations with it are kept but can no longer continue.`,
+                              t("deleteAgentConfirmation", {
+                                name: agent.name,
+                              }),
                             )
                           ) {
                             deleteMutation.mutate(agent.id);
                           }
                         }}
-                        aria-label={`Delete ${agent.name}`}
+                        aria-label={t("delete", { name: agent.name })}
                       >
                         <Trash2 className="size-4" />
                       </Button>

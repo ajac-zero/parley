@@ -22,6 +22,7 @@ import {
   useA2uiHost,
 } from "~/components/a2ui/context";
 import { Markdown } from "~/components/chat/markdown";
+import { useI18n } from "~/components/i18n";
 import {
   type A2uiCallSurfaces,
   type A2uiSurface,
@@ -114,6 +115,7 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
   onAction?: A2uiActionHandler;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const host = useA2uiHost();
   const stateKey = `${host?.stateScope ?? ""}:${surface.surfaceId}`;
   const stored = surfaceStateStore.get(stateKey);
@@ -237,7 +239,7 @@ export const A2uiSurfaceView = memo(function A2uiSurfaceView({
           <button
             type="button"
             onClick={() => host.togglePin?.(surface.surfaceId)}
-            title="Pin to canvas"
+            title={t("pinToCanvas")}
             className="absolute -top-2 -right-2 z-10 rounded-full border bg-card p-1.5 text-muted-foreground opacity-0 shadow-xs transition-opacity focus-visible:opacity-100 group-hover/surface:opacity-100 hover:text-foreground"
           >
             <Pin className="size-3.5" />
@@ -278,15 +280,16 @@ function UnsupportedSurface({
 
 /** Inline stand-in for a surface currently pinned to the side canvas. */
 function PinnedPlaceholder({ onUnpin }: { onUnpin?: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={onUnpin}
-      title="Unpin to show inline"
+      title={t("unpinToShowInline")}
       className="inline-flex w-fit items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent/50"
     >
       <Pin className="size-3 shrink-0" />
-      Pinned to canvas
+      {t("pinnedToCanvas")}
     </button>
   );
 }

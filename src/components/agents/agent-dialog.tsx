@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useI18n } from "~/components/i18n";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -99,6 +100,7 @@ export function AgentDialog({
   isAdmin: boolean;
   allowUserAgents: boolean;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AgentFormState>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
@@ -134,11 +136,9 @@ export function AgentDialog({
       }));
       setFormError(null);
       if (prefill.baseUrl) {
-        setImportNote("Agent card imported. Review the fields below and save.");
+        setImportNote(t("agentCardImported"));
       } else {
-        setImportNote(
-          "Card imported, but it doesn't declare an Open Responses interface — enter the base URL manually.",
-        );
+        setImportNote(t("agentCardMissingInterface"));
       }
     },
     onError: (error) => setImportNote(error.message),
@@ -165,7 +165,7 @@ export function AgentDialog({
           }
           params = parsed as Record<string, unknown>;
         } catch {
-          throw new Error("Extra parameters must be a JSON object.");
+          throw new Error(t("extraParametersMustBeJson"));
         }
       }
       const payload = {
@@ -200,7 +200,7 @@ export function AgentDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents"] });
-      toast.success(agent ? "Agent updated." : "Agent created.");
+      toast.success(agent ? t("agentUpdated") : t("agentCreated"));
       onOpenChange(false);
     },
     onError: (error) => setFormError(error.message),
@@ -215,7 +215,7 @@ export function AgentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl scrollbar-thin">
         <DialogHeader>
-          <DialogTitle>{agent ? "Edit agent" : "Add an agent"}</DialogTitle>
+          <DialogTitle>{agent ? t("editAgent") : t("addAgent")}</DialogTitle>
           <DialogDescription>
             Connect any endpoint that implements the{" "}
             <a
@@ -239,7 +239,7 @@ export function AgentDialog({
         >
           {!agent && (
             <div className="space-y-1.5 rounded-md border p-3">
-              <Label htmlFor="agent-import-url">Import from agent card</Label>
+              <Label htmlFor="agent-import-url">{t("importAgentCard")}</Label>
               <div className="flex gap-2">
                 <Input
                   id="agent-import-url"
@@ -261,12 +261,11 @@ export function AgentDialog({
                   }
                   onClick={() => runImport(importUrl)}
                 >
-                  {importMutation.isPending ? "Fetching…" : "Import"}
+                  {importMutation.isPending ? t("fetching") : t("import")}
                 </Button>
               </div>
               <p className="text-muted-foreground text-xs">
-                Fetches <code>/.well-known/agent-card.json</code> (A2A agent
-                card) and prefills the form, including the Open Responses URL.
+                {t("agentCardHelp")}
               </p>
               {importNote && <p className="text-xs">{importNote}</p>}
             </div>
@@ -284,7 +283,7 @@ export function AgentDialog({
                 disabled={importMutation.isPending}
                 onClick={() => runImport(form.cardUrl ?? "")}
               >
-                {importMutation.isPending ? "Syncing…" : "Re-sync"}
+                {importMutation.isPending ? t("syncing") : t("resync")}
               </Button>
             </div>
           )}
@@ -294,17 +293,17 @@ export function AgentDialog({
 
           <div className="grid grid-cols-[1fr_5.5rem] gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="agent-name">Name *</Label>
+              <Label htmlFor="agent-name">{t("name")} *</Label>
               <Input
                 id="agent-name"
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
-                placeholder="My Research Agent"
+                placeholder={t("agentNameExample")}
                 required
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="agent-avatar">Avatar</Label>
+              <Label htmlFor="agent-avatar">{t("avatar")}</Label>
               <Input
                 id="agent-avatar"
                 value={form.avatar}
@@ -316,17 +315,17 @@ export function AgentDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="agent-description">Description</Label>
+            <Label htmlFor="agent-description">{t("description")}</Label>
             <Input
               id="agent-description"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
-              placeholder="What is this agent good at?"
+              placeholder={t("agentDescriptionExample")}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="agent-url">Base URL *</Label>
+            <Label htmlFor="agent-url">{t("baseUrl")} *</Label>
             <Input
               id="agent-url"
               value={form.baseUrl}
@@ -340,7 +339,7 @@ export function AgentDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="agent-key">API key</Label>
+            <Label htmlFor="agent-key">{t("apiKey")}</Label>
             <Input
               id="agent-key"
               type="password"
@@ -352,27 +351,27 @@ export function AgentDialog({
               placeholder={
                 agent?.hasApiKey
                   ? "•••••••• (stored — leave blank to keep)"
-                  : "Optional bearer token"
+                  : t("optionalBearerToken")
               }
               autoComplete="off"
             />
             <p className="text-muted-foreground text-xs">
-              Sent as <code>Authorization: Bearer …</code> and stored encrypted.
+              {t("apiKeyStorageDescription")}
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="agent-model">Model</Label>
+              <Label htmlFor="agent-model">{t("model")}</Label>
               <Input
                 id="agent-model"
                 value={form.model}
                 onChange={(e) => set("model", e.target.value)}
-                placeholder="optional"
+                placeholder={t("optional")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Conversation state</Label>
+              <Label>{t("conversationState")}</Label>
               <Select
                 value={form.continuation}
                 onValueChange={(value) =>
@@ -387,16 +386,16 @@ export function AgentDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="replay">
-                    Replay transcript (stateless)
+                    {t("replayTranscript")}
                   </SelectItem>
                   <SelectItem value="previous_response_id">
-                    previous_response_id (agent stores state)
+                    {t("agentStoresState")}
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>File delivery</Label>
+              <Label>{t("fileDelivery")}</Label>
               <Select
                 value={form.fileDelivery}
                 onValueChange={(value) =>
@@ -408,10 +407,10 @@ export function AgentDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="url">
-                    Capability URL (agent fetches from Parley)
+                    {t("capabilityUrlDelivery")}
                   </SelectItem>
                   <SelectItem value="inline">
-                    Inline base64 (agent cannot reach Parley)
+                    {t("inlineFileDelivery")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -419,12 +418,12 @@ export function AgentDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="agent-instructions">Instructions</Label>
+            <Label htmlFor="agent-instructions">{t("instructions")}</Label>
             <Textarea
               id="agent-instructions"
               value={form.instructions}
               onChange={(e) => set("instructions", e.target.value)}
-              placeholder="Optional system instructions sent with every request"
+              placeholder={t("optionalInstructions")}
               className="min-h-20"
             />
           </div>
@@ -459,23 +458,23 @@ export function AgentDialog({
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <ToggleRow
-              label="Image input"
+              label={t("imageInput")}
               checked={form.supportsImages}
               onChange={(v) => set("supportsImages", v)}
             />
             <ToggleRow
-              label="File input"
+              label={t("fileInput")}
               checked={form.supportsFiles}
               onChange={(v) => set("supportsFiles", v)}
             />
             <ToggleRow
-              label="Enabled"
+              label={t("enabled")}
               checked={form.isEnabled}
               onChange={(v) => set("isEnabled", v)}
             />
             {isAdmin && (
               <ToggleRow
-                label="Shared with everyone"
+                label={t("sharedWithEveryone")}
                 checked={form.global}
                 onChange={(v) => set("global", v)}
                 disabled={agent !== null}
@@ -485,7 +484,7 @@ export function AgentDialog({
 
           {!isAdmin && !allowUserAgents && (
             <p className="text-muted-foreground text-sm">
-              Personal agents are disabled on this deployment.
+              {t("personalAgentsDisabled")}
             </p>
           )}
 
@@ -497,14 +496,14 @@ export function AgentDialog({
               variant="ghost"
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {mutation.isPending
-                ? "Saving…"
+                ? t("saving")
                 : agent
-                  ? "Save changes"
-                  : "Add agent"}
+                  ? t("saveChanges")
+                  : t("addAgent")}
             </Button>
           </DialogFooter>
         </form>

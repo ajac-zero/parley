@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Info, Monitor, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useI18n } from "~/components/i18n";
 import { useShowReasoning } from "~/components/reasoning-preference";
 import { useTheme } from "~/components/theme";
 import { Button } from "~/components/ui/button";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 function SettingsPage() {
+  const { t } = useI18n();
   const { session } = Route.useRouteContext();
   const { preference, setPreference } = useTheme();
   const { showReasoning, setShowReasoning } = useShowReasoning();
@@ -38,9 +40,9 @@ function SettingsPage() {
     setSavingName(true);
     const { error } = await authClient.updateUser({ name: name.trim() });
     setSavingName(false);
-    if (error) toast.error(error.message ?? "Could not update your name.");
+    if (error) toast.error(error.message ?? t("couldNotUpdateName"));
     else {
-      toast.success("Name updated.");
+      toast.success(t("nameUpdated"));
       window.location.reload();
     }
   };
@@ -53,9 +55,9 @@ function SettingsPage() {
       revokeOtherSessions: true,
     });
     setSavingPassword(false);
-    if (error) toast.error(error.message ?? "Could not change your password.");
+    if (error) toast.error(error.message ?? t("couldNotChangePassword"));
     else {
-      toast.success("Password changed.");
+      toast.success(t("passwordChanged"));
       setCurrentPassword("");
       setNewPassword("");
     }
@@ -64,16 +66,18 @@ function SettingsPage() {
   return (
     <main className="h-full flex-1 overflow-y-auto scrollbar-thin">
       <div className="mx-auto w-full max-w-2xl px-4 pt-16 pb-16 md:px-6">
-        <h1 className="font-semibold text-2xl tracking-tight">Settings</h1>
+        <h1 className="font-semibold text-2xl tracking-tight">
+          {t("settings")}
+        </h1>
 
         <section className="mt-8 space-y-4">
-          <h2 className="font-medium text-lg">Appearance</h2>
+          <h2 className="font-medium text-lg">{t("appearance")}</h2>
           <div className="flex gap-2">
             {(
               [
-                ["light", "Light", Sun],
-                ["dark", "Dark", Moon],
-                ["system", "System", Monitor],
+                ["light", t("light"), Sun],
+                ["dark", t("dark"), Moon],
+                ["system", t("system"), Monitor],
               ] as const
             ).map(([value, label, Icon]) => (
               <button
@@ -93,19 +97,16 @@ function SettingsPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="font-medium text-lg">Behavior</h2>
+          <h2 className="font-medium text-lg">{t("behavior")}</h2>
           <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
             <div className="flex items-center gap-1.5">
-              <Label htmlFor="show-reasoning">Show reasoning</Label>
+              <Label htmlFor="show-reasoning">{t("showReasoning")}</Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
                     <Info className="size-3.5 text-muted-foreground" />
                   </TooltipTrigger>
-                  <TooltipContent>
-                    Keep an agent's thinking expanded by default. Off keeps it
-                    collapsed until you click to expand it.
-                  </TooltipContent>
+                  <TooltipContent>{t("reasoningDescription")}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
@@ -118,9 +119,9 @@ function SettingsPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="font-medium text-lg">Profile</h2>
+          <h2 className="font-medium text-lg">{t("profile")}</h2>
           <div className="space-y-1.5">
-            <Label htmlFor="profile-email">Email</Label>
+            <Label htmlFor="profile-email">{t("email")}</Label>
             <Input
               id="profile-email"
               value={session?.user.email ?? ""}
@@ -128,7 +129,7 @@ function SettingsPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="profile-name">Name</Label>
+            <Label htmlFor="profile-name">{t("name")}</Label>
             <div className="flex gap-2">
               <Input
                 id="profile-name"
@@ -139,16 +140,16 @@ function SettingsPage() {
                 onClick={saveName}
                 disabled={savingName || name.trim() === session?.user.name}
               >
-                Save
+                {t("save")}
               </Button>
             </div>
           </div>
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="font-medium text-lg">Password</h2>
+          <h2 className="font-medium text-lg">{t("password")}</h2>
           <div className="space-y-1.5">
-            <Label htmlFor="current-password">Current password</Label>
+            <Label htmlFor="current-password">{t("currentPassword")}</Label>
             <Input
               id="current-password"
               type="password"
@@ -158,7 +159,7 @@ function SettingsPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="new-password">New password</Label>
+            <Label htmlFor="new-password">{t("newPassword")}</Label>
             <Input
               id="new-password"
               type="password"
@@ -176,7 +177,7 @@ function SettingsPage() {
               newPassword.length < 8
             }
           >
-            {savingPassword ? "Changing…" : "Change password"}
+            {savingPassword ? t("changing") : t("changePassword")}
           </Button>
         </section>
       </div>

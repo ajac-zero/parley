@@ -371,15 +371,21 @@ function confirmationUpdateMessages(
 /* ------------------------- A2UI charts showcase --------------------------- */
 
 /** The fabricated monthly figures behind the demo revenue report. */
-const REVENUE_MONTHS = [
-  { month: "Jan", revenue: 186_000, expenses: 152_000 },
-  { month: "Feb", revenue: 198_500, expenses: 156_400 },
-  { month: "Mar", revenue: 224_300, expenses: 161_200 },
-  { month: "Apr", revenue: 209_800, expenses: 173_900 },
-  { month: "May", revenue: 241_600, expenses: 178_300 },
-  { month: "Jun", revenue: 253_100, expenses: 182_700 },
-  { month: "Jul", revenue: 275_400, expenses: 189_500 },
-  { month: "Aug", revenue: 291_200, expenses: 196_800 },
+const REVENUE_MONTHS: ReadonlyArray<{
+  month: string;
+  revenue: number;
+  expenses: number;
+  forecast: number | null;
+  margin: number;
+}> = [
+  { month: "Jan", revenue: 186_000, expenses: 152_000, forecast: 190_000, margin: 0.183 },
+  { month: "Feb", revenue: 198_500, expenses: 156_400, forecast: 201_000, margin: 0.212 },
+  { month: "Mar", revenue: 224_300, expenses: 161_200, forecast: 218_000, margin: 0.281 },
+  { month: "Apr", revenue: 209_800, expenses: 173_900, forecast: 228_000, margin: 0.171 },
+  { month: "May", revenue: 241_600, expenses: 178_300, forecast: 240_000, margin: 0.262 },
+  { month: "Jun", revenue: 253_100, expenses: 182_700, forecast: 252_000, margin: 0.278 },
+  { month: "Jul", revenue: 275_400, expenses: 189_500, forecast: 268_000, margin: 0.312 },
+  { month: "Aug", revenue: 291_200, expenses: 196_800, forecast: null, margin: 0.324 },
 ] as const;
 
 type RevenueMonth = (typeof REVENUE_MONTHS)[number];
@@ -427,7 +433,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       id: "report_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Rendered from Parley's first-party charts catalog: the A2UI Basic Catalog extended with native Chart and Stat components.",
+      text: "Actuals and expenses are bars; the dashed plan ends in August, while the right axis tracks net margin.",
     },
     {
       id: "report_stats",
@@ -441,6 +447,11 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       value: { path: "/report/stats/revenue" },
       format: "currency",
       delta: { path: "/report/stats/revenueDelta" },
+      comparisonLabel: "vs. January",
+      description: "Booked revenue year to date",
+      trend: "up",
+      status: "positive",
+      sparkline: { path: "/report/stats/revenueTrend" },
       weight: 1,
     },
     {
@@ -450,6 +461,11 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       value: { path: "/report/stats/expenses" },
       format: "currency",
       delta: { path: "/report/stats/expensesDelta" },
+      comparisonLabel: "vs. January",
+      description: "Operating costs year to date",
+      trend: "down",
+      status: "positive",
+      sparkline: { path: "/report/stats/expenseTrend" },
       weight: 1,
     },
     {
@@ -459,21 +475,72 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
       value: { path: "/report/stats/margin" },
       format: "percent",
       delta: { path: "/report/stats/marginDelta" },
+      comparisonLabel: "vs. January",
+      description: "After operating expenses",
+      trend: "up",
+      status: "positive",
+      sparkline: { path: "/report/stats/marginTrend" },
       weight: 1,
     },
     {
       id: "report_chart",
       component: "Chart",
       variant: "bar",
-      title: "Revenue vs expenses by month",
+      title: "Revenue actuals, plan, expenses, and margin by month",
+      description: "Actual revenue and expenses rise through August. The revenue plan ends in July because August has no forecast; net margin uses the right axis.",
       data: { path: "/report/monthly" },
       x: { key: "month", label: "Month" },
+      yAxes: {
+        left: {
+          label: "USD",
+          format: "currency",
+          maximumFractionDigits: 0,
+          includeZero: true,
+        },
+        right: {
+          label: "Net margin",
+          format: "percent",
+          maximumFractionDigits: 0,
+          includeZero: true,
+          min: 0,
+          max: 0.4,
+        },
+      },
+      // Recharts presents legend entries in reverse rendering order.
       series: [
-        { key: "revenue", label: "Revenue", color: "chart-1" },
-        { key: "expenses", label: "Expenses", color: "chart-5" },
+        { key: "expenses", label: "Expenses", color: "chart-5", type: "bar" },
+        {
+          key: "forecast",
+          label: "Revenue plan",
+          color: "chart-3",
+          type: "line",
+          lineStyle: "dashed",
+          connectNulls: false,
+        },
+        { key: "revenue", label: "Revenue actual", color: "chart-1", type: "bar" },
+        {
+          key: "margin",
+          label: "Net margin",
+          color: "chart-4",
+          type: "line",
+          axis: "right",
+        },
       ],
-      height: 260,
+      referenceBands: [
+        {
+          from: 230_000,
+          to: 260_000,
+          label: "",
+          color: "chart-2",
+        },
+      ],
+      referenceLines: [
+        { value: 250_000, label: "Target: $250k", color: "chart-2" },
+      ],
+      legend: { path: "/hiddenSeries" },
       selection: { path: "/selection", mode: "point" },
+      dataTable: true,
+      height: 260,
     },
     {
       id: "report_hint",
@@ -484,7 +551,7 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
         args: {
           value:
             // biome-ignore lint/suspicious/noTemplateCurlyInString: A2UI formatString interpolation syntax
-            "Selected month: ${/selection/x}. Click a bar to change the selection, then analyze it.",
+            "Selected month: ${/selection/x}. The plan is unavailable in August. Click a bar to analyze it.",
         },
       },
     },
@@ -528,10 +595,14 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
             revenueDelta: REVENUE_LAST.revenue / first.revenue - 1,
             expensesDelta: REVENUE_LAST.expenses / first.expenses - 1,
             marginDelta: monthMargin(REVENUE_LAST) - monthMargin(first),
+            revenueTrend: REVENUE_MONTHS.map((month) => month.revenue),
+            expenseTrend: REVENUE_MONTHS.map((month) => month.expenses),
+            marginTrend: REVENUE_MONTHS.map(monthMargin),
           },
         },
       },
     },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/hiddenSeries", value: [] } },
     {
       version: A2UI_VERSION,
       updateDataModel: {
@@ -544,10 +615,145 @@ function revenueReportMessages(): Array<Record<string, unknown>> {
           values: {
             revenue: REVENUE_LAST.revenue,
             expenses: REVENUE_LAST.expenses,
+            forecast: REVENUE_LAST.forecast,
           },
         },
       },
     },
+  ];
+}
+
+function revenueMixMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_revenue_mix";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Revenue mix" },
+    {
+      id: "subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "A donut chart uses one value series across named categories.",
+    },
+    {
+      id: "chart",
+      component: "Chart",
+      variant: "donut",
+      title: "Revenue by channel",
+      data: { path: "/mix/channels" },
+      x: { key: "channel", label: "Channel" },
+      series: [{ key: "revenue", label: "Revenue" }],
+      sort: "descending",
+      centerValue: { path: "/mix/total" },
+      centerLabel: "FY26 revenue",
+      height: 280,
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/mix",
+        value: {
+          total: "$1.53M",
+          channels: [
+            { channel: "Enterprise", revenue: 640_000 },
+            { channel: "Self-serve", revenue: 430_000 },
+            { channel: "Partners", revenue: 285_000 },
+            { channel: "Services", revenue: 175_000 },
+          ],
+        },
+      },
+    },
+  ];
+}
+
+function channelShareMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_channel_share";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Channel share" },
+    { id: "chart", component: "Chart", variant: "bar", title: "Revenue share by quarter", description: "Each stacked bar sums to 100 percent. Select a legend entry to bind its series identity.", data: { path: "/share" }, x: { key: "quarter", label: "Quarter" }, y: { format: "percent", includeZero: true }, series: [{ key: "enterprise", label: "Enterprise", color: "chart-1" }, { key: "selfServe", label: "Self-serve", color: "chart-2" }, { key: "partners", label: "Partners", color: "chart-3" }], normalize: "stackedPercent", legend: { path: "/hiddenSeries" }, selection: { path: "/selectedSeries", mode: "series" }, height: 260 },
+  ];
+  return [
+    { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/share", value: [{ quarter: "Q1", enterprise: 520, selfServe: 270, partners: 110 }, { quarter: "Q2", enterprise: 560, selfServe: 330, partners: 125 }, { quarter: "Q3", enterprise: 610, selfServe: 370, partners: 155 }] } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/hiddenSeries", value: [] } },
+  ];
+}
+
+function accountOpportunityMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_account_opportunity";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "chart"] },
+    { id: "title", component: "Text", variant: "h3", text: "Account opportunity" },
+    {
+      id: "subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Bubble position compares engagement and opportunity; size shows account value.",
+    },
+    {
+      id: "chart",
+      component: "Chart",
+      variant: "bubble",
+      title: "Engagement versus opportunity",
+      data: { path: "/accounts" },
+      x: { key: "engagement", label: "Engagement score", type: "number" },
+      y: { label: "Opportunity score", includeZero: true },
+      size: { key: "value" },
+      series: [{ key: "opportunity", label: "Opportunity", color: "chart-4" }],
+      height: 280,
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/accounts",
+        value: [
+          { engagement: 28, opportunity: 42, value: 45 },
+          { engagement: 45, opportunity: 61, value: 120 },
+          { engagement: 63, opportunity: 55, value: 80 },
+          { engagement: 76, opportunity: 82, value: 210 },
+          { engagement: 88, opportunity: 73, value: 155 },
+        ],
+      },
+    },
+  ];
+}
+
+function deliveryHealthMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_delivery_health";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    { id: "layout", component: "Column", children: ["title", "subtitle", "metrics"] },
+    { id: "title", component: "Text", variant: "h3", text: "Delivery health" },
+    { id: "subtitle", component: "Text", variant: "caption", text: "Focused chart leaves for a compact operational summary." },
+    { id: "metrics", component: "Row", children: ["progress", "sparkline", "gauge"] },
+    { id: "progress", component: "Progress", label: "Sprint completion", value: { path: "/delivery/completed" }, max: { path: "/delivery/planned" }, target: { path: "/delivery/target" }, format: "percent", weight: 1 },
+    { id: "sparkline", component: "Sparkline", label: "Deploys per day", data: { path: "/delivery/deploys" }, color: "chart-2", weight: 1 },
+    { id: "gauge", component: "Gauge", label: "Release confidence", value: { path: "/delivery/confidence" }, min: 0, max: 1, format: "percent", weight: 1 },
+  ];
+  return [
+    { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: A2UI_CHARTS_CATALOG_ID } },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    { version: A2UI_VERSION, updateDataModel: { surfaceId, path: "/delivery", value: { completed: 37, planned: 48, target: 40, confidence: 0.82, deploys: [3, 5, 4, 7, 6, 9, 8] } } },
   ];
 }
 
@@ -616,21 +822,6 @@ const pct = (fraction: number): string =>
 
 /* -------------------- A2UI charts showcase: range mode -------------------- */
 
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
-
 /**
  * The fabricated daily-sessions series behind the demo traffic report:
  * 45 days from May 1 with a gentle upward trend, a weekly cycle, and a
@@ -639,7 +830,7 @@ const MONTH_NAMES = [
 const TRAFFIC_DAYS = Array.from({ length: 45 }, (_, i) => {
   const date = new Date(Date.UTC(2026, 4, 1) + i * 86_400_000);
   return {
-    day: `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`,
+    day: date.toISOString(),
     sessions: Math.round(
       3200 +
         i * 28 +
@@ -656,6 +847,14 @@ const TRAFFIC_LAST = TRAFFIC_DAYS[TRAFFIC_DAYS.length - 1] as TrafficDay;
 
 const trafficTotal = (days: readonly TrafficDay[]): number =>
   days.reduce((total, d) => total + d.sessions, 0);
+
+const displayTrafficDay = (iso: string): string => {
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
 
 /**
  * The traffic report surface: an area chart with a `range` selection —
@@ -688,7 +887,7 @@ function trafficReportMessages(): Array<Record<string, unknown>> {
       id: "traffic_subtitle",
       component: "Text",
       variant: "caption",
-      text: "Drag across the chart to select a date range; the selection binds into the surface's data model.",
+       text: "ISO timestamps render as dates. Drag across the chart to select a date range in the surface data model.",
     },
     {
       id: "traffic_chart",
@@ -696,7 +895,7 @@ function trafficReportMessages(): Array<Record<string, unknown>> {
       variant: "area",
       title: "Daily sessions",
       data: { path: "/traffic/daily" },
-      x: { key: "day", label: "Day" },
+      x: { key: "day", label: "Day", type: "time", format: "short" },
       series: [{ key: "sessions", label: "Sessions", color: "chart-2" }],
       selection: { path: "/range", mode: "range" },
     },
@@ -833,7 +1032,7 @@ function replyForTrafficSummary(action: DemoA2uiAction): BuiltReply {
   const windowDays = TRAFFIC_DAYS.slice(start, end + 1);
   const from = (TRAFFIC_DAYS[start] as TrafficDay).day;
   const to = (TRAFFIC_DAYS[end] as TrafficDay).day;
-  const window = `${from} – ${to}`;
+  const window = `${displayTrafficDay(from)} – ${displayTrafficDay(to)}`;
   const total = trafficTotal(windowDays);
   const average = total / windowDays.length;
   const overallAverage = trafficTotal(TRAFFIC_DAYS) / TRAFFIC_DAYS.length;
@@ -1016,6 +1215,58 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
     };
   }
 
+  if (/\b(scatter|bubble|opportunity)\b/.test(lower)) {
+    return {
+      reasoning:
+        "The user wants a relationship chart. I'll return the account-opportunity bubble surface.",
+      reply:
+        "I called `get_account_opportunity` to show a **bubble chart** with numeric X and Y values plus a size field.",
+      tool: {
+        name: "get_account_opportunity",
+        args: JSON.stringify({ segment: "all accounts" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/account-opportunity",
+          "Account opportunity bubble chart.",
+          accountOpportunityMessages(),
+        ),
+      },
+    };
+  }
+
+  if (/\b(progress|sparkline|delivery health)\b/.test(lower)) {
+    return {
+      reasoning: "The user wants compact operational metrics. I'll return the delivery-health leaf-component surface.",
+      reply: "I called `get_delivery_health` to show the standalone **Progress** and **Sparkline** chart leaves.",
+      tool: { name: "get_delivery_health", args: JSON.stringify({ sprint: "current" }), output: a2uiToolOutput("a2ui://demo/delivery-health", "Delivery health: 37 of 48 planned items complete.", deliveryHealthMessages()) },
+    };
+  }
+
+  if (/\b(donut|pie|revenue mix|channel mix)\b/.test(lower)) {
+    return {
+      reasoning:
+        "The user wants a composition chart. I'll return the demo revenue-mix donut surface.",
+      reply:
+        "I called `get_revenue_mix` to show a **donut chart**: one numeric revenue series grouped by channel.",
+      tool: {
+        name: "get_revenue_mix",
+        args: JSON.stringify({ period: "FY26" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/revenue-mix",
+          "Revenue mix by channel.",
+          revenueMixMessages(),
+        ),
+      },
+    };
+  }
+
+  if (/\b(channel share|stacked percent|share chart)\b/.test(lower)) {
+    return {
+      reasoning: "The user wants normalized composition. I'll return the stacked-percent channel-share chart.",
+      reply: "I called `get_channel_share` to show a **stacked-percent** chart, where every quarter sums to 100%.",
+      tool: { name: "get_channel_share", args: JSON.stringify({ metric: "revenue share" }), output: a2uiToolOutput("a2ui://demo/channel-share", "Channel revenue share by quarter.", channelShareMessages()) },
+    };
+  }
+
   if (/\b(charts?|revenue|graphs?|dashboard)\b/.test(lower)) {
     const totalRevenue = sum((m) => m.revenue);
     const totalExpenses = sum((m) => m.expenses);
@@ -1102,7 +1353,7 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
   return {
     reasoning:
       "The user sent a general message. I'll introduce myself, echo their message back, and suggest things to try.",
-    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
+    reply: `${intro}${echo}${attachmentNote}\n\nThings to try:\n- Ask me about the **weather** to see a tool call\n- Say **markdown** to see rich rendering\n- Say **book a table** to see generative UI (A2UI)\n- Say **revenue chart** to see the charts catalog\n- Say **revenue mix** to see a donut chart\n- Say **traffic trend** to drag-select a range in a chart\n- Connect your own agent from the **Agents** page`,
     tool: null,
   };
 }
