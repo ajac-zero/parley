@@ -999,6 +999,18 @@ const LazyGaugeView = lazy(() =>
   })),
 );
 
+const LazyMapView = lazy(() =>
+  import("~/components/a2ui/maps").then((module) => ({
+    default: module.MapView,
+  })),
+);
+
+const LazyMapV2View = lazy(() =>
+  import("~/components/a2ui/maps-v2").then((module) => ({
+    default: module.MapV2View,
+  })),
+);
+
 /**
  * Contains failures from the charting library (or a chunk that failed to
  * load) to an inert placeholder: a malformed chart resource must degrade
@@ -1016,7 +1028,7 @@ class ChartViewBoundary extends Component<
     if (!this.state.failed) return this.props.children;
     return (
       <div className="rounded-lg border border-dashed px-2.5 py-1.5 text-muted-foreground text-xs">
-        This chart couldn't be rendered.
+        This visualization couldn't be rendered.
       </div>
     );
   }
@@ -1105,6 +1117,40 @@ function SuspendedGaugeView(props: ViewProps) {
   );
 }
 
+function SuspendedMapView(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-80 w-full animate-pulse rounded-lg bg-muted/40"
+          />
+        }
+      >
+        <LazyMapView {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
+function SuspendedMapV2View(props: ViewProps) {
+  return (
+    <ChartViewBoundary>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden
+            className="h-64 w-full animate-pulse rounded-lg bg-muted/40"
+          />
+        }
+      >
+        <LazyMapV2View {...props} />
+      </Suspense>
+    </ChartViewBoundary>
+  );
+}
+
 const chartsComponentViews: A2uiComponentViews = {
   ...basicComponentViews,
   Chart: SuspendedChartView,
@@ -1114,6 +1160,16 @@ const chartsComponentViews: A2uiComponentViews = {
   Gauge: SuspendedGaugeView,
 };
 
+const mapsComponentViews: A2uiComponentViews = {
+  ...basicComponentViews,
+  Map: SuspendedMapView,
+};
+
+const mapsV2ComponentViews: A2uiComponentViews = {
+  ...basicComponentViews,
+  Map: SuspendedMapV2View,
+};
+
 /**
  * Trusted renderer plugins installed in this build. Plugin manifests and
  * renderers use the same keys so built-in and external plugins share one path.
@@ -1121,14 +1177,22 @@ const chartsComponentViews: A2uiComponentViews = {
 const pluginViews: Record<string, A2uiComponentViews> = {
   basic: basicComponentViews,
   charts: chartsComponentViews,
+  maps: mapsComponentViews,
+  mapsV2: mapsV2ComponentViews,
 };
 
 const catalogViews: Record<string, A2uiComponentViews> = Object.fromEntries(
-  A2UI_CATALOG_PLUGINS.flatMap((plugin) => {
-    const views = pluginViews[plugin.key];
-    if (!views) throw new Error(`Missing A2UI renderer plugin: ${plugin.key}`);
-    return plugin.catalogIds.map((catalogId) => [catalogId, views] as const);
-  }),
+  A2UI_CATALOG_PLUGINS.flatMap((plugin) =>
+    plugin.catalogIds.map((catalogId) => {
+      const views =
+        plugin.key === "maps" && plugin.catalogIds.indexOf(catalogId) > 0
+          ? pluginViews.mapsV2
+          : pluginViews[plugin.key];
+      if (!views)
+        throw new Error(`Missing A2UI renderer plugin: ${plugin.key}`);
+      return [catalogId, views] as const;
+    }),
+  ),
 );
 
 /**

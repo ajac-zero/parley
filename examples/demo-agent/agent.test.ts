@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   A2UI_CHARTS_CATALOG_ID,
   A2UI_INSTALLED_CATALOG_IDS,
+  A2UI_MAPS_V2_CATALOG_ID,
   type A2uiCallSurfaces,
   type A2uiMessage,
   type A2uiOutputRef,
@@ -604,6 +605,45 @@ describe("handleDemoResponses", () => {
     expect(components?.progress?.component).toBe("Progress");
     expect(components?.sparkline?.component).toBe("Sparkline");
     expect(components?.gauge?.component).toBe("Gauge");
+  });
+
+  it("returns a selectable bubble map for location asks", async () => {
+    const { state } = await streamAndReduce({
+      input: [userMessage("show me the customer map")],
+    });
+    const call = state.items.find((item) => item.type === "function_call") as {
+      name: string;
+    };
+    expect(call.name).toBe("get_customer_map");
+    const output = state.items.find(
+      (item) => item.type === "function_call_output",
+    ) as FunctionCallOutputItem;
+    const extraction = extractA2uiResources(output.output);
+    expect(extraction.resources[0]?.uri).toBe("a2ui://demo/customer-map");
+    const surface = reduceA2uiMessages(
+      extraction.resources[0]?.messages ?? [],
+    )[0];
+    expect(surface?.catalogId).toBe(A2UI_MAPS_V2_CATALOG_ID);
+    expect(surface?.components.map).toMatchObject({
+      component: "Map",
+      selection: { path: "/selectedFeature", mode: "single" },
+    });
+    expect(surface?.components.map?.layers).toMatchObject([
+      {
+        layerId: "customer-locations",
+        type: "point",
+        featureId: { key: "id" },
+        latitude: { key: "latitude" },
+      },
+      {
+        layerId: "revenue-connections",
+        type: "connection",
+        featureId: { key: "id" },
+        toLongitude: { key: "toLongitude" },
+      },
+    ]);
+    expect(pointerGet(surface?.dataModel, "/customers")).toHaveLength(5);
+    expect(pointerGet(surface?.dataModel, "/flows")).toHaveLength(4);
   });
 
   it("returns a range-selectable traffic chart for trend asks", async () => {

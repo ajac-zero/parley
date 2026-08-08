@@ -3,6 +3,8 @@
 const A2UI_MIME_TYPE = "application/a2ui+json";
 const A2UI_CHARTS_CATALOG_ID =
   "https://github.com/artemis-sh/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json";
+const A2UI_MAPS_V2_CATALOG_ID =
+  "https://github.com/artemis-sh/a2ui-catalogs/blob/maps-v2.0.0/catalogs/maps/v2/catalog.json";
 
 type ContentPart = Record<string, unknown> & { type: string };
 type ORItem = Record<string, unknown> & { type: string };
@@ -757,6 +759,108 @@ function deliveryHealthMessages(): Array<Record<string, unknown>> {
   ];
 }
 
+function customerMapMessages(): Array<Record<string, unknown>> {
+  const surfaceId = "demo_customer_map";
+  const components = [
+    { id: "root", component: "Card", child: "layout" },
+    {
+      id: "layout",
+      component: "Column",
+      children: ["title", "subtitle", "map", "footer"],
+    },
+    { id: "title", component: "Text", variant: "h3", text: "Customer footprint" },
+    {
+      id: "subtitle",
+      component: "Text",
+      variant: "caption",
+      text: "Revenue connections from New York to each customer region. Select a feature to explore it.",
+    },
+    {
+      id: "map",
+      component: "Map",
+      title: "Global customer revenue flows",
+      description:
+        "Customer locations and schematic revenue connections from New York.",
+      height: 340,
+      selection: { path: "/selectedFeature", mode: "single" },
+      layers: [
+        {
+          layerId: "customer-locations",
+          type: "point",
+          data: { path: "/customers" },
+          featureId: { key: "id" },
+          latitude: { key: "latitude" },
+          longitude: { key: "longitude" },
+          label: { key: "name" },
+          variant: "bubble",
+          color: "chart-2",
+        },
+        {
+          layerId: "revenue-connections",
+          type: "connection",
+          data: { path: "/flows" },
+          featureId: { key: "id" },
+          fromLatitude: { key: "fromLatitude" },
+          fromLongitude: { key: "fromLongitude" },
+          toLatitude: { key: "toLatitude" },
+          toLongitude: { key: "toLongitude" },
+          label: { key: "label" },
+          color: "chart-4",
+          animated: true,
+        },
+      ],
+    },
+    { id: "footer", component: "Row", justify: "end", children: ["analyze"] },
+    { id: "analyze_text", component: "Text", text: "Analyze location" },
+    {
+      id: "analyze",
+      component: "Button",
+      variant: "primary",
+      child: "analyze_text",
+      action: {
+        event: {
+          name: "analyze_location",
+          context: { selection: { path: "/selectedFeature" } },
+        },
+      },
+    },
+  ];
+  return [
+    {
+      version: A2UI_VERSION,
+      createSurface: { surfaceId, catalogId: A2UI_MAPS_V2_CATALOG_ID },
+    },
+    { version: A2UI_VERSION, updateComponents: { surfaceId, components } },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/customers",
+        value: [
+          { id: "nyc", name: "New York", latitude: 40.7128, longitude: -74.006, revenue: 425_000 },
+          { id: "london", name: "London", latitude: 51.5072, longitude: -0.1276, revenue: 310_000 },
+          { id: "bogota", name: "Bogotá", latitude: 4.711, longitude: -74.0721, revenue: 190_000 },
+          { id: "singapore", name: "Singapore", latitude: 1.3521, longitude: 103.8198, revenue: 265_000 },
+          { id: "sydney", name: "Sydney", latitude: -33.8688, longitude: 151.2093, revenue: 225_000 },
+        ],
+      },
+    },
+    {
+      version: A2UI_VERSION,
+      updateDataModel: {
+        surfaceId,
+        path: "/flows",
+        value: [
+          { id: "nyc-london", label: "New York → London", fromLatitude: 40.7128, fromLongitude: -74.006, toLatitude: 51.5072, toLongitude: -0.1276, revenue: 310_000 },
+          { id: "nyc-bogota", label: "New York → Bogotá", fromLatitude: 40.7128, fromLongitude: -74.006, toLatitude: 4.711, toLongitude: -74.0721, revenue: 190_000 },
+          { id: "nyc-singapore", label: "New York → Singapore", fromLatitude: 40.7128, fromLongitude: -74.006, toLatitude: 1.3521, toLongitude: 103.8198, revenue: 265_000 },
+          { id: "nyc-sydney", label: "New York → Sydney", fromLatitude: 40.7128, fromLongitude: -74.006, toLatitude: -33.8688, toLongitude: 151.2093, revenue: 225_000 },
+        ],
+      },
+    },
+  ];
+}
+
 /**
  * The analysis for one selected month: update envelopes targeting the
  * existing `demo_revenue_report` surface — the insight section is appended
@@ -1210,6 +1314,24 @@ function buildReply(parsed: ReturnType<typeof lastUserText>): BuiltReply {
           "a2ui://demo/traffic-report",
           `Site traffic, last ${TRAFFIC_DAYS.length} days: ${num(total)} sessions total (avg ${num(total / TRAFFIC_DAYS.length)}/day). Drag a range in the chart to summarize it.`,
           trafficReportMessages(),
+        ),
+      },
+    };
+  }
+
+  if (/\b(map|locations?|geograph|customer footprint)\b/.test(lower)) {
+    return {
+      reasoning:
+        "The user wants a geographic view. I'll return the customer-footprint surface from the Maps catalog.",
+      reply:
+        "I called `get_customer_map` to show a **bubble map** with host-controlled OpenStreetMap tiles and selectable customer locations.",
+      tool: {
+        name: "get_customer_map",
+        args: JSON.stringify({ metric: "annual revenue" }),
+        output: a2uiToolOutput(
+          "a2ui://demo/customer-map",
+          "Customer footprint across five locations, sized by annual revenue.",
+          customerMapMessages(),
         ),
       },
     };
