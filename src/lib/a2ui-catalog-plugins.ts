@@ -25,7 +25,7 @@ export const A2UI_BASIC_CATALOG_IDS: readonly string[] = [
 ];
 
 export const A2UI_CHARTS_CATALOG_ID =
-  "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json";
+  "https://github.com/artemis-sh/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json";
 
 export const A2UI_CATALOG_PLUGINS: readonly A2uiCatalogPluginManifest[] = [
   {

@@ -1,9 +1,7 @@
 /**
  * Native views for Parley's first-party charts catalog
- * (ajac-zero/a2ui-catalogs, charts/v1): the A2UI Basic Catalog plus two leaf
- * components — `Chart` (line/bar/area over data-model rows, with optional
- * point/range selection written back through two-way binding) and `Stat`
- * (a labeled headline number with an optional delta).
+ * (artemis-sh/a2ui-catalogs, charts/v1): the A2UI Basic Catalog plus five leaf
+ * components for charts, metrics, and compact quantitative displays.
  *
  * Loaded lazily from the catalog registry (~/components/a2ui/catalog) so
  * recharts stays out of the main bundle. Everything renders from the
