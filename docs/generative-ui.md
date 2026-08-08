@@ -134,16 +134,15 @@ implementations on the host; receiving an unknown catalog must not cause
 Parley to download or execute anything.
 
 Parley ships a renderer for the independently owned
-[ajac-zero Charts v1 catalog](https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json),
-which composes the official Basic Catalog v0.9.1 with two leaf components —
-`Chart` (line/bar/area series, including composed Cartesian charts with
-per-series rendering and stack controls, over data-model rows, with optional
-point/range selection written back through two-way binding, plus target lines
-and shaded reference bands) and `Stat` (a labeled headline number with an
-optional delta). Because both extensions are leaves, every Basic Catalog
-resource remains valid under the charts catalog unchanged; adding a new
-container component would be a breaking change and would require a new
-versioned catalog ID.
+[Artemis Charts v1 catalog](https://github.com/artemis-sh/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json),
+which composes the official Basic Catalog v0.9.1 with five leaf components:
+`Chart` supports Cartesian, composed, pie, donut, scatter, and bubble charts;
+`Stat`, `Sparkline`, `Progress`, and `Gauge` provide metric and compact
+quantitative displays. The components support capabilities including selection,
+reference marks, normalization, legend bindings, dual axes, and accessible data
+tables. Because every extension is a leaf, every Basic Catalog resource remains
+valid under the charts catalog unchanged; adding a new container component
+would be a breaking change and require a new versioned catalog ID.
 
 How it works today:
 

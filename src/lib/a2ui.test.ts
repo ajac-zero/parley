@@ -1746,7 +1746,7 @@ describe("call_id uniqueness scope", () => {
 describe("charts catalog contract", () => {
   it("advertises the independently owned catalog ID", () => {
     expect(A2UI_CHARTS_CATALOG_ID).toBe(
-      "https://github.com/ajac-zero/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json",
+      "https://github.com/artemis-sh/a2ui-catalogs/blob/main/catalogs/charts/v1/catalog.json",
     );
     expect(A2UI_INSTALLED_CATALOG_IDS).toContain(A2UI_CHARTS_CATALOG_ID);
   });

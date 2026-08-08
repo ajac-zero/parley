@@ -967,9 +967,9 @@ const basicComponentViews: A2uiComponentViews = {
   DateTimeInput: DateTimeInputView,
 };
 
-/* The charts catalog adds Chart and Stat on top of the Basic Catalog.
+/* The charts catalog adds chart and metric views on top of the Basic Catalog.
  * Recharts is heavy, so those views load lazily — the chunk downloads only
- * when a chart actually renders, behind a skeleton fallback. */
+ * when a chart component actually renders, behind a skeleton fallback. */
 
 const LazyChartView = lazy(() =>
   import("~/components/a2ui/charts").then((module) => ({
